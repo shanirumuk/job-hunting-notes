@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f7f5f2" />
+  <meta name="description" content="A private, calm job-application notebook." />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css?v=2" />
+  <title>Job notebook</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="mark" aria-hidden="true">✦</span><span>Job notebook</span></div>
+      <button class="quiet-button" id="backup-button" type="button">Backup</button>
+    </header>
+
+    <main id="main-content">
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow">PRIVATE APPLICATION SPACE</p>
+        <h1 id="page-title">Job hunting</h1>
+        <p class="subtitle">A calm place for roles, application notes, and what happens next.</p>
+      </section>
+
+      <section class="toolbar" aria-label="Application tools">
+        <label class="search-field">
+          <span class="sr-only">Search applications</span>
+          <input id="search-input" type="search" placeholder="Search roles, companies, or notes" autocomplete="off" />
+        </label>
+        <button class="primary-button" id="add-button" type="button">+ Add application</button>
+      </section>
+
+      <section class="status-line" aria-live="polite">
+        <p id="summary-text">Loading applications…</p>
+        <div class="filters" role="group" aria-label="Filter applications">
+          <button class="filter active" type="button" data-filter="all">All</button>
+          <button class="filter" type="button" data-filter="to apply">To apply</button>
+          <button class="filter" type="button" data-filter="applied">Applied</button>
+          <button class="filter" type="button" data-filter="interview">Interview</button>
+        </div>
+      </section>
+
+      <section class="table-wrap" aria-label="Applications">
+        <div class="application-table" role="table" aria-label="Job applications">
+          <div class="table-head" role="row">
+            <span role="columnheader">Company & role</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader">Location</span>
+            <span role="columnheader">Date</span>
+          </div>
+          <div id="applications" role="rowgroup"></div>
+        </div>
+        <div class="empty-state" id="empty-state" hidden>
+          <p class="empty-symbol" aria-hidden="true">⌁</p>
+          <h2>No applications here yet</h2>
+          <p>Add a role yourself, or save one from a suggestion I send you.</p>
+          <button class="text-button" id="empty-add-button" type="button">Add your first role</button>
+        </div>
+      </section>
+
+      <section class="note-card">
+        <p class="eyebrow">HOW THIS WORKS</p>
+        <p>Your entries are stored only in this browser. Use <strong>Backup</strong> after important updates to download a private copy you can restore later.</p>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="editor-dialog" aria-labelledby="editor-title">
+    <form id="application-form" method="dialog">
+      <div class="sheet-header">
+        <div>
+          <p class="eyebrow">APPLICATION NOTE</p>
+          <h2 id="editor-title">Add application</h2>
+        </div>
+        <button class="icon-button" id="close-editor" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="sheet-scroll">
+        <input id="entry-id" type="hidden" />
+        <div class="form-grid">
+          <label>Company<input id="company" required maxlength="90" placeholder="e.g. Deliverect" /></label>
+          <label>Role title<input id="title" required maxlength="120" placeholder="e.g. Implementation Consultant" /></label>
+          <label>Location<input id="location" maxlength="100" placeholder="e.g. Berlin · Hybrid" /></label>
+          <label>Status<select id="status"><option>To apply</option><option>Applied</option><option>Interview</option><option>Offer</option><option>Archived</option></select></label>
+          <label>Application date<input id="application-date" type="date" /></label>
+          <label>Interview date<input id="interview-date" type="date" /></label>
+          <label class="wide">Application link<input id="link" type="url" placeholder="https://…" /></label>
+          <label class="wide">CV / materials used<input id="materials" maxlength="150" placeholder="e.g. Consulting CV PDF · tailored cover letter" /></label>
+          <label class="wide">Fit & required knowledge<textarea id="requirements" rows="4" placeholder="Role fit, key requirements, gaps, work-right note…"></textarea></label>
+          <label class="wide">Notes<textarea id="notes" rows="5" placeholder="What you submitted, follow-up date, recruiter details, reflections…"></textarea></label>
+        </div>
+      </div>
+      <div class="sheet-actions">
+        <button class="danger-button" id="delete-button" type="button" hidden>Delete</button>
+        <span class="save-status" id="save-status" aria-live="polite"></span>
+        <button class="primary-button" type="submit">Save application</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="backup-dialog" aria-labelledby="backup-title">
+    <div class="backup-panel">
+      <div class="sheet-header"><div><p class="eyebrow">YOUR DATA</p><h2 id="backup-title">Backup & restore</h2></div><button class="icon-button" id="close-backup" type="button" aria-label="Close">×</button></div>
+      <p>Export a copy after important changes. This app does not send your notes anywhere.</p>
+      <div class="backup-actions"><button class="primary-button" id="export-button" type="button">Download backup</button><label class="secondary-button file-button">Restore backup<input id="import-input" type="file" accept="application/json" hidden /></label></div>
+      <p class="small-note" id="backup-message" aria-live="polite"></p>
+    </div>
+  </dialog>
+
+  <script src="app.js?v=1"></script>
+</body>
+</html>
