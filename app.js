@@ -1,7 +1,8 @@
 const KEY = 'job-notebook-v1';
+const APPLICATION_STATUS_MIGRATION = 'job-notebook-applied-status-2026-09-15';
 const seed = [
-  {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'To apply', applicationDate:'', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Priority application.'},
-  {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'To apply', applicationDate:'', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Apply if the form does not immediately exclude work-permit needs.'},
+  {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
+  {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
   {id:'pointclickcare', company:'PointClickCare', title:'Software Implementation Consultant, Clinical', location:'Mississauga, Canada · Remote', status:'To apply', applicationDate:'', interviewDate:'', link:'https://jobs.lever.co/pointclickcare/6b7f5c7a-372b-4a4a-8187-b2c347157e14/apply', materials:'Consulting CV PDF', requirements:'Customer discovery, workflows, configuration, testing, training and change management. Canadian work-right/sponsorship is unconfirmed; includes up to 30% travel.', notes:'Apply only if no automatic sponsorship exclusion.'}
 ];
 let entries = load();
@@ -14,6 +15,13 @@ const form = $('application-form');
 
 function load(){ try { const saved = JSON.parse(localStorage.getItem(KEY)); return Array.isArray(saved) ? saved : seed; } catch { return seed; } }
 function save(){ localStorage.setItem(KEY, JSON.stringify(entries)); }
+function applyConfirmedStatuses(){
+  if(localStorage.getItem(APPLICATION_STATUS_MIGRATION)) return;
+  const confirmed = new Set(['deliverect','allianz']);
+  entries = entries.map(entry => confirmed.has(entry.id) ? {...entry,status:'Applied',applicationDate:'2026-09-15',notes:`${entry.notes||''}${entry.notes?' ':''}Applied on 15 September 2026.`} : entry);
+  save();
+  localStorage.setItem(APPLICATION_STATUS_MIGRATION,'done');
+}
 function esc(value=''){ return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function dateText(value){ if(!value) return '—'; const [y,m,d]=value.split('-'); return `${d}.${m}.${y}`; }
 function statusClass(status){ return `status-${status.toLowerCase().replace(/\s+/g,'-')}`; }
@@ -39,4 +47,5 @@ apps.addEventListener('click',e=>{const row=e.target.closest('[data-id]'); if(ro
 $('search-input').addEventListener('input',render); document.querySelectorAll('.filter').forEach(button=>button.addEventListener('click',()=>{activeFilter=button.dataset.filter;document.querySelectorAll('.filter').forEach(b=>b.classList.toggle('active',b===button));render();}));
 $('backup-button').addEventListener('click',()=>backup.showModal()); $('close-backup').addEventListener('click',()=>backup.close()); $('export-button').addEventListener('click',exportData); $('import-input').addEventListener('change',e=>{if(e.target.files[0])importData(e.target.files[0]);e.target.value='';});
 if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js'));
+applyConfirmedStatuses();
 render();
