@@ -237,7 +237,7 @@ dialog form::before, .preparation-panel::before, .role-panel::before, .backup-pa
   .profile-card { max-width: 760px; }
   .backup-actions { grid-template-columns: 1fr 1fr; }
 }
-@media (min-width: 900px) {
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   :root { --top-height: 72px; --nav-height: 0px; }
   .topbar { height: 72px; padding: 0 4%; border-bottom: 1px solid var(--line); background: #fffefa; }
   .brand { font-size: 20px; }
@@ -290,7 +290,7 @@ dialog form::before, .preparation-panel::before, .role-panel::before, .backup-pa
   .prep-buttons { display: flex; flex-wrap: wrap; }
   .toast { bottom: 24px; }
 }
-@media (min-width: 1180px) {
+@media (min-width: 1180px) and (hover: hover) and (pointer: fine) {
   .discover-layout { grid-template-columns: 220px minmax(0,520px) 190px; justify-content: space-between; gap: 30px; }
   .search-progress { display: block; padding-top: 40px; }
   .progress-card { padding: 22px 18px; background: #edf0e5; border: 1px solid #e0e5d7; border-radius: 18px; color: #536348; }
@@ -318,7 +318,7 @@ dialog form::before, .preparation-panel::before, .role-panel::before, .backup-pa
 #prep-cv-choice { width: 100%; min-height: 48px; font-size: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: white; color: var(--ink); }
 /* Keep the full-detail entry point visible even on the smallest card. */
 .job-card>.card-footer { position: sticky; bottom: 0; flex-shrink: 0; margin-top: auto; padding: 5px 20px 8px; border-top: 1px solid #f3eff1; background: white; z-index: 1; }
-@media (min-width: 900px) { .job-card>.card-footer { padding-right: 24px; padding-left: 24px; } }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) { .job-card>.card-footer { padding-right: 24px; padding-left: 24px; } }
 @media (max-height: 620px) and (max-width: 599px) {
   .card-top { padding: 12px 14px 10px; }
   .company-line { margin-bottom: 10px; }
@@ -330,9 +330,10 @@ dialog form::before, .preparation-panel::before, .role-panel::before, .backup-pa
   .job-card>.card-footer { padding: 2px 14px 5px; }
 }
 /* A full-height shell responds to browser bars and rotation without changing views. */
-body { overflow: hidden; }
-.app-shell { height: 100dvh; min-height: 0; display: grid; grid-template-rows: var(--top-height) minmax(0,1fr); overflow: hidden; }
-main { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+html { width: 100%; min-height: 100%; background: var(--paper); }
+body { width: 100%; overflow: hidden; }
+.app-shell { min-width: 0; height: 100vh; height: 100svh; height: 100dvh; min-height: 0; display: grid; grid-template-rows: var(--top-height) minmax(0,1fr); overflow: hidden; }
+main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .fit-list .extra-reason { display: none; }
 .action-icon, .nav-button { transition: transform .12s ease, background .12s ease; }
 .nav-button:active { transform: scale(.96); }
@@ -354,7 +355,7 @@ main { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 @media (min-height: 1000px) and (max-width: 599px) {
   .card-body .extra-reason { display: flex; }
 }
-@media (min-width: 900px) {
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   .app-shell { width: min(1440px,100vw); margin-inline: auto; background: var(--paper); }
   body[data-view="discover"] main { height: calc(100dvh - var(--top-height)); max-height: none; }
   .deck-area { max-width: 620px; }
