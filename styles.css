@@ -569,8 +569,8 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 }
 
 /* Android browsers that report desktop-like widths need an explicit accessibility scale. */
-@media (orientation: portrait) and (min-width: 600px) and (hover: none) and (pointer: coarse),
-       (orientation: portrait) and (min-width: 600px) and (any-hover: none) and (any-pointer: coarse) {
+@media (orientation: portrait) and (min-height: 1200px) and (min-width: 600px) and (hover: none) and (pointer: coarse),
+       (orientation: portrait) and (min-height: 1200px) and (min-width: 600px) and (any-hover: none) and (any-pointer: coarse) {
   html { font-size: 28px; }
   :root { --top-height: calc(148px + env(safe-area-inset-top,0px)); --nav-height: calc(154px + env(safe-area-inset-bottom,0px)); }
   .topbar { padding-inline: 34px; }

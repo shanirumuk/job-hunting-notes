@@ -192,3 +192,9 @@ test('Apply opens a real separate tab with no opener and retains the notebook',a
   expect(popup.url()).toBe(jobs[0].link);expect(await popup.evaluate(()=>window.opener)).toBe(null);await expect(page.locator('#preparation-dialog')).not.toBeVisible();
   expect((await records(page)).find(e=>e.id===jobs[0].id).status).toBe('Preparing');await popup.close();
 });
+
+test('touch tablet keeps the whole deck usable without desktop-width magnification',async ({browser})=>{
+  const context=await browser.newContext({viewport:{width:768,height:1024},isMobile:true,hasTouch:true,serviceWorkers:'block'});const page=await context.newPage();await setup(page);
+  expect(await page.locator('#active-card').evaluate(el=>el.getBoundingClientRect().height)).toBeGreaterThan(300);
+  await page.locator('[data-read-role]').click();await expect(page.locator('.inline-role')).toContainText(jobs[0].description);await context.close();
+});
