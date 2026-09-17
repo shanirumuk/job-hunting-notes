@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "Job notebook · Application helper",
+  "version": "1.0.0",
+  "description": "Fill standard application fields from a Job notebook draft, then review and submit yourself.",
+  "permissions": ["activeTab", "scripting"],
+  "action": { "default_popup": "popup.html", "default_title": "Fill from Job notebook" }
+}
