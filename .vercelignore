@@ -6,3 +6,5 @@ node_modules/
 .env*
 .vercel/
 playwright.config.js
+
+scripts/

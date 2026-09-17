@@ -1,4 +1,4 @@
-import {KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=11';
+import {KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=12';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -129,7 +129,9 @@ async function decide(action, job = deckJobs()[0]) {
     if (action === 'prepare') {preparationId = entry.id;}
   }
   saveDiscovery();
-  if (action === 'prepare') {
+  if (action === 'prepare' && browserConnection) {
+    startApplicationBrowser(job,preparationId);
+  } else if (action === 'prepare') {
     const url = safeURL(job.link);
     if (url) {
       const tab = window.open(url, '_blank');
@@ -146,7 +148,7 @@ async function decide(action, job = deckJobs()[0]) {
   }
   decisionPending = false;
   render();
-  if (action === 'prepare') toast('Listing opened. Your CV choice and notes are saved in Applications. Autofill is not connected on this browser.');
+  if (action === 'prepare' && !browserConnection) toast('Listing opened. Your CV choice and notes are saved in Applications. Autofill is not connected on this browser.');
   else toast(action === 'pass' ? 'Passed. Undo is here if you change your mind.' : 'Saved to your applications for later.');
 }
 function undoSwipe() {
@@ -301,6 +303,55 @@ async function downloadCV() {
   try {const stored = await cvStore('get',cvKey(entry.preparation.cv)); if (stored) download(stored.blob,stored.name,'application/pdf');}
   catch {toast('Could not read the CV. Attach your original file.');}
 }
+let browserConnection=null, browserController=null, browserEntryId=null, browserRun=0;
+async function loadBrowserConnection() {
+  try {browserConnection=(await cvStore('get','connection'))?.token||null;}catch{browserConnection=null;}
+  $('browser-connection-status').textContent=browserConnection?'Private application browser connected on this device.':'Import your private CV setup to connect application preparation.';
+  $('test-browser').disabled=!browserConnection;$('disconnect-browser').hidden=!browserConnection;
+}
+function endApplicationBrowser() {
+  browserRun++;browserController?.abort();browserController=null;
+  $('browser-live').hidden=true;$('browser-live').removeAttribute('src');$('browser-dialog').close();
+}
+async function startApplicationBrowser(job,entryId,{demo=false}={}) {
+  browserController?.abort();const run=++browserRun;const controller=new AbortController();browserController=controller;browserEntryId=entryId;
+  $('browser-title').textContent=demo?'Practice application':job.company;
+  $('browser-progress').textContent='Reading your saved details and selected CV…';$('browser-report').textContent='';
+  $('browser-original').href=safeURL(job.link);$('browser-submitted').hidden=true;
+  $('browser-live').hidden=true;$('browser-live').removeAttribute('src');
+  if(!$('browser-dialog').open)$('browser-dialog').showModal();
+  try {
+    const cv=await cvStore('get',demo?'consulting':cvKey(job.match?.cv||entries.find(e=>e.id===entryId)?.preparation?.cv||'Consulting CV'));
+    if(!cv||!profile.name||!profile.email)throw new Error('Import your private CV setup in My profile first. It contains your contact details and all three PDFs—no retyping needed.');
+    if(cv.blob.size>2500000)throw new Error('This PDF is too large for browser preparation (2.5 MB maximum). Download it from My profile and use Open original.');
+    const base64=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result.split(',')[1]);r.onerror=reject;r.readAsDataURL(cv.blob);});
+    if(run!==browserRun)return;
+    const response=await fetch('/api/prepare',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({url:job.link,title:job.title,company:job.company,demo,fields:{name:profile.name,email:profile.email,phone:profile.phone,linkedin:profile.linkedin},cv:{name:cv.name,base64}}),signal:controller.signal});
+    if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.error||'Browser preparation is unavailable. Use Open original to continue.');}
+    const reader=response.body.getReader(),decoder=new TextDecoder();let pending='';
+    while(true){const {value,done}=await reader.read();if(done)break;pending+=decoder.decode(value,{stream:true});let line;
+      while((line=pending.indexOf('\n'))>=0){const raw=pending.slice(0,line);pending=pending.slice(line+1);if(!raw.trim())continue;const message=JSON.parse(raw);if(run!==browserRun)return;
+        if(message.type==='progress')$('browser-progress').textContent=message.message;
+        if(message.type==='review'){
+          const live=new URL(message.liveUrl);if(live.protocol!=='https:'||!(live.hostname==='browserbase.com'||live.hostname.endsWith('.browserbase.com')))throw new Error('Invalid browser review link.');
+          $('browser-live').src=live.href;$('browser-live').hidden=false;
+          $('browser-progress').textContent='Review the actual form below. This session closes in about 3 minutes; keep this screen open.';
+          $('browser-report').textContent=message.message+' '+(message.filled?.length||0)+' contact fields filled. '+(message.cvAttached?'CV attached.':'CV not attached.')+(message.remaining?.length?' Remaining questions: '+message.remaining.join(', ')+'.':'');
+          $('browser-submitted').hidden=demo;
+        }
+        if(message.type==='error')throw new Error(message.message);
+        if(message.type==='ended'){$('browser-progress').textContent=message.message;$('browser-live').hidden=true;$('browser-live').removeAttribute('src');}
+      }
+    }
+    if(run===browserRun){$('browser-progress').textContent='Session ended. Your saved notebook and CVs are unchanged.';$('browser-live').hidden=true;$('browser-live').removeAttribute('src');}
+  }catch(error){if(run===browserRun&&error.name!=='AbortError'){$('browser-progress').textContent=error.message||'Could not prepare this application.';$('browser-live').hidden=true;$('browser-live').removeAttribute('src');}}
+}
+$('close-browser').addEventListener('click',endApplicationBrowser);$('browser-end').addEventListener('click',endApplicationBrowser);
+$('browser-dialog').addEventListener('cancel',e=>{e.preventDefault();endApplicationBrowser();});
+$('browser-submitted').addEventListener('click',()=>{const entry=entries.find(e=>e.id===browserEntryId);if(entry){entry.status='Applied';entry.applicationDate=today();saveEntries();undoAction=null;render();}endApplicationBrowser();toast('Recorded as submitted by you.');});
+$('test-browser').addEventListener('click',()=>startApplicationBrowser({company:'Job Notebook Practice',title:'Implementation Consultant',link:'https://job-hunting-notes.vercel.app/practice-application.html'},null,{demo:true}));
+$('disconnect-browser').addEventListener('click',async()=>{await cvStore('delete','connection');await loadBrowserConnection();toast('Private browser disconnected from this device.');});
+loadBrowserConnection();
 // Event bindings
 for (const button of document.querySelectorAll('button[data-view]')) button.addEventListener('click', () => setView(button.dataset.view));
 window.addEventListener('hashchange', () => setView(location.hash.slice(1)));
@@ -363,6 +414,8 @@ $('profile-import').addEventListener('change',async e => {
       }
     }
     for (const [key,cv] of cvs) await cvStore('put',key,cv);
+    if (typeof parsed.automationToken === 'string' && /^[A-Za-z0-9_-]{40,100}$/.test(parsed.automationToken)) await cvStore('put','connection',{token:parsed.automationToken});
+    await loadBrowserConnection();
     profile = next;
     if (persist(PROFILE_KEY,profile)) {populateProfile(); render(); $('profile-message').textContent = `Profile imported${cvs.length ? ' with '+cvs.length+' CV PDFs' : ''}. New drafts will use these details.`;}
   } catch (error) {toast(error.message === 'Invalid profile' ? 'Choose a Job notebook profile or setup file.' : `Could not import setup: ${error.message}`);}

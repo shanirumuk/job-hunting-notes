@@ -680,3 +680,15 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
   .job-card>.card-footer { padding: 5px 18px; }
   .job-card { scroll-padding-bottom: 90px; }
 }
+.browser-connection { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 18px; }
+.browser-connection>p:first-child { font-size: 16px; font-weight: 600; }
+#browser-dialog { inset: 0; margin: auto; width: min(1100px,100vw); max-height: 100dvh; }
+.browser-panel { display: grid; grid-template-rows: auto minmax(0,1fr) auto; height: 100dvh; background: white; }
+.browser-panel .sheet-header { padding: 12px 16px; }
+#browser-progress { font-size: 14px; line-height: 1.4; margin: 6px 0 0; }
+.browser-workspace { display: flex; flex-direction: column; min-height: 0; padding: 0 8px; }
+#browser-report { font-size: 14px; margin: 8px; max-height: 90px; overflow: auto; }
+#browser-report:empty { display: none; }
+#browser-live { width: 100%; flex: 1; min-height: 0; border: 1px solid var(--line); }
+.browser-panel .sheet-actions { flex-wrap: wrap; padding: 8px; }
+.browser-panel .sheet-actions>* { min-height: 44px; font-size: 14px; padding: 10px; }
