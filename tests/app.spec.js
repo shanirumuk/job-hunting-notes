@@ -123,3 +123,32 @@ test('touch scrolling stays inside the card and a horizontal touch prepares the 
   expect(await page.locator('#active-card').evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
   await context.close();
 });
+
+for (const [width,height] of [[384,832],[393,852],[412,892],[384,720],[832,384],[892,412],[915,412],[740,320]]) {
+  test(`Galaxy-size workspace has reachable controls at ${width}×${height}`,async ({browser}) => {
+    const context=await browser.newContext({viewport:{width,height},deviceScaleFactor:2.625,isMobile:true,hasTouch:true,serviceWorkers:'block'});
+    const page=await context.newPage();await setup(page);
+    const layout=await page.evaluate(()=>{
+      const rect=el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height,hit:el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))};};
+      return {width:document.documentElement.scrollWidth,height:document.documentElement.scrollHeight,nav:rect(document.querySelector('.main-nav')),top:rect(document.querySelector('.card-top')),body:rect(document.querySelector('.card-body')),controls:[...document.querySelectorAll('.swipe-button,.nav-button,#active-card .text-button')].map(rect)};
+    });
+    expect(layout.width).toBeLessThanOrEqual(width);expect(layout.height).toBeLessThanOrEqual(height+1);
+    for(const control of layout.controls){expect(control.x).toBeGreaterThanOrEqual(0);expect(control.bottom).toBeLessThanOrEqual(height);expect(control.right).toBeLessThanOrEqual(width);expect(control.width).toBeGreaterThanOrEqual(44);expect(control.height).toBeGreaterThanOrEqual(44);expect(control.hit).toBe(true);}
+    if(width<height && height>=780) {expect(await page.locator('.role-checks').evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);}
+    if(width>height){expect(layout.nav.width).toBeLessThan(90);expect(layout.body.x).toBeGreaterThan(layout.top.x);expect(layout.body.y).toBe(layout.top.y);}else{expect(layout.body.y).toBeGreaterThan(layout.top.y);}
+    await page.locator('#prepare-job').click();await expect(page.locator('#preparation-dialog')).toBeVisible();await page.locator('#prep-pitch').fill('Keep this draft when I rotate.');
+    await page.setViewportSize({width:height,height:width});await expect(page.locator('#prep-pitch')).toHaveValue('Keep this draft when I rotate.');
+    await page.locator('#save-preparation').click();expect((await records(page)).find(e=>e.id==='fixture-ba').preparation.pitch).toBe('Keep this draft when I rotate.');
+    await context.close();
+  });
+}
+test('rotation preserves the role and a burst of decisions only passes it once',async ({page})=>{
+  await page.setViewportSize({width:384,height:832});await setup(page);
+  await page.setViewportSize({width:832,height:384});await expect(page.locator('#active-card')).toContainText('Workflow Ltd');
+  await page.evaluate(()=>{document.querySelector('#pass-job').click();document.querySelector('#pass-job').click();document.querySelector('#save-job').click();});
+  await expect(page.locator('#active-card')).toContainText('Systems Ltd');
+  expect(await page.evaluate(()=>Object.keys(JSON.parse(localStorage.getItem('job-notebook-discovery-v1')).decisions).length)).toBe(1);
+});
+test('reduced motion still saves and prepares applications',async ({page})=>{
+  await page.emulateMedia({reducedMotion:'reduce'});await setup(page);await page.locator('#prepare-job').click();await expect(page.locator('#preparation-dialog')).toBeVisible();expect((await records(page)).find(e=>e.id==='fixture-ba').status).toBe('Preparing');
+});

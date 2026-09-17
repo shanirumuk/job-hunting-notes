@@ -2,6 +2,14 @@
 
 A mobile-first job discovery and application notebook with bottom navigation, a viewport-sized swipe deck, persistent decision buttons and full-width detail sheets on phones. Browse a ranked deck, swipe left to pass, save for later, or swipe right to prepare an application. Review the draft, use the optional browser autofill helper, and submit on the employer’s website.
 
+## Responsive workspace
+
+Portrait uses bottom navigation and a full-height card that adapts to browser bars. On short landscape screens, navigation moves to a left rail, role details and fit reasons share a two-column card, and decision buttons sit on the right. Wider desktop screens show search preferences and application progress alongside the deck. Rotating preserves the current role and open draft.
+
+Swipes use a card-relative distance threshold, frame-synchronised feedback and a short exit animation. Fast repeated actions are guarded; decisions are saved before animation. Reduced-motion preferences are respected. Matching results are cached until profile or listing data changes.
+
+Browser coverage includes touch input, portrait/landscape viewports from 384×720 through 412×892 and 740×320 through 915×412, rotation with an edited draft, smaller phones, and offline use. These are emulated Galaxy S23+ size ranges, not tests on physical Samsung hardware.
+
 ## Run locally
 
 Requires Node.js 22 or newer. No runtime dependencies or API keys.

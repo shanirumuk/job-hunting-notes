@@ -1,4 +1,4 @@
-import {KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=6';
+import {KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=7';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -16,7 +16,8 @@ let profile;
 try {profile = validateProfile(read(PROFILE_KEY, defaultProfile));} catch {profile = {...defaultProfile}; storageError = true;}
 let discovery = read(DISCOVERY_KEY, {jobs: [], decisions: {}, fetchedAt: ''});
 if (!discovery || !Array.isArray(discovery.jobs) || !discovery.decisions || typeof discovery.decisions !== 'object') {discovery = {jobs: [], decisions: {}, fetchedAt: ''}; storageError = true;}
-let activeFilter = 'all', activeView = 'discover', undoAction = null, preparationId = null, loading = false, toastTimer, selectedRole = null;
+let activeFilter = 'all', activeView = 'discover', undoAction = null, preparationId = null, loading = false, toastTimer, selectedRole = null, decisionPending = false;
+let matchCache = new WeakMap(), cachedProfile = profile;
 const editor = $('editor-dialog'), backup = $('backup-dialog'), form = $('application-form');
 function toast(message) {$('toast').textContent = message; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').hidden = true, 5500);}
 function persist(key, value) {
@@ -58,19 +59,23 @@ function render() {
   renderDeck();
 }
 function deckJobs() {
+  if (cachedProfile !== profile) {matchCache = new WeakMap(); cachedProfile = profile;}
   const historical = entries.filter(e => e.status === 'To apply' && !e.preparation).map(e => ({...e, description: e.requirements, source: 'Your notebook', historical: true}));
   const all = [...discovery.jobs, ...historical];
   const result = [];
   for (const job of all) {
     if (discovery.decisions[job.id] || result.some(j => sameJob(j,job))) continue;
     if (entries.some(e => sameJob(e,job) && (e.status !== 'To apply' || e.preparation))) continue;
-    const match = matchJob(job,profile);
+    let match = matchCache.get(job);
+    if (!match) {match = matchJob(job,profile); matchCache.set(job,match);}
     // Previously saved roles remain accessible in the notebook even outside current search preferences.
     if (match.eligible) result.push({...job, match});
   }
   return rankJobs(result);
 }
 function renderDeck() {
+  if (decisionPending) return;
+  document.querySelectorAll('.swipe-button').forEach(button => button.disabled = false);
   const jobs = deckJobs(), job = jobs[0];
   $('deck-count').textContent = `${jobs.length} role${jobs.length === 1 ? '' : 's'} to explore`;
   $('undo-swipe').disabled = !undoAction;
@@ -82,7 +87,7 @@ function renderDeck() {
   const {match} = job;
   const checks = match.flags.length;
   const checkSummary = match.flags.some(f => /German requirement|Another language/.test(f)) ? 'Language & work rights need a look' : match.flags.some(f => /Seniority/.test(f)) ? 'Experience & work rights need a look' : 'Work rights & role details to confirm';
-  $('job-deck').innerHTML = `<article class="job-card" id="active-card" aria-label="${esc(job.title)} at ${esc(job.company)}"><span class="swipe-label" aria-hidden="true"></span><div class="card-top"><div class="company-line"><span class="company-monogram" aria-hidden="true">${esc(job.company.slice(0,1))}</span><div class="company-info"><strong>${esc(job.company)}</strong><small>${job.historical ? 'Saved role · check availability' : match.exploration ? 'Worth exploring' : 'Matches your direction'}</small></div><div class="match-badge"><b>${match.score}%</b><small>profile match</small></div></div><h2>${esc(job.title)}</h2><p class="job-location">◎ ${esc(job.location)}${job.remote ? ' · Remote option' : ''}</p></div><div class="card-body"><p class="card-section-label">${match.exploration ? 'A DIFFERENT TITLE. FAMILIAR WORK.' : 'WHY THIS FITS'}</p><ul class="fit-list">${match.reasons.slice(0,2).map(r => `<li>${esc(r)}</li>`).join('')}</ul><button class="role-checks" data-role-details type="button" aria-label="Review ${checks} things to check for this role"><span class="check-dot" aria-hidden="true"></span><span><strong>${checks} things to check</strong><small>${esc(checkSummary)}</small></span><span aria-hidden="true">›</span></button></div><div class="card-footer"><span class="cv-tag">${esc(match.cv)}<br><a href="${esc(safeURL(job.link))}" target="_blank" rel="noopener noreferrer">${esc(job.source || 'Original listing')} ↗</a></span><button class="text-button" data-role-details type="button">Role details ↗</button></div></article>`;
+  $('job-deck').innerHTML = `<article class="job-card" id="active-card" data-job-id="${esc(job.id)}" aria-label="${esc(job.title)} at ${esc(job.company)}"><span class="swipe-label" aria-hidden="true"></span><div class="card-top"><div class="company-line"><span class="company-monogram" aria-hidden="true">${esc(job.company.slice(0,1))}</span><div class="company-info"><strong>${esc(job.company)}</strong><small>${job.historical ? 'Saved role · check availability' : match.exploration ? 'Worth exploring' : 'Matches your direction'}</small></div><div class="match-badge"><b>${match.score}%</b><small>profile match</small></div></div><h2>${esc(job.title)}</h2><p class="job-location">◎ ${esc(job.location)}${job.remote ? ' · Remote option' : ''}</p></div><div class="card-body"><p class="card-section-label">${match.exploration ? 'A DIFFERENT TITLE. FAMILIAR WORK.' : 'WHY THIS FITS'}</p><ul class="fit-list">${match.reasons.slice(0,4).map((r,i) => `<li${i > 1 ? ' class="extra-reason"' : ''}>${esc(r)}</li>`).join('')}</ul><button class="role-checks" data-role-details type="button" aria-label="Review ${checks} things to check for this role"><span class="check-dot" aria-hidden="true"></span><span><strong>${checks} things to check</strong><small>${esc(checkSummary)}</small></span><span aria-hidden="true">›</span></button></div><div class="card-footer"><span class="cv-tag">${esc(match.cv)}<br><a href="${esc(safeURL(job.link))}" target="_blank" rel="noopener noreferrer">${esc(job.source || 'Original listing')} ↗</a></span><button class="text-button" data-role-details type="button">Role details ↗</button></div></article>`;
   wireSwipe();
 }
 function openRoleDetails() {
@@ -109,8 +114,11 @@ async function refreshJobs() {
     $('feed-status').textContent = `Couldn’t refresh. ${discovery.jobs.length ? 'Showing saved suggestions.' : 'Try again, or add a role in Applications.'}`;
   } finally {loading = false; $('refresh-jobs').disabled = false; renderDeck();}
 }
-function decide(action, job = deckJobs()[0]) {
-  if (!job) return;
+async function decide(action, job = deckJobs()[0]) {
+  if (!job || decisionPending) return;
+  decisionPending = true;
+  document.querySelectorAll('.swipe-button').forEach(button => button.disabled = true);
+  $('undo-swipe').disabled = true;
   const existing = entries.find(e => sameJob(e,job));
   undoAction = {jobId: job.id, previousDecision: discovery.decisions[job.id], entry: existing ? structuredClone(existing) : null, newId: null};
   discovery.decisions[job.id] = action;
@@ -121,12 +129,22 @@ function decide(action, job = deckJobs()[0]) {
     saveEntries();
     if (action === 'prepare') {preparationId = entry.id;}
   }
-  saveDiscovery(); render();
-  if (action === 'prepare') openPreparation(preparationId);
+  saveDiscovery();
+  const card = $('active-card');
+  if (card?.dataset.jobId === job.id && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const direction = action === 'pass' ? -1 : action === 'prepare' ? 1 : 0;
+    try {
+      await card.animate([{transform:card.style.transform || 'none',opacity:1}, {transform:`translate3d(${direction * card.clientWidth}px, ${direction ? 0 : -25}px, 0) rotate(${direction * 8}deg)`,opacity:0}], {duration:170,easing:'ease-in',fill:'forwards'}).finished;
+    } catch { /* A cancelled animation must not block an already saved decision. */ }
+  }
+  decisionPending = false;
+  render();
+  if (action === 'prepare' && activeView === 'discover') openPreparation(preparationId);
+  else if (action === 'prepare') toast('Application draft ready in Applications.');
   else toast(action === 'pass' ? 'Passed. Undo is here if you change your mind.' : 'Saved to your applications for later.');
 }
 function undoSwipe() {
-  if (!undoAction) return;
+  if (!undoAction || decisionPending) return;
   const {jobId, previousDecision, entry, newId} = undoAction;
   const current = entries.find(e => e.id === (entry?.id || newId));
   if (current && ['Applied','Interview','Offer'].includes(current.status)) {toast('This application has progressed. Edit it in Applications.'); undoAction = null; render(); return;}
@@ -136,20 +154,40 @@ function undoSwipe() {
   undoAction = null; saveEntries(); saveDiscovery(); render(); toast('Last swipe undone.');
 }
 function wireSwipe() {
-  const card = $('active-card'); let start = null, dx = 0;
-  card.addEventListener('pointerdown', e => {if (e.button !== 0 || e.target.closest('a,button,details')) return; start = {x:e.clientX,y:e.clientY,id:e.pointerId}; dx = 0;});
+  const card = $('active-card'); let start = null, dx = 0, frame = 0;
+  const threshold = () => Math.max(64, Math.min(125, card.clientWidth * .23));
+  card.addEventListener('pointerdown', e => {
+    if (decisionPending || e.button !== 0 || !e.isPrimary || e.target.closest('a,button,details')) return;
+    start = {x:e.clientX,y:e.clientY,id:e.pointerId,time:e.timeStamp}; dx = 0;
+  });
   card.addEventListener('pointermove', e => {
     if (!start || e.pointerId !== start.id) return;
     dx = e.clientX - start.x;
     if (Math.abs(e.clientY - start.y) > Math.abs(dx) + 15) {reset(); return;}
     if (Math.abs(dx) < 10) return;
     if (!card.hasPointerCapture(e.pointerId)) card.setPointerCapture(e.pointerId);
-    card.classList.add('dragging'); card.style.transform = `translateX(${Math.max(-140,Math.min(140,dx))}px) rotate(${dx/25}deg)`;
-    const label = card.querySelector('.swipe-label'); label.style.opacity = Math.min(1,Math.abs(dx)/100); label.textContent = dx > 0 ? 'PREPARE' : 'PASS';
+    card.classList.add('dragging');
+    if (!frame) frame = requestAnimationFrame(() => {
+      frame = 0;
+      card.style.transform = `translate3d(${dx}px,0,0) rotate(${Math.max(-8,Math.min(8,dx/30))}deg)`;
+      const label = card.querySelector('.swipe-label'); label.style.opacity = Math.min(1,Math.abs(dx)/threshold()); label.textContent = dx > 0 ? 'PREPARE' : 'PASS';
+      card.dataset.direction = dx > 0 ? 'prepare' : 'pass';
+    });
   });
-  function reset() {start = null; dx = 0; card.classList.remove('dragging'); card.style.transform = ''; card.querySelector('.swipe-label').style.opacity = 0;}
-  card.addEventListener('pointerup', () => {if (!start) return; const amount = dx; reset(); if (Math.abs(amount) > 95) decide(amount > 0 ? 'prepare' : 'pass');});
+  function reset() {
+    if (start && card.hasPointerCapture(start.id)) card.releasePointerCapture(start.id);
+    cancelAnimationFrame(frame); frame = 0; start = null; dx = 0;
+    card.classList.remove('dragging'); card.style.transform = ''; delete card.dataset.direction;
+    card.querySelector('.swipe-label').style.opacity = 0;
+  }
+  card.addEventListener('pointerup', e => {
+    if (!start || e.pointerId !== start.id) return;
+    const amount = dx, velocity = Math.abs(dx) / Math.max(1,e.timeStamp-start.time);
+    const commit = Math.abs(amount) >= threshold() || (Math.abs(amount) >= 40 && velocity >= .55);
+    reset(); if (commit) decide(amount > 0 ? 'prepare' : 'pass');
+  });
   card.addEventListener('pointercancel', reset);
+  card.addEventListener('lostpointercapture', e => {if (e.target === card && start) reset();});
 }
 function openEditor(entry) {
   form.reset(); $('save-status').textContent = ''; $('delete-button').hidden = !entry; $('editor-title').textContent = entry ? 'Edit application' : 'Add application';

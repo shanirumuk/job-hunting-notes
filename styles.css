@@ -329,37 +329,105 @@ dialog form::before, .preparation-panel::before, .role-panel::before, .backup-pa
   .role-checks small { display: none; }
   .job-card>.card-footer { padding: 2px 14px 5px; }
 }
-@media (max-height: 500px) and (min-width: 600px) and (max-width: 899px) {
-  .intro-row h1 { font-size: 23px; }
-  .intro-row .subtitle { display: none; }
-  .deck-area { display: grid; grid-template-columns: minmax(0,1fr) 90px; grid-template-rows: 32px minmax(0,1fr) auto; column-gap: 14px; }
-  .deck-meta { grid-column: 1/-1; height: 32px; }
-  #job-deck { grid-column: 1; grid-row: 2; }
-  .swipe-actions { grid-column: 2; grid-row: 2; height: 100%; flex-direction: column; justify-content: space-evenly; gap: 4px; padding: 0; }
-  .swipe-button { flex-direction: row; justify-content: center; min-height: 44px; gap: 6px; width: 90px; padding: 0; }
-  .action-icon { width: 35px; height: 35px; }
-  .swipe-button .ui-icon { width: 22px; height: 22px; }
-  .swipe-button small { font-size: 10px; }
-  .feed-status { grid-column: 1/-1; padding-top: 6px; }
-  .company-line { margin-bottom: 10px; }
-  .job-card h2 { font-size: 22px; }
-}
-/* Preserve the repository's full-screen touch shell and compact desktop frame. */
+/* A full-height shell responds to browser bars and rotation without changing views. */
 body { overflow: hidden; }
 .app-shell { height: 100dvh; min-height: 0; display: grid; grid-template-rows: var(--top-height) minmax(0,1fr); overflow: hidden; }
 main { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.fit-list .extra-reason { display: none; }
+.action-icon, .nav-button { transition: transform .12s ease, background .12s ease; }
+.nav-button:active { transform: scale(.96); }
+.job-card { animation: card-arrive .16s ease-out; }
+.job-card.dragging { will-change: transform; }
+.job-card[data-direction="prepare"] { border-color: #917286; }
+.job-card[data-direction="pass"] { border-color: #b08a79; }
+@keyframes card-arrive { from { opacity: .4; } to { opacity: 1; } }
+@media (min-height: 780px) and (max-width: 599px) {
+  .card-top { padding: clamp(20px,2.6dvh,28px) 20px; }
+  .card-body { padding-top: clamp(17px,2.4dvh,26px); }
+  .fit-list { gap: 12px; }
+  .fit-list li { font-size: 14px; }
+  .role-checks { margin-top: auto; }
+}
+@media (min-height: 850px) and (max-width: 599px) {
+  .card-body .extra-reason:nth-child(3) { display: flex; }
+}
+@media (min-height: 1000px) and (max-width: 599px) {
+  .card-body .extra-reason { display: flex; }
+}
 @media (min-width: 900px) {
-  body { min-height: 100dvh; display: grid; place-items: center; background: #eee5dd; }
-  .app-shell { width: min(720px,100vw); height: min(100dvh,980px); border-inline: 1px solid var(--line); background: var(--paper); box-shadow: 0 0 60px #2c241c12; }
-  .topbar { padding: 0 20px; }
-  .brand { font-size: 17px; }
-  .main-nav { gap: 2px; }
-  .nav-button { padding: 10px 9px; font-size: 12px; }
-  .nav-icon { width: 16px; height: 16px; }
+  .app-shell { width: min(1440px,100vw); margin-inline: auto; background: var(--paper); }
+  body[data-view="discover"] main { height: calc(100dvh - var(--top-height)); max-height: none; }
+  .deck-area { max-width: 620px; }
+  .card-body .extra-reason { display: flex; }
+  .profile-card { max-width: none; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 20px; align-items: start; }
+  .cv-library { grid-row: span 3; }
+  .profile-actions { grid-column: 1/-1; }
+}
+/* Short, wide touch screens: a navigation rail, two-column card and side actions. */
+@media (orientation: landscape) and (min-width: 600px) and (max-height: 600px) {
+  :root { --top-height: calc(48px + env(safe-area-inset-top,0px)); --nav-height: 0px; --rail-width: calc(68px + env(safe-area-inset-left,0px)); }
+  .app-shell { width: 100%; grid-template-columns: var(--rail-width) minmax(0,1fr); }
+  .topbar, main { grid-column: 2; }
+  .topbar { height: var(--top-height); padding: env(safe-area-inset-top,0px) calc(14px + env(safe-area-inset-right,0px)) 0 14px; border-bottom: 1px solid var(--line); }
+  .brand { font-size: 16px; }
+  .mark { width: 26px; height: 28px; font-size: 20px; }
+  .main-nav { position: fixed; inset: 0 auto 0 0; height: 100dvh; width: var(--rail-width); padding: 8px 5px 8px calc(5px + env(safe-area-inset-left,0px)); display: flex; flex-direction: column; justify-content: center; gap: 12px; border: 0; border-right: 1px solid var(--line); background: #fffefa; }
+  .nav-button { flex-direction: column; width: 100%; min-height: 66px; padding: 8px 2px; font-size: 10px; gap: 6px; }
+  .nav-icon { width: 22px; height: 22px; }
+  #nav-count { position: absolute; top: 3px; left: calc(50% + 8px); border: 2px solid #fffefa; }
   #backup-button span { display: none; }
-  body[data-view="discover"] main { height: calc(min(100dvh,980px) - var(--top-height)); padding-top: 20px; }
-  .discover-layout { display: flex; justify-content: center; }
-  .deck-area { max-width: 520px; }
-  .search-compass, .search-progress { display: none; }
-  h1, .intro-row h1 { font-size: 35px; }
+  main { padding: 12px calc(14px + env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) 14px; }
+  body[data-view="discover"] main { height: calc(100dvh - var(--top-height)); padding: 0 calc(12px + env(safe-area-inset-right,0px)) env(safe-area-inset-bottom,0px) 12px; }
+  .intro-row { padding: 0; min-height: 44px; }
+  .intro-row h1 { font-size: 23px; letter-spacing: -.7px; }
+  .intro-row .eyebrow, .intro-row .subtitle, .search-compass, .search-progress { display: none; }
+  .refresh-button { width: 40px; height: 44px; border: 0; background: transparent; }
+  .discover-layout { display: flex; gap: 0; }
+  .deck-area { max-width: none; display: grid; grid-template-columns: minmax(0,1fr) 76px; grid-template-rows: 30px minmax(0,1fr) 23px; column-gap: 10px; }
+  .deck-meta { grid-column: 1; height: 30px; }
+  .deck-meta .text-button { min-height: 30px; padding-block: 4px; }
+  #job-deck { grid-column: 1; grid-row: 2; }
+  .job-card { display: grid; grid-template-columns: minmax(0,.95fr) minmax(0,1.05fr); grid-template-rows: minmax(0,1fr) auto; overflow: hidden; border-radius: 18px; }
+  .card-top, .card-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 13px; }
+  .card-top { grid-column: 1; grid-row: 1; }
+  .card-body { grid-column: 2; grid-row: 1; display: block; }
+  .company-line { gap: 7px; margin-bottom: 12px; }
+  .company-monogram { display: none; }
+  .company-info strong { font-size: 13px; }
+  .company-info small { font-size: 9px; }
+  .match-badge { padding: 5px 7px; }
+  .match-badge b { font-size: 16px; }
+  .job-card h2 { font-size: clamp(20px,2.8vw,26px); margin-bottom: 8px; }
+  .job-location { font-size: 11px; }
+  .card-section-label { font-size: 9px; margin-bottom: 8px; }
+  .fit-list { gap: 7px; margin-bottom: 10px; }
+  .fit-list li { font-size: 12px; }
+  .card-body .extra-reason { display: none; }
+  .role-checks { min-height: 44px; padding: 9px; }
+  .role-checks small { display: none; }
+  .job-card>.card-footer { grid-column: 1/-1; position: static; padding: 0 13px; min-height: 44px; }
+  .swipe-actions { grid-column: 2; grid-row: 1/3; height: auto; flex-direction: column; justify-content: space-evenly; gap: 4px; padding: 0; }
+  .swipe-button { min-width: 64px; width: 100%; min-height: 62px; gap: 4px; padding: 0; }
+  .action-icon { width: 44px; height: 44px; }
+  .swipe-button .ui-icon { width: 23px; height: 23px; }
+  .swipe-button small { font-size: 10px; }
+  .feed-status { grid-column: 1/-1; padding: 4px 0 0; font-size: 9px; }
+  .swipe-label { top: 12px; font-size: 18px; }
+  .privacy-footer { display: none; }
+  .profile-card { max-width: none; }
+  .cv-library-row { grid-template-columns: minmax(0,1fr) auto; }
+  .cv-library-row .file-button { grid-column: 1/-1; }
+  .application-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .application-item { display: block; }
+  .application-actions { justify-content: flex-start; gap: 2px; margin-top: 12px; }
+  dialog { inset: 0; margin: auto; width: min(960px,calc(100vw - 24px)); max-height: calc(100dvh - 16px); }
+  dialog form, .preparation-panel, .role-panel { height: calc(100dvh - 16px); border-radius: 18px; }
+  dialog form::before, .preparation-panel::before, .role-panel::before, .backup-panel::before { display: none; }
+  .sheet-header { padding: 10px 16px; align-items: center; }
+  .sheet-header h2 { font-size: 18px; }
+  .sheet-header .eyebrow { display: none; }
+  .sheet-scroll { padding: 14px 18px; }
+  .sheet-actions { padding: 8px 16px; }
+  .preparation-panel .sheet-actions { grid-template-columns: 1fr 1fr; }
+  .toast { left: calc(var(--rail-width) + 12px); bottom: 12px; }
 }
