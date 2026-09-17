@@ -219,3 +219,42 @@ test('practice inspection reports unchecked required consent without changing it
  const scan=await page.evaluate(inspectForm);expect(scan.fields.find(f=>f.type==='checkbox').filled).toBe(false);
  expect(await page.evaluate(()=>window.practiceSubmitted)).toBe(false);
 });
+test('summary checks and missing-requirement sheet are readable on a Galaxy-sized screen',async({page})=>{
+ await page.setViewportSize({width:412,height:892});await page.route('**/api/jobs',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Your role: requirements analysis and API integration. German B2 required. Flexible working hours. 30 days annual leave.'}]}}));
+ await page.goto('/');await expect(page.locator('.qualification.gap')).toContainText('German B2');await expect(page.locator('.benefit-list')).toContainText('30 days');
+ await expect(page.locator('.source-description')).not.toHaveAttribute('open','');
+ await page.locator('.listing-info').click();await expect(page.locator('#role-content')).toContainText('B1');
+ for(const selector of ['#role-content .role-heading','#role-content .prep-meta','#role-content li'])expect(await page.locator(selector).first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(19);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+test('private connection loads all CVs without file uploads and removes the token from the URL',async({page})=>{
+ await page.route('**/api/jobs',r=>r.fulfill({json:{jobs:[]}}));
+ const cv={name:'Saved.pdf',base64:Buffer.from('%PDF-1.4\n%%EOF').toString('base64')};const token='private-test-'.padEnd(43,'x');
+ await page.route('**/api/setup',r=>{expect(r.request().headers().authorization).toBe('Bearer '+token);return r.fulfill({json:{profile:{name:'Saved Applicant',email:'saved@example.org'},cvs:{consulting:cv,analyst:cv,developer:cv}}});});
+ await page.goto('/#connect='+token);await expect(page.locator('#saved-cv-status')).toContainText('All three saved CVs');expect(page.url()).not.toContain(token);
+ for(const type of ['consulting','analyst','developer'])await expect(page.locator('#'+type+'-file-status')).toContainText('Saved.pdf');
+});
+test('larger text, rotation, and returning from requirements keep the decision usable',async({page})=>{
+ await page.setViewportSize({width:412,height:892});await setup(page);
+ await page.evaluate(()=>document.documentElement.style.fontSize='200%');
+ await page.locator('.listing-info').click();await expect(page.locator('#role-content')).toBeVisible();
+ const font=await page.locator('#role-content li').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize));expect(font).toBeGreaterThanOrEqual(38);
+ expect(await page.locator('#close-role').evaluate(el=>{const r=el.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&r.right<=innerWidth;})).toBe(true);
+ await page.screenshot({path:'private/requirements-large-text.png'});
+ await page.keyboard.press('Escape');await page.setViewportSize({width:892,height:412});
+ await expect(page.locator('#prepare-job')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.evaluate(()=>document.documentElement.style.fontSize='');
+ await page.setViewportSize({width:412,height:892});await page.locator('[data-read-role]').click();await page.screenshot({path:'private/role-summary-phone.png'});
+ await page.locator('.listing-info').click();await page.screenshot({path:'private/requirements-phone.png'});
+ await page.keyboard.press('Escape');await page.locator('#save-job').click();await page.locator('[data-view="notebook"]').first().click();expect((await records(page)).some(e=>e.id==='fixture-ba')).toBe(true);
+});
+test('automatic CV recovery preserves a newer local PDF and edited profile',async({page})=>{
+ await setup(page);await page.locator('[data-view="profile"]').first().click();
+ const base64=Buffer.from('%PDF-1.4\n%%EOF').toString('base64');const token='restore-test-'.padEnd(43,'x');
+ await page.locator('#profile-import').setInputFiles({name:'local.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({automationToken:token,profile:{name:'Edited Name',email:'edited@example.org'},cvs:{consulting:{name:'Newer-local.pdf',base64}}}))});
+ await expect(page.locator('#consulting-file-status')).toContainText('Newer-local.pdf');
+ await page.route('**/api/setup',r=>r.fulfill({json:{profile:{name:'Server Name',email:'server@example.org'},cvs:{consulting:{name:'Old-server.pdf',base64},analyst:{name:'BA.pdf',base64},developer:{name:'Dev.pdf',base64}}}}));
+ await page.reload();await expect(page.locator('#saved-cv-status')).toContainText('All three saved CVs');
+ await expect(page.locator('#consulting-file-status')).toContainText('Newer-local.pdf');await expect(page.locator('#profile-name')).toHaveValue('Edited Name');
+ await expect(page.locator('#analyst-file-status')).toContainText('BA.pdf');
+});

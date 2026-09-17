@@ -698,3 +698,32 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 .browser-input-row { display: flex; flex-wrap: wrap; gap: 6px; }
 #browser-text { flex: 1 1 100%; min-width: 0; font-size: 18px; }
 .browser-input-row button { min-height: 44px; }
+
+/* Readable, scrollable listing summaries and uncertainty sheets on phones. */
+.inline-role, #role-content { font-size: 1.1875rem; line-height: 1.6; }
+.inline-role p, .inline-role li, #role-content li, #role-content .source-note, #role-content .prep-meta { font-size: 1.1875rem; line-height: 1.6; }
+.inline-role h3, #role-content .flag-box strong { font-size: 1.375rem; line-height: 1.35; }
+#role-content .role-heading { font-size: 1.75rem; line-height: 1.25; }
+#role-content .flag-box { padding: 20px; }
+#role-content li { margin: 14px 0; }
+.qualification-list { list-style: none; padding: 0; margin: 16px 0 24px; }
+.qualification { display: flex; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.qualification-icon { flex: 0 0 32px; height: 32px; border-radius: 50%; text-align: center; font-size: 24px; line-height: 32px; font-weight: 700; background: #edf0f4; color: #424b59; }
+.qualification.match .qualification-icon { background: #dceee3; color: #215e3c; }
+.qualification.gap .qualification-icon { background: #f9e0de; color: #99382f; }
+.qualification strong { font-size: 1.1875rem; line-height: 1.4; }
+.qualification p { margin: 6px 0 0; }
+.inline-role .check-legend { font-size: 1rem; line-height: 1.5; }
+.source-description summary { min-height: 48px; padding: 12px 0; font-size: 1.1875rem; font-weight: 600; cursor: pointer; }
+.source-description p { white-space: pre-line; }
+.benefit-list { padding-left: 24px; }
+@media (pointer: coarse) and (min-width: 600px) and (orientation: portrait) { .inline-role p, .inline-role li, #role-content li, #role-content .source-note, #role-content .prep-meta { font-size: 1.625rem; } #role-content .role-heading { font-size: 2.25rem; } }
+
+.listing-info { min-width: 48px; min-height: 48px; }
+.decision-alert { font-size: 1.1875rem; line-height: 1.45; background: #fff0e8; color: #743721; border-radius: 12px; padding: 14px; margin: 0 0 18px; }
+.inline-role h3:not(:first-child) { margin-top: 24px; }
+#role-dialog .sheet-actions a, #role-dialog button { min-height: 48px; }
+
+.qualification details { min-width: 0; flex: 1; }
+.qualification summary { min-height: 48px; font-weight: 650; font-size: 1.1875rem; line-height: 1.45; cursor: pointer; }
+.fit-list li::before { content: '•'; }
