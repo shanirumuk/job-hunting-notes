@@ -14,7 +14,7 @@ Browser coverage includes touch input, portrait/landscape viewports from 384×72
 
 ## Run locally
 
-Requires Node.js 22 or newer. No runtime dependencies or API keys.
+Requires Node.js 22 or newer. Run `npm ci` to install dependencies. Discovery works without keys; private browser preparation needs server-side Browserbase credentials.
 
 ```bash
 npm start
@@ -30,7 +30,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-The app is compatible with Vercel’s Node serverless functions. `api/jobs.js` is the only backend endpoint; the rest is static. Deploy the repository root with no build command. The existing production URL is https://job-hunting-notes.vercel.app/; local changes do not update that deployment automatically.
+The app is compatible with Vercel’s Node serverless functions. `api/jobs.js` provides listings; `api/prepare.js` streams private browser preparation and review, and `api/browser.js` forwards explicit typing and session-end actions. The rest is static. Deploy the repository root with no build command. The existing production URL is https://job-hunting-notes.vercel.app/; local changes do not update that deployment automatically.
 
 ## Discovery and matching
 
@@ -43,7 +43,7 @@ The app is compatible with Vercel’s Node serverless functions. `api/jobs.js` i
 
 ## Application preparation
 
-A right swipe opens the source URL in a new tab (same-tab fallback if popups are blocked), without opening a notebook form. Arbeitnow links may lead to a job-board listing, requiring a further Apply click. It also creates a **Preparing** record with a CV recommendation, an editable introduction based on verified profile facts, practical answers and a checklist. The optional draft remains accessible in Applications. This does not autofill the external page or attach a CV. These are deterministic drafts, not AI-generated tailored CVs. Existing PDFs retain their layout and content. Original job descriptions are treated as text.
+Without a private browser connection, a right swipe opens the source URL in a new tab (same-tab fallback if popups are blocked), without opening a notebook form. Arbeitnow links may lead to a job-board listing, requiring a further Apply click. It also creates a **Preparing** record with a CV recommendation, an editable introduction based on verified profile facts, practical answers and a checklist. The optional draft remains accessible in Applications. This does not autofill the external page or attach a CV. These are deterministic drafts, not AI-generated tailored CVs. Existing PDFs retain their layout and content. Original job descriptions are treated as text.
 
 Standard-field autofill is available through the optional desktop Chrome/Edge extension:
 
@@ -61,7 +61,7 @@ After submission, confirm **I’ve submitted this application** to record the da
 
 **My profile** stores contact details, start date, languages, work-authorisation reference, motivation and verified achievements. New drafts use this profile; existing drafts keep their saved wording.
 
-Upload Consulting, Business Analyst and Full Stack Developer PDF files (up to 15 MB each) to the local CV library. All three files can be downloaded from Profile. The recommended file is available from the application draft, and the CV selector lets you change it without rewriting the PDF or losing draft edits. Developer-heavy jobs remain excluded from discovery; a manually added developer role can select the developer CV. File contents are stored in IndexedDB on this device; the app does not send them to a backend.
+Upload Consulting, Business Analyst and Full Stack Developer PDF files (up to 15 MB each) to the local CV library. All three files can be downloaded from Profile. The recommended file is available from the application draft, and the CV selector lets you change it without rewriting the PDF or losing draft edits. Developer-heavy jobs remain excluded from discovery; a manually added developer role can select the developer CV. File contents are stored in IndexedDB on this device. Starting browser preparation sends the selected PDF and contact details to the private endpoint and cloud browser; employer forms may autosave uploads before submission.
 
 **Import profile** accepts a Job notebook profile JSON or a setup bundle containing `profile` and optional `cvs.consulting`, `cvs.analyst` and `cvs.developer` objects with `name` and base64 PDF content. Resume-editor JSON exports have a different schema and must first be mapped to the profile format. Private setup bundles belong in `private/`, which is excluded from Git, Vercel deployment and the local web server. Never commit a personal setup bundle or CV to this public repository.
 
@@ -74,3 +74,17 @@ The original `job-notebook-v1` localStorage key and confirmed-status migration a
 - **CV PDFs are not in JSON backups. Keep the original PDF files or your private setup bundle.**
 - The publicly deployed app exposes its code and initial seed roles. Each browser has its own data. The job endpoint fetches public listings and never receives your profile, CVs or application history.
 - The PWA caches its application shell for offline use; feed requests remain online-only. Clearing browser storage removes locally saved data. No background search scheduling, account sync or automatic application submission is included.
+
+## Private application browser on phone Chrome
+
+Import the private setup bundle in My profile once. Its `automationToken` connects this device; the same bundle imports saved contact details and all three original PDFs without changing their layout. The token stays in IndexedDB and is excluded from notebook backups. Keep this bundle private. Disconnect removes the device connection.
+
+Set `BROWSERBASE_API_KEY` and a random, at least 32-character `JOB_NOTEBOOK_ACCESS_TOKEN` on the server. The setup bundle must contain the matching access token. Never expose the Browserbase key in frontend code or commit either credential. No project ID or separate model key is needed.
+
+A connected right swipe starts a temporary Browserbase browser, opens the listing, follows a supported application link, checks the employer/role identity, fills recognised empty contact fields and attaches the recommended original PDF (maximum 2.5 MB). Review appears inside the app after automation stops. Tap fields in the live application; on phone Chrome, expand **Type into a form field** to send text to the focused field. Complete custom questions and submit yourself, then use **I submitted it** to update the notebook. The automation never submits, checks consent boxes, answers eligibility questions, or overwrites existing answers.
+
+Use **Try a practice application** to verify your connection first. It uploads no application to an employer. Initial URL support is limited to Lever, Workable, SmartRecruiters, Personio and Teamtailor domains, with Arbeitnow as a listing source. This is a conservative first version, not a guarantee that every form on those platforms works. Embedded forms, blocked pages, logins and unsupported sites may need manual completion through Open original.
+
+The review session lasts about three minutes; keep the app open. End session explicitly releases the browser; closing the app requests release, and the cloud session has a five-minute maximum. No paid proxies or Verified features are requested. Real application session recording/logging is disabled. Link discovery can use Stagehand and the included Model Gateway allowance; quotas and anti-bot restrictions can still prevent preparation. The endpoint holds a streamed response during review, so deployment must support a 300-second function duration.
+
+Validation: `npm test` and `npm run test:browser`. With credentials supplied through the process environment, `node scripts/browserbase-smoke.mjs` tests the controlled form in a cloud session, `node scripts/production-smoke.mjs` checks the deployed streaming endpoint, and `node scripts/phone-smoke.mjs` checks the production review on an emulated phone (requires Playwright Chromium). These tests consume Browserbase session allowance and use synthetic applicant data.

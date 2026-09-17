@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/prepare.js": {
+      "maxDuration": 300,
+      "includeFiles": "node_modules/@browserbasehq/stagehand/dist/assets/stagehand-extension.zip"
+    }
+  }
+}

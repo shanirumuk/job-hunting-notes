@@ -198,3 +198,24 @@ test('touch tablet keeps the whole deck usable without desktop-width magnificati
   expect(await page.locator('#active-card').evaluate(el=>el.getBoundingClientRect().height)).toBeGreaterThan(300);
   await page.locator('[data-read-role]').click();await expect(page.locator('.inline-role')).toContainText(jobs[0].description);await context.close();
 });
+test('connected swipe sends the selected PDF privately and never marks a failed preparation applied',async({page})=>{
+ await setup(page);await page.locator('[data-view="profile"]').first().click();
+ const token='test-connection-token-'.padEnd(43,'x');
+ const bundle={automationToken:token,profile:{name:'Test Applicant',email:'test@example.org'},cvs:{analyst:{name:'BA.pdf',base64:Buffer.from('%PDF-1.4\n%%EOF').toString('base64')}}};
+ await page.locator('#profile-import').setInputFiles({name:'setup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(bundle))});
+ await expect(page.locator('#browser-connection-status')).toContainText('connected on this device');
+ let sent;await page.route('**/api/prepare',async route=>{sent={headers:route.request().headers(),body:route.request().postDataJSON()};await route.fulfill({status:400,json:{error:'Unsupported employer form. Use Open original.'}});});
+ await page.locator('[data-view="discover"]').first().click();await page.locator('#prepare-job').click();
+ await expect(page.locator('#browser-progress')).toContainText('Unsupported employer form');
+ expect(sent.headers.authorization).toBe('Bearer '+token);expect(sent.body.cv.name).toBe('BA.pdf');expect(sent.body.fields.email).toBe('test@example.org');
+ expect((await records(page)).find(e=>e.id==='fixture-ba').status).toBe('Preparing');expect(await page.evaluate(()=>window.openedListings)).toEqual([]);
+ expect(await page.evaluate(()=>JSON.stringify(localStorage))).not.toContain(token);
+ await page.locator('#browser-end').click();await expect(page.locator('#browser-dialog')).not.toBeVisible();
+ await page.locator('[data-view="profile"]').first().click();await page.locator('#disconnect-browser').click();await expect(page.locator('#test-browser')).toBeDisabled();
+});
+test('practice inspection reports unchecked required consent without changing it',async({page})=>{
+ const {inspectForm}=await import('../server/fields.js');await page.goto('/practice-application.html');
+ await page.locator('input[type="checkbox"]').evaluate(el=>el.required=true);
+ const scan=await page.evaluate(inspectForm);expect(scan.fields.find(f=>f.type==='checkbox').filled).toBe(false);
+ expect(await page.evaluate(()=>window.practiceSubmitted)).toBe(false);
+});

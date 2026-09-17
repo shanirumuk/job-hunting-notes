@@ -9,7 +9,7 @@ export async function prepareInBrowser(input,{emit,signal,reviewMilliseconds=210
   const checkpoint=()=>{if(signal?.aborted) throw new Error('Session stopped.');};
   try {
     emit({type:'progress',message:'Starting your private application browser…'});
-    browser=await browserbase.launch({apiKey:process.env.BROWSERBASE_API_KEY,timeout:300,proxies:false,browserSettings:{solveCaptchas:false,verified:false,recordSession:recordDemo&&input.demo,logSession:recordDemo&&input.demo,viewport:{width:412,height:850}}});
+    browser=await browserbase.launch({apiKey:process.env.BROWSERBASE_API_KEY,timeout:300,proxies:false,browserSettings:{solveCaptchas:false,verified:false,recordSession:recordDemo&&input.demo,logSession:recordDemo&&input.demo,viewport:{width:412,height:520}}});
     checkpoint();
     stagehand=await Stagehand.create({browser,cache:true,logging:{level:'off'}});
     [page]=await browser.context.pages();

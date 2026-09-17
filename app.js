@@ -1,4 +1,4 @@
-import {KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=12';
+import {KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=14';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -149,7 +149,7 @@ async function decide(action, job = deckJobs()[0]) {
   decisionPending = false;
   render();
   if (action === 'prepare' && !browserConnection) toast('Listing opened. Your CV choice and notes are saved in Applications. Autofill is not connected on this browser.');
-  else toast(action === 'pass' ? 'Passed. Undo is here if you change your mind.' : 'Saved to your applications for later.');
+  else if(action !== 'prepare') toast(action === 'pass' ? 'Passed. Undo is here if you change your mind.' : 'Saved to your applications for later.');
 }
 function undoSwipe() {
   if (!undoAction || decisionPending) return;
@@ -303,22 +303,27 @@ async function downloadCV() {
   try {const stored = await cvStore('get',cvKey(entry.preparation.cv)); if (stored) download(stored.blob,stored.name,'application/pdf');}
   catch {toast('Could not read the CV. Attach your original file.');}
 }
-let browserConnection=null, browserController=null, browserEntryId=null, browserRun=0;
+let browserConnection=null, browserController=null, browserEntryId=null, browserSessionId=null, browserRun=0;
 async function loadBrowserConnection() {
   try {browserConnection=(await cvStore('get','connection'))?.token||null;}catch{browserConnection=null;}
   $('browser-connection-status').textContent=browserConnection?'Private application browser connected on this device.':'Import your private CV setup to connect application preparation.';
   $('test-browser').disabled=!browserConnection;$('disconnect-browser').hidden=!browserConnection;
 }
+function releaseBrowserSession() {
+  if(browserSessionId)fetch('/api/browser',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({sessionId:browserSessionId,action:'end'})}).catch(()=>{});
+  browserSessionId=null;
+}
 function endApplicationBrowser() {
+  releaseBrowserSession();
   browserRun++;browserController?.abort();browserController=null;
   $('browser-live').hidden=true;$('browser-live').removeAttribute('src');$('browser-dialog').close();
 }
 async function startApplicationBrowser(job,entryId,{demo=false}={}) {
-  browserController?.abort();const run=++browserRun;const controller=new AbortController();browserController=controller;browserEntryId=entryId;
+  releaseBrowserSession();browserController?.abort();const run=++browserRun;const controller=new AbortController();browserController=controller;browserEntryId=entryId;
   $('browser-title').textContent=demo?'Practice application':job.company;
   $('browser-progress').textContent='Reading your saved details and selected CV…';$('browser-report').textContent='';
   $('browser-original').href=safeURL(job.link);$('browser-submitted').hidden=true;
-  $('browser-live').hidden=true;$('browser-live').removeAttribute('src');
+  $('browser-live').hidden=true;$('browser-live').removeAttribute('src');$('browser-keyboard').hidden=true;
   if(!$('browser-dialog').open)$('browser-dialog').showModal();
   try {
     const cv=await cvStore('get',demo?'consulting':cvKey(job.match?.cv||entries.find(e=>e.id===entryId)?.preparation?.cv||'Consulting CV'));
@@ -331,10 +336,11 @@ async function startApplicationBrowser(job,entryId,{demo=false}={}) {
     const reader=response.body.getReader(),decoder=new TextDecoder();let pending='';
     while(true){const {value,done}=await reader.read();if(done)break;pending+=decoder.decode(value,{stream:true});let line;
       while((line=pending.indexOf('\n'))>=0){const raw=pending.slice(0,line);pending=pending.slice(line+1);if(!raw.trim())continue;const message=JSON.parse(raw);if(run!==browserRun)return;
+        if(message.type==='session')browserSessionId=message.sessionId;
         if(message.type==='progress')$('browser-progress').textContent=message.message;
         if(message.type==='review'){
           const live=new URL(message.liveUrl);if(live.protocol!=='https:'||!(live.hostname==='browserbase.com'||live.hostname.endsWith('.browserbase.com')))throw new Error('Invalid browser review link.');
-          $('browser-live').src=live.href;$('browser-live').hidden=false;
+          live.searchParams.set('navbar','false');$('browser-keyboard').hidden=false;$('browser-live').src=live.href;$('browser-live').hidden=false;
           $('browser-progress').textContent='Review the actual form below. This session closes in about 3 minutes; keep this screen open.';
           $('browser-report').textContent=message.message+' '+(message.filled?.length||0)+' contact fields filled. '+(message.cvAttached?'CV attached.':'CV not attached.')+(message.remaining?.length?' Remaining questions: '+message.remaining.join(', ')+'.':'');
           $('browser-submitted').hidden=demo;
@@ -346,6 +352,13 @@ async function startApplicationBrowser(job,entryId,{demo=false}={}) {
     if(run===browserRun){$('browser-progress').textContent='Session ended. Your saved notebook and CVs are unchanged.';$('browser-live').hidden=true;$('browser-live').removeAttribute('src');}
   }catch(error){if(run===browserRun&&error.name!=='AbortError'){$('browser-progress').textContent=error.message||'Could not prepare this application.';$('browser-live').hidden=true;$('browser-live').removeAttribute('src');}}
 }
+for(const button of document.querySelectorAll('[data-browser-input]'))button.addEventListener('click',async()=>{
+  const action=button.dataset.browserInput,text=$('browser-text').value;if(!browserSessionId||(action==='type'&&!text))return;
+  button.disabled=true;
+  try{const response=await fetch('/api/browser',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({sessionId:browserSessionId,action,text})});if(!response.ok)throw new Error('Could not send input. Check that the session is still open.');if(action==='type')$('browser-text').value='';}
+  catch(error){toast(error.message);}finally{button.disabled=false;}
+});
+window.addEventListener('pagehide',releaseBrowserSession);
 $('close-browser').addEventListener('click',endApplicationBrowser);$('browser-end').addEventListener('click',endApplicationBrowser);
 $('browser-dialog').addEventListener('cancel',e=>{e.preventDefault();endApplicationBrowser();});
 $('browser-submitted').addEventListener('click',()=>{const entry=entries.find(e=>e.id===browserEntryId);if(entry){entry.status='Applied';entry.applicationDate=today();saveEntries();undoAction=null;render();}endApplicationBrowser();toast('Recorded as submitted by you.');});

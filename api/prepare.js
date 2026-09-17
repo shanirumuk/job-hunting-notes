@@ -18,6 +18,7 @@ export default async function handler(req,res) {
     await prepareInBrowser(input,{emit,signal:controller.signal,reviewMilliseconds:180000});
     emit({type:'ended',message:'Browser session ended. Your notebook and CVs are still saved.'});
   } catch(error) {
+    console.error('Browser preparation failure', {name:error.name,status:error.status,code:error.code,causeStatus:error.cause?.status,causeCode:error.cause?.code});
     // Do not return SDK errors: they can contain session capabilities or applicant text.
     if(!controller.signal.aborted)emit({type:'error',message:'This page could not be prepared. It may be unsupported, blocked, or your Browserbase allowance may be exhausted. Nothing was submitted. Use Open original to continue manually.'});
   } finally {

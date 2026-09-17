@@ -2,17 +2,18 @@ import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import handler from './api/jobs.js';
+import browserHandler from './api/browser.js';
 import prepareHandler from './api/prepare.js';
 const root = process.cwd();
 const types = {'.html':'text/html', '.js':'text/javascript', '.css':'text/css', '.json':'application/json', '.svg':'image/svg+xml', '.png':'image/png'};
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  if (url.pathname === '/api/prepare') {
+  if (['/api/prepare','/api/browser'].includes(url.pathname)) {
     res.status = code => {res.statusCode=code;return res;};
     res.json = data => {res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));};
     let body='';for await(const chunk of req){body+=chunk;if(body.length>4000000){res.statusCode=413;res.end('Request too large');return;}}
     try{req.body=JSON.parse(body||'{}');}catch{res.statusCode=400;res.end('Invalid JSON');return;}
-    return prepareHandler(req,res);
+    return (url.pathname==='/api/browser'?browserHandler:prepareHandler)(req,res);
   }
   if (url.pathname === '/api/jobs') {
     res.status = code => {res.statusCode = code; return res;};

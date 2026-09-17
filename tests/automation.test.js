@@ -28,3 +28,10 @@ test('field mapping leaves eligibility, consent, demographic and already-filled 
  assert.equal(identityMatches('Example Co is recruiting an Implementation Consultant','Implementation Consultant','Example Co'),true);
  assert.equal(identityMatches('Other employer Implementation Consultant','Implementation Consultant','Example Co'),false);
 });
+test('manual browser controls require the private token and reject unknown actions',async()=>{
+ const {default:browserHandler}=await import('../api/browser.js');
+ const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};
+ await browserHandler({method:'POST',headers:{},body:{action:'end',sessionId:'11111111-1111-1111-1111-111111111111'}},res);assert.equal(res.code,401);
+ const previous=process.env.JOB_NOTEBOOK_ACCESS_TOKEN;process.env.JOB_NOTEBOOK_ACCESS_TOKEN='x'.repeat(43);
+ try{await browserHandler({method:'POST',headers:{authorization:'Bearer '+'x'.repeat(43)},body:{action:'submit',sessionId:'11111111-1111-1111-1111-111111111111'}},res);assert.equal(res.code,400);}finally{if(previous===undefined)delete process.env.JOB_NOTEBOOK_ACCESS_TOKEN;else process.env.JOB_NOTEBOOK_ACCESS_TOKEN=previous;}
+});

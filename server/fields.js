@@ -5,7 +5,7 @@ export function inspectForm() {
   const fields=controls.map((el,index)=>{
     const label=[...(el.labels||[])].map(l=>l.textContent).join(' ') || el.getAttribute('aria-label') || (el.getAttribute('aria-labelledby')||'').split(/\s+/).map(id=>document.getElementById(id)?.textContent||'').join(' ');
     el.setAttribute('data-job-notebook-field',String(index));
-    return {selector:`[data-job-notebook-field="${index}"]`,label:normalize(label),hint:normalize(el.name+' '+el.id),type:el.type,tag:el.tagName,required:el.required,filled:el.type==='file'?!!el.files?.length:!!el.value?.trim(),disabled:el.disabled||el.readOnly,visible:!!el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden'};
+    return {selector:`[data-job-notebook-field="${index}"]`,label:normalize(label),hint:normalize(el.name+' '+el.id),type:el.type,tag:el.tagName,required:el.required,filled:el.type==='file'?!!el.files?.length:['checkbox','radio'].includes(el.type)?el.checked:!!el.value?.trim(),disabled:el.disabled||el.readOnly,visible:!!el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden'};
   });
   return {fields,text:document.body.innerText.slice(0,30000),links:[...document.querySelectorAll('a[href]')].map(a=>({text:a.innerText.trim(),url:a.href})).filter(a=>a.text&&a.url.startsWith('https:')).slice(0,250)};
 }

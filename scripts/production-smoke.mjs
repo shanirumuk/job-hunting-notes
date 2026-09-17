@@ -1,0 +1,11 @@
+const {JOB_NOTEBOOK_ACCESS_TOKEN}=process.env;
+if(!JOB_NOTEBOOK_ACCESS_TOKEN)throw new Error('Set JOB_NOTEBOOK_ACCESS_TOKEN before running this smoke test.');
+let sessionId;const controller=new AbortController();
+const timer=setTimeout(()=>controller.abort(),90000);
+try {
+ const response=await fetch('https://job-hunting-notes.vercel.app/api/prepare',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json',Authorization:`Bearer ${JOB_NOTEBOOK_ACCESS_TOKEN}`},body:JSON.stringify({url:'https://job-hunting-notes.vercel.app/practice-application.html',title:'Implementation Consultant',company:'Job Notebook Practice',demo:true,fields:{name:'Test Applicant',email:'test@example.org',phone:'+49 00000',linkedin:'https://www.linkedin.com/in/test-applicant'},cv:{name:'Practice.pdf',base64:Buffer.from('%PDF-1.4\n%%EOF').toString('base64')}})});
+ console.log('HTTP',response.status);if(!response.ok)throw new Error('Production endpoint failed');
+ let pending='',reviewed=false;const decoder=new TextDecoder();
+ for await(const chunk of response.body){pending+=decoder.decode(chunk,{stream:true});let index;while((index=pending.indexOf('\n'))>=0){const line=pending.slice(0,index);pending=pending.slice(index+1);if(!line)continue;const event=JSON.parse(line);if(event.type==='progress')console.log(event.message);if(event.type==='session'){sessionId=event.sessionId;console.log(event.replayUrl);}if(event.type==='error')throw new Error(event.message);if(event.type==='review'){console.log(JSON.stringify({filled:event.filled,cvAttached:event.cvAttached,remaining:event.remaining}));if(event.filled.length!==5||!event.cvAttached)throw new Error('Preparation incomplete');const live=await fetch(event.liveUrl);console.log('Live View HTTP',live.status);if(!live.ok)throw new Error('Live View unavailable');reviewed=true;break;}}if(reviewed)break;}
+ if(!reviewed)throw new Error('No review received');console.log('Production stream and review verified.');
+}finally{clearTimeout(timer);controller.abort();if(sessionId){const ended=await fetch('https://job-hunting-notes.vercel.app/api/browser',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${JOB_NOTEBOOK_ACCESS_TOKEN}`},body:JSON.stringify({sessionId,action:'end'})});if(!ended.ok)throw new Error('Could not release test session');}}
