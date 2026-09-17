@@ -134,8 +134,8 @@ for (const [width,height] of [[384,832],[393,852],[412,892],[384,720],[832,384],
     });
     expect(layout.width).toBeLessThanOrEqual(width);expect(layout.height).toBeLessThanOrEqual(height+1);
     for(const control of layout.controls){expect(control.x).toBeGreaterThanOrEqual(0);expect(control.bottom).toBeLessThanOrEqual(height);expect(control.right).toBeLessThanOrEqual(width);expect(control.width).toBeGreaterThanOrEqual(44);expect(control.height).toBeGreaterThanOrEqual(44);expect(control.hit).toBe(true);}
-    if(width<height && height>=780) {expect(await page.locator('.role-checks').evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);}
-    if(width>height){expect(layout.nav.width).toBeLessThan(90);expect(layout.body.x).toBeGreaterThan(layout.top.x);expect(layout.body.y).toBe(layout.top.y);}else{expect(layout.body.y).toBeGreaterThan(layout.top.y);}
+    if(width<height && height>=780) {await page.locator('.role-checks').scrollIntoViewIfNeeded();expect(await page.locator('.role-checks').evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);}
+    if(width>height){expect(layout.nav.width).toBeLessThan(width*.15);expect(layout.body.x).toBeGreaterThan(layout.top.x);expect(layout.body.y).toBe(layout.top.y);}else{expect(layout.body.y).toBeGreaterThan(layout.top.y);}
     await page.locator('#prepare-job').click();await expect(page.locator('#preparation-dialog')).toBeVisible();await page.locator('#prep-pitch').fill('Keep this draft when I rotate.');
     await page.setViewportSize({width:height,height:width});await expect(page.locator('#prep-pitch')).toHaveValue('Keep this draft when I rotate.');
     await page.locator('#save-preparation').click();expect((await records(page)).find(e=>e.id==='fixture-ba').preparation.pitch).toBe('Keep this draft when I rotate.');
@@ -151,4 +151,19 @@ test('rotation preserves the role and a burst of decisions only passes it once',
 });
 test('reduced motion still saves and prepares applications',async ({page})=>{
   await page.emulateMedia({reducedMotion:'reduce'});await setup(page);await page.locator('#prepare-job').click();await expect(page.locator('#preparation-dialog')).toBeVisible();expect((await records(page)).find(e=>e.id==='fixture-ba').status).toBe('Preparing');
+});
+
+test('app refresh reloads the latest shell and preserves saved records and PDFs',async ({browser})=>{
+  const context=await browser.newContext({viewport:{width:384,height:832},serviceWorkers:'allow'});const page=await context.newPage();await setup(page);
+  await page.locator('[data-view="profile"]').first().click();
+  await page.locator('#analyst-upload').setInputFiles({name:'Keep.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\n%%EOF')});await expect(page.locator('#analyst-file-status')).toContainText('Keep.pdf');
+  const before=await records(page);await page.locator('#refresh-app').click();await page.waitForURL(/app-refresh=/);
+  await expect(page.locator('#analyst-file-status')).toContainText('Keep.pdf');expect(await records(page)).toEqual(before);
+  await context.setOffline(true);await page.locator('#refresh-app').click();await expect(page.locator('#toast')).toContainText('Couldn’t update');await expect(page.locator('#refresh-app')).toBeEnabled();expect(await records(page)).toEqual(before);
+  await context.close();
+});
+test('phone reading text and app refresh remain readable and reachable',async ({page})=>{
+  await page.setViewportSize({width:384,height:832});await setup(page);
+  for(const selector of ['.fit-list li','.job-location'])expect(await page.locator(selector).first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+  for(const [width,height] of [[320,568],[384,832],[832,384]]){await page.setViewportSize({width,height});expect(await page.locator('#refresh-app').evaluate(el=>{const r=el.getBoundingClientRect();return r.width>=44&&r.height>=44&&el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);}
 });

@@ -1,4 +1,4 @@
-import {KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=7';
+import {KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=8';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -299,6 +299,32 @@ async function downloadCV() {
 for (const button of document.querySelectorAll('button[data-view]')) button.addEventListener('click', () => setView(button.dataset.view));
 window.addEventListener('hashchange', () => setView(location.hash.slice(1)));
 $('refresh-jobs').addEventListener('click',refreshJobs);
+$('refresh-app').addEventListener('click', async () => {
+  const button = $('refresh-app');
+  button.disabled = true; button.textContent = 'Updating…';
+  try {
+    const url = new URL(location.href); url.searchParams.set('app-refresh', Date.now());
+    const response = await fetch(url, {cache:'no-store', signal:AbortSignal.timeout(12000)});
+    if (!response.ok) throw new Error('Update unavailable');
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) {
+        await Promise.race([registration.update().catch(() => {}),new Promise(resolve => setTimeout(resolve,3000))]);
+        const worker = registration.installing || registration.waiting;
+        if (worker && worker.state !== 'activated') await new Promise(resolve => {
+          const done = () => {clearTimeout(timer); worker.removeEventListener('statechange',changed); resolve();};
+          const changed = () => {if (['activated','redundant'].includes(worker.state)) done();};
+          const timer = setTimeout(done,4000); worker.addEventListener('statechange',changed); changed();
+        });
+      }
+    }
+    location.replace(url.href);
+  } catch {
+    toast('Couldn’t update the app. Check your connection and try Refresh again. Your saved data is safe.');
+    button.disabled = false; button.textContent = '↻ Refresh';
+  }
+});
+
 $('close-role').addEventListener('click', () => $('role-dialog').close());
 $('role-prepare').addEventListener('click', () => {const job = selectedRole; $('role-dialog').close(); if (job) decide('prepare', job);});
 $('pass-job').addEventListener('click',() => decide('pass'));

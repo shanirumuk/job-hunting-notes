@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=7" />
+  <link rel="stylesheet" href="styles.css?v=8" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -29,7 +29,7 @@
         <button class="nav-button" data-view="notebook"><svg class="nav-icon" aria-hidden="true"><use href="#icon-notebook"/></svg><span>Applications</span><span id="nav-count">3</span></button>
         <button class="nav-button" data-view="profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-profile"/></svg><span>My profile</span></button>
       </nav>
-      <button class="quiet-button" id="backup-button" type="button" aria-label="Backup and restore"><svg class="ui-icon" aria-hidden="true"><use href="#icon-backup"/></svg><span>Backup</span></button>
+      <div class="header-actions"><button class="secondary-button" id="refresh-app" type="button" aria-label="Refresh app">↻ Refresh</button><button class="quiet-button" id="backup-button" type="button" aria-label="Backup and restore"><svg class="ui-icon" aria-hidden="true"><use href="#icon-backup"/></svg><span>Backup</span></button></div>
     </header>
     <main id="main-content">
       <section id="discover-view" class="view" aria-labelledby="page-title">
@@ -155,6 +155,6 @@
       <div class="sheet-actions"><button class="secondary-button" id="save-preparation">Save draft</button><button class="primary-button" id="mark-applied" aria-label="I’ve submitted this application">Mark submitted</button></div>
     </div>
   </dialog>
-  <script type="module" src="app.js?v=7"></script>
+  <script type="module" src="app.js?v=8"></script>
 </body>
 </html>
