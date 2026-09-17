@@ -1,0 +1,8 @@
+private/
+tests/
+test-results/
+node_modules/
+.git/
+.env*
+.vercel/
+playwright.config.js

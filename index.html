@@ -2,71 +2,103 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="theme-color" content="#f7f5f2" />
-  <meta name="description" content="A private, calm job-application notebook." />
+  <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=2" />
-  <title>Job notebook</title>
+  <link rel="stylesheet" href="styles.css?v=6" />
+  <title>Job notebook · Your next chapter</title>
 </head>
-<body>
+<body data-view="discover">
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="icon-discover" viewBox="0 0 24 24"><rect x="6" y="3" width="14" height="17" rx="3"/><path d="M3 7v12a3 3 0 0 0 3 3M10 9h6m-6 4h4"/></symbol>
+    <symbol id="icon-notebook" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="15" rx="3"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M3 12a24 24 0 0 0 18 0m-9-1v4"/></symbol>
+    <symbol id="icon-profile" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M5.7 7a7 7 0 0 1 11.6-2L20 8M4 16l2.7 3A7 7 0 0 0 18.3 17"/></symbol>
+    <symbol id="icon-backup" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
+    <symbol id="icon-save" viewBox="0 0 24 24"><path d="M6 4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17l-6-4-6 4z"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  </defs></svg>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><span class="mark" aria-hidden="true">✦</span><span>Job notebook</span></div>
-      <button class="quiet-button" id="backup-button" type="button">Backup</button>
+      <a class="brand" href="#discover"><span class="mark" aria-hidden="true">✦</span><span>job notebook<span class="brand-dot">.</span></span></a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <button class="nav-button active" data-view="discover" aria-current="page"><svg class="nav-icon" aria-hidden="true"><use href="#icon-discover"/></svg><span>Discover</span></button>
+        <button class="nav-button" data-view="notebook"><svg class="nav-icon" aria-hidden="true"><use href="#icon-notebook"/></svg><span>Applications</span><span id="nav-count">3</span></button>
+        <button class="nav-button" data-view="profile"><svg class="nav-icon" aria-hidden="true"><use href="#icon-profile"/></svg><span>My profile</span></button>
+      </nav>
+      <button class="quiet-button" id="backup-button" type="button" aria-label="Backup and restore"><svg class="ui-icon" aria-hidden="true"><use href="#icon-backup"/></svg><span>Backup</span></button>
     </header>
-
     <main id="main-content">
-      <section class="intro" aria-labelledby="page-title">
-        <p class="eyebrow">PRIVATE APPLICATION SPACE</p>
-        <h1 id="page-title">Job hunting</h1>
-        <p class="subtitle">A calm place for roles, application notes, and what happens next.</p>
-      </section>
-
-      <section class="toolbar" aria-label="Application tools">
-        <label class="search-field">
-          <span class="sr-only">Search applications</span>
-          <input id="search-input" type="search" placeholder="Search roles, companies, or notes" autocomplete="off" />
-        </label>
-        <button class="primary-button" id="add-button" type="button">+ Add application</button>
-      </section>
-
-      <section class="status-line" aria-live="polite">
-        <p id="summary-text">Loading applications…</p>
-        <div class="filters" role="group" aria-label="Filter applications">
-          <button class="filter active" type="button" data-filter="all">All</button>
-          <button class="filter" type="button" data-filter="to apply">To apply</button>
-          <button class="filter" type="button" data-filter="applied">Applied</button>
-          <button class="filter" type="button" data-filter="interview">Interview</button>
-        </div>
-      </section>
-
-      <section class="table-wrap" aria-label="Applications">
-        <div class="application-table" role="table" aria-label="Job applications">
-          <div class="table-head" role="row">
-            <span role="columnheader">Company & role</span>
-            <span role="columnheader">Status</span>
-            <span role="columnheader">Location</span>
-            <span role="columnheader">Date</span>
+      <section id="discover-view" class="view" aria-labelledby="page-title">
+        <div class="intro-row"><div class="intro"><p class="eyebrow">YOUR NEXT CHAPTER</p><h1 id="page-title">Find your next <em>move.</em></h1><p class="subtitle">Swipe right to prepare. Left to pass.</p></div><button class="refresh-button" id="refresh-jobs" aria-label="Find fresh roles" title="Find fresh roles"><svg class="ui-icon" aria-hidden="true"><use href="#icon-refresh"/></svg></button></div>
+        <div class="discover-layout">
+          <aside class="search-compass">
+            <p class="eyebrow">YOUR DIRECTION</p><h2>Good problems.<br>Meaningful work.</h2><p class="muted">Follow the work you enjoy. Be open to a different title.</p>
+            <div class="preference-group"><span class="mini-label">LOOKING FOR</span><div class="chips"><span>Systems & processes</span><span>Analysis & delivery</span><span>Client collaboration</span><span>Adjacent roles, too</span></div></div>
+            <div class="preference-group"><span class="mini-label">THE PRACTICAL DETAILS</span><p id="compass-location">◎ Germany & Europe first</p><p>↗ Consulting & stakeholder work</p><p>⌘ Light coding, real technical depth</p></div>
+            <button class="text-button" data-view="profile">Fine-tune your profile →</button>
+            <div class="compass-note"><span aria-hidden="true">✧</span><p>A match is a starting point. Every role includes the things worth checking.</p></div>
+          </aside>
+          <div class="deck-area">
+            <div class="deck-meta"><span id="deck-count">Your role shortlist</span><button id="undo-swipe" class="text-button" disabled>↶ Undo</button></div>
+            <div id="job-deck" aria-live="polite" aria-atomic="true"></div>
+            <div class="swipe-actions" id="swipe-actions" hidden>
+              <button id="pass-job" class="swipe-button pass" aria-label="Pass on this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-close"/></svg></span><small>Pass</small></button>
+              <button id="save-job" class="swipe-button later" aria-label="Save this role for later"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-save"/></svg></span><small>Save</small></button>
+              <button id="prepare-job" class="swipe-button prepare" aria-label="Prepare an application for this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-check"/></svg></span><small>Prepare</small></button>
+            </div>
+            <p class="gesture-hint">Your next step starts with a swipe.</p>
+            <p class="feed-status" id="feed-status" role="status"></p>
           </div>
-          <div id="applications" role="rowgroup"></div>
-        </div>
-        <div class="empty-state" id="empty-state" hidden>
-          <p class="empty-symbol" aria-hidden="true">⌁</p>
-          <h2>No applications here yet</h2>
-          <p>Add a role yourself, or save one from a suggestion I send you.</p>
-          <button class="text-button" id="empty-add-button" type="button">Add your first role</button>
+          <aside class="search-progress"><div class="progress-card"><p class="eyebrow">ONE STEP AT A TIME</p><div class="progress-number" id="progress-applied">2</div><p>applications out in the world</p><div class="progress-divider"></div><p><strong id="progress-preparing">0</strong> being prepared</p><button class="text-button" data-view="notebook">Your applications →</button></div><div class="workflow-note"><p class="eyebrow">AFTER A RIGHT SWIPE</p><ol><li>CV choice & answers prepared</li><li>Review the practical details</li><li>Autofill, attach CV & submit</li></ol><p>You make the final call.</p></div></aside>
         </div>
       </section>
+      <section id="notebook-view" class="view" aria-labelledby="notebook-title" hidden>
+        <div class="intro"><p class="eyebrow">YOUR APPLICATION SPACE</p><h1 id="notebook-title">Your <em>applications.</em></h1><p class="subtitle">From a promising role to your next conversation.</p></div>
+        <section class="toolbar" aria-label="Application tools"><label class="search-field"><span class="sr-only">Search applications</span><input id="search-input" type="search" placeholder="Search your applications" autocomplete="off" /></label><button class="primary-button" id="add-button" type="button" aria-label="Add application">+ Add</button></section>
+        <section class="status-line"><p id="summary-text" aria-live="polite"></p><div class="filters" role="group" aria-label="Filter applications"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="preparing">Preparing</button><button class="filter" data-filter="to apply">Saved</button><button class="filter" data-filter="applied">Applied</button><button class="filter" data-filter="interview">Interview</button></div></section>
+        <section id="applications" class="application-list" aria-label="Applications"></section>
+        <div class="empty-state" id="empty-state" hidden><h2>No applications here yet</h2><p>Save a role from Discover, or add one yourself.</p><button class="text-button" id="empty-add-button">Add your first role</button></div>
+      </section>
+      <section id="profile-view" class="view" aria-labelledby="profile-title" hidden>
+        <div class="intro"><p class="eyebrow">MAKE IT YOURS</p><h1 id="profile-title">Your <em>profile.</em></h1><p class="subtitle">Your preferences guide suggestions. Your verified experience shapes the drafts.</p></div>
+        <form id="profile-form" class="profile-card">
+          <div class="cv-library"><h3>Your CVs</h3><p class="small-note">All three versions, ready when you need them. Your original PDF layout stays intact. Files stay on this device; keep a separate backup.</p><div class="cv-library-row"><label class="secondary-button file-button">Add Consulting PDF<input id="consulting-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="consulting-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="consulting-download" hidden>Download</button><button type="button" class="text-button" id="consulting-remove" hidden>Remove</button></div></div><div class="cv-library-row"><label class="secondary-button file-button">Add Business Analyst PDF<input id="analyst-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="analyst-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="analyst-download" hidden>Download</button><button type="button" class="text-button" id="analyst-remove" hidden>Remove</button></div></div><div class="cv-library-row"><label class="secondary-button file-button">Add Full Stack Developer PDF<input id="developer-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="developer-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="developer-download" hidden>Download</button><button type="button" class="text-button" id="developer-remove" hidden>Remove</button></div></div></div>
+<details class="profile-section" open><summary><span>Your details<small>Contact info & availability</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
+            <label>Full name<input id="profile-name" maxlength="150" autocomplete="name" /></label>
+            <label>Earliest start date<input id="profile-startDate" type="date" /></label>
+            <label>Email for applications<input id="profile-email" type="email" autocomplete="email" /></label>
+            <label>Phone for applications<input id="profile-phone" type="tel" autocomplete="tel" /></label>
+            <label class="wide">LinkedIn URL<input id="profile-linkedin" type="url" placeholder="https://www.linkedin.com/in/…" /></label>
+</div></details>
+<details class="profile-section"><summary><span>Search preferences<small>Location & languages</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
+            <label>Search geography<select id="profile-geography"><option value="europe">Germany & Europe first</option><option value="international">International, excluding the US</option></select></label>
+            <label>German level<select id="profile-germanLevel"><option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option></select></label>
+            <label class="wide">Languages & levels<input id="profile-languages" maxlength="300" /></label>
+            <label class="wide checkbox-label"><input id="profile-includeAdjacent" type="checkbox" /> Explore adjacent roles when the responsibilities fit my direction</label>
+<label class="wide checkbox-label"><input id="profile-includeConditional" type="checkbox" /> Include conditional matches with language, seniority or eligibility flags</label>
+</div></details>
+<details class="profile-section"><summary><span>Your experience<small>Work rights, motivation & achievements</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
+            <label class="wide">Your work-authorisation position<textarea id="profile-workRights" rows="4" placeholder="Current country, permit restrictions and expiry, and where you need a work-permit route. This is a reference for your review, not an automatic yes/no answer."></textarea></label>
+            <label class="wide">What you want to do<textarea id="profile-motivation" rows="3"></textarea></label>
+            <label class="wide">Verified experience for application drafts<textarea id="profile-evidence" rows="6" placeholder="Add achievements you can back up. Use your own words; only these facts will appear in your drafts."></textarea></label>
+</div></details>
+<details class="profile-section"><summary><span>CV file reminders<small>Optional filenames</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
+            <label>Consulting CV filename<input id="profile-consultingCV" placeholder="e.g. Shanise_Consulting.pdf" maxlength="200" /></label>
+            <label>Business Analyst CV filename<input id="profile-analystCV" placeholder="e.g. Shanise_Business_Analyst.pdf" maxlength="200" /></label>
+<label>Full Stack Developer CV filename<input id="profile-developerCV" placeholder="e.g. Shanise_Developer.pdf" maxlength="200" /></label>
+</div></details>
 
-      <section class="note-card">
-        <p class="eyebrow">HOW THIS WORKS</p>
-        <p>Your entries are stored only in this browser. Use <strong>Backup</strong> after important updates to download a private copy you can restore later.</p>
+          <div class="profile-actions"><button class="primary-button" type="submit">Save my profile</button><label class="secondary-button file-button">Import profile<input id="profile-import" type="file" accept="application/json" class="file-input" /></label><span id="profile-message" role="status"></span></div>
+        </form>
       </section>
+      <footer class="privacy-footer"><span>✧ A little momentum, every day.</span><span>Saved on this device · Keep a backup</span></footer>
     </main>
   </div>
-
+  <div class="toast" id="toast" role="status" hidden></div>
   <dialog id="editor-dialog" aria-labelledby="editor-title">
     <form id="application-form" method="dialog">
       <div class="sheet-header">
@@ -82,7 +114,7 @@
           <label>Company<input id="company" required maxlength="90" placeholder="e.g. Deliverect" /></label>
           <label>Role title<input id="title" required maxlength="120" placeholder="e.g. Implementation Consultant" /></label>
           <label>Location<input id="location" maxlength="100" placeholder="e.g. Berlin · Hybrid" /></label>
-          <label>Status<select id="status"><option>To apply</option><option>Applied</option><option>Interview</option><option>Offer</option><option>Archived</option></select></label>
+          <label>Status<select id="status"><option>To apply</option><option>Preparing</option><option>Applied</option><option>Interview</option><option>Offer</option><option>Archived</option></select></label>
           <label>Application date<input id="application-date" type="date" /></label>
           <label>Interview date<input id="interview-date" type="date" /></label>
           <label class="wide">Application link<input id="link" type="url" placeholder="https://…" /></label>
@@ -103,11 +135,26 @@
     <div class="backup-panel">
       <div class="sheet-header"><div><p class="eyebrow">YOUR DATA</p><h2 id="backup-title">Backup & restore</h2></div><button class="icon-button" id="close-backup" type="button" aria-label="Close">×</button></div>
       <p>Export a copy after important changes. This app does not send your notes anywhere.</p>
-      <div class="backup-actions"><button class="primary-button" id="export-button" type="button">Download backup</button><label class="secondary-button file-button">Restore backup<input id="import-input" type="file" accept="application/json" hidden /></label></div>
+      <div class="backup-actions"><button class="primary-button" id="export-button" type="button">Download backup</button><label class="secondary-button file-button">Restore backup<input id="import-input" type="file" accept="application/json" class="file-input" /></label></div>
       <p class="small-note" id="backup-message" aria-live="polite"></p>
     </div>
   </dialog>
 
-  <script src="app.js?v=2"></script>
+
+  <dialog id="role-dialog" aria-labelledby="role-title">
+    <div class="role-panel">
+      <div class="sheet-header"><div><p class="eyebrow">A CLOSER LOOK</p><h2 id="role-title">Role details</h2></div><button class="icon-button" id="close-role" aria-label="Close role details">×</button></div>
+      <div id="role-content" class="sheet-scroll"></div>
+      <div class="sheet-actions"><a class="secondary-button" id="role-source" target="_blank" rel="noopener noreferrer">View listing ↗</a><button class="primary-button" id="role-prepare">Prepare application</button></div>
+    </div>
+  </dialog>
+  <dialog id="preparation-dialog" aria-labelledby="preparation-title">
+    <div class="preparation-panel">
+      <div class="sheet-header"><div><p class="eyebrow">YOUR NEXT STEP, PREPARED</p><h2 id="preparation-title">Application draft</h2></div><button class="icon-button" id="close-preparation" aria-label="Close">×</button></div>
+      <div id="preparation-content" class="sheet-scroll"></div>
+      <div class="sheet-actions"><button class="secondary-button" id="save-preparation">Save draft</button><button class="primary-button" id="mark-applied" aria-label="I’ve submitted this application">Mark submitted</button></div>
+    </div>
+  </dialog>
+  <script type="module" src="app.js?v=6"></script>
 </body>
 </html>
