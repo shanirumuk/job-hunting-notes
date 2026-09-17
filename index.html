@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=8" />
+  <link rel="stylesheet" href="styles.css?v=9" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -33,7 +33,7 @@
     </header>
     <main id="main-content">
       <section id="discover-view" class="view" aria-labelledby="page-title">
-        <div class="intro-row"><div class="intro"><p class="eyebrow">YOUR NEXT CHAPTER</p><h1 id="page-title">Find your next <em>move.</em></h1><p class="subtitle">Swipe right to prepare. Left to pass.</p></div><button class="refresh-button" id="refresh-jobs" aria-label="Find fresh roles" title="Find fresh roles"><svg class="ui-icon" aria-hidden="true"><use href="#icon-refresh"/></svg></button></div>
+        <div class="intro-row"><div class="intro"><p class="eyebrow">YOUR NEXT CHAPTER</p><h1 id="page-title">Find your next <em>move.</em></h1><p class="subtitle">Swipe right to open the application. Left to pass.</p></div><button class="refresh-button" id="refresh-jobs" aria-label="Find fresh roles" title="Find fresh roles"><svg class="ui-icon" aria-hidden="true"><use href="#icon-refresh"/></svg></button></div>
         <div class="discover-layout">
           <aside class="search-compass">
             <p class="eyebrow">YOUR DIRECTION</p><h2>Good problems.<br>Meaningful work.</h2><p class="muted">Follow the work you enjoy. Be open to a different title.</p>
@@ -48,12 +48,12 @@
             <div class="swipe-actions" id="swipe-actions" hidden>
               <button id="pass-job" class="swipe-button pass" aria-label="Pass on this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-close"/></svg></span><small>Pass</small></button>
               <button id="save-job" class="swipe-button later" aria-label="Save this role for later"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-save"/></svg></span><small>Save</small></button>
-              <button id="prepare-job" class="swipe-button prepare" aria-label="Prepare an application for this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-check"/></svg></span><small>Prepare</small></button>
+              <button id="prepare-job" class="swipe-button prepare" aria-label="Open application for this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-check"/></svg></span><small>Apply ↗</small></button>
             </div>
             <p class="gesture-hint">Your next step starts with a swipe.</p>
             <p class="feed-status" id="feed-status" role="status"></p>
           </div>
-          <aside class="search-progress"><div class="progress-card"><p class="eyebrow">ONE STEP AT A TIME</p><div class="progress-number" id="progress-applied">2</div><p>applications out in the world</p><div class="progress-divider"></div><p><strong id="progress-preparing">0</strong> being prepared</p><button class="text-button" data-view="notebook">Your applications →</button></div><div class="workflow-note"><p class="eyebrow">AFTER A RIGHT SWIPE</p><ol><li>CV choice & answers prepared</li><li>Review the practical details</li><li>Autofill, attach CV & submit</li></ol><p>You make the final call.</p></div></aside>
+          <aside class="search-progress"><div class="progress-card"><p class="eyebrow">ONE STEP AT A TIME</p><div class="progress-number" id="progress-applied">2</div><p>applications out in the world</p><div class="progress-divider"></div><p><strong id="progress-preparing">0</strong> being prepared</p><button class="text-button" data-view="notebook">Your applications →</button></div><div class="workflow-note"><p class="eyebrow">AFTER A RIGHT SWIPE</p><ol><li>CV choice & notes saved</li><li>Open the original listing</li><li>Complete the employer’s form</li></ol><p>You make the final call.</p></div></aside>
         </div>
       </section>
       <section id="notebook-view" class="view" aria-labelledby="notebook-title" hidden>
@@ -145,7 +145,7 @@
     <div class="role-panel">
       <div class="sheet-header"><div><p class="eyebrow">A CLOSER LOOK</p><h2 id="role-title">Role details</h2></div><button class="icon-button" id="close-role" aria-label="Close role details">×</button></div>
       <div id="role-content" class="sheet-scroll"></div>
-      <div class="sheet-actions"><a class="secondary-button" id="role-source" target="_blank" rel="noopener noreferrer">View listing ↗</a><button class="primary-button" id="role-prepare">Prepare application</button></div>
+      <div class="sheet-actions"><a class="secondary-button" id="role-source" target="_blank" rel="noopener noreferrer">View listing ↗</a><button class="primary-button" id="role-prepare">Open application ↗</button></div>
     </div>
   </dialog>
   <dialog id="preparation-dialog" aria-labelledby="preparation-title">
@@ -155,6 +155,6 @@
       <div class="sheet-actions"><button class="secondary-button" id="save-preparation">Save draft</button><button class="primary-button" id="mark-applied" aria-label="I’ve submitted this application">Mark submitted</button></div>
     </div>
   </dialog>
-  <script type="module" src="app.js?v=8"></script>
+  <script type="module" src="app.js?v=9"></script>
 </body>
 </html>

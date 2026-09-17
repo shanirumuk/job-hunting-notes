@@ -1,4 +1,4 @@
-import {KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=8';
+import {KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=9';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -86,8 +86,7 @@ function renderDeck() {
   }
   const {match} = job;
   const checks = match.flags.length;
-  const checkSummary = match.flags.some(f => /German requirement|Another language/.test(f)) ? 'Language & work rights need a look' : match.flags.some(f => /Seniority/.test(f)) ? 'Experience & work rights need a look' : 'Work rights & role details to confirm';
-  $('job-deck').innerHTML = `<article class="job-card" id="active-card" data-job-id="${esc(job.id)}" aria-label="${esc(job.title)} at ${esc(job.company)}"><span class="swipe-label" aria-hidden="true"></span><div class="card-top"><div class="company-line"><span class="company-monogram" aria-hidden="true">${esc(job.company.slice(0,1))}</span><div class="company-info"><strong>${esc(job.company)}</strong><small>${job.historical ? 'Saved role · check availability' : match.exploration ? 'Worth exploring' : 'Matches your direction'}</small></div><div class="match-badge"><b>${match.score}%</b><small>profile match</small></div></div><h2>${esc(job.title)}</h2><p class="job-location">◎ ${esc(job.location)}${job.remote ? ' · Remote option' : ''}</p></div><div class="card-body"><p class="card-section-label">${match.exploration ? 'A DIFFERENT TITLE. FAMILIAR WORK.' : 'WHY THIS FITS'}</p><ul class="fit-list">${match.reasons.slice(0,4).map((r,i) => `<li${i > 1 ? ' class="extra-reason"' : ''}>${esc(r)}</li>`).join('')}</ul><button class="role-checks" data-role-details type="button" aria-label="Review ${checks} things to check for this role"><span class="check-dot" aria-hidden="true"></span><span><strong>${checks} things to check</strong><small>${esc(checkSummary)}</small></span><span aria-hidden="true">›</span></button></div><div class="card-footer"><span class="cv-tag">${esc(match.cv)}<br><a href="${esc(safeURL(job.link))}" target="_blank" rel="noopener noreferrer">${esc(job.source || 'Original listing')} ↗</a></span><button class="text-button" data-role-details type="button">Role details ↗</button></div></article>`;
+  $('job-deck').innerHTML = `<article class="job-card" id="active-card" data-job-id="${esc(job.id)}" aria-label="${esc(job.title)} at ${esc(job.company)}"><span class="swipe-label" aria-hidden="true"></span><div class="card-top"><div class="company-line"><span class="company-monogram" aria-hidden="true">${esc(job.company.slice(0,1))}</span><div class="company-info"><strong>${esc(job.company)}</strong><small>${job.historical ? 'Saved role · check availability' : match.exploration ? 'Worth exploring' : 'Matches your direction'}</small></div><button class="listing-info" data-role-details type="button" aria-label="${checks} missing or uncertain requirements" title="Missing or uncertain requirements"><span aria-hidden="true">ⓘ</span><small>${checks}</small></button><div class="match-badge"><b>${match.score}%</b><small>profile match</small></div></div><h2>${esc(job.title)}</h2><p class="job-location">◎ ${esc(job.location)}${job.remote ? ' · Remote option' : ''}</p></div><div class="card-body"><p class="card-section-label">${match.exploration ? 'A DIFFERENT TITLE. FAMILIAR WORK.' : 'WHY THIS FITS'}</p><ul class="fit-list">${match.reasons.slice(0,4).map((r,i) => `<li${i > 1 ? ' class="extra-reason"' : ''}>${esc(r)}</li>`).join('')}</ul><section class="inline-role" aria-label="Role details"><h3>Role details</h3><p>${esc(job.description || job.requirements || 'The source did not include a description. Open the original listing to read the role.')}</p></section></div><div class="card-footer"><span class="cv-tag">${esc(match.cv)}<br><a href="${esc(safeURL(job.link))}" target="_blank" rel="noopener noreferrer">${esc(job.source || 'Original listing')} ↗</a></span><button class="text-button" data-read-role type="button">Read role ↓</button></div></article>`;
   wireSwipe();
 }
 function openRoleDetails() {
@@ -95,7 +94,7 @@ function openRoleDetails() {
   if (!selectedRole) return;
   const job = selectedRole, match = job.match;
   $('role-title').textContent = job.company;
-  $('role-content').innerHTML = `<h3 class="role-heading">${esc(job.title)}</h3><p class="prep-meta">${esc(job.location)}${job.remote ? ' · Remote option' : ''}</p><p class="card-section-label">${match.exploration ? 'WHY THIS ADJACENT ROLE IS WORTH EXPLORING' : 'WHY THIS ROLE FITS YOUR DIRECTION'}</p><ul class="fit-list">${match.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul><div class="flag-box"><strong>Things to check</strong><ul>${match.flags.map(f => `<li>${esc(f)}</li>`).join('')}</ul></div><section class="prep-section"><h3>The role</h3><p class="role-description">${esc(job.description || job.requirements || 'Open the original listing for the complete description.')}</p></section><p class="source-note">${esc(job.source || 'Original listing')}${job.publishedAt ? ' · Posted '+esc(dateText(job.publishedAt)) : ''}${job.historical ? ' · Availability has not been checked.' : ' · Confirm the opening is still available.'}</p><p class="source-note">Suggestions follow your preferred work: operational problem-solving, systems improvement, analysis, stakeholder workshops and delivery, with light coding. Scores estimate relevance from the listing; they do not confirm eligibility or the actual balance of your working week.</p><p class="source-note">The feed is a selection of recent roles, mainly in Europe, refreshed every six hours.</p>`;
+  $('role-content').innerHTML = `<h3 class="role-heading">${esc(job.title)}</h3><p class="prep-meta">${esc(job.location)}</p><div class="flag-box"><strong>Missing or uncertain requirements</strong><ul>${match.flags.map(f => `<li>${esc(f)}</li>`).join('')}</ul></div><p class="source-note">These details are missing, unconfirmed, or may not match your profile. Absence from the description does not mean there is no requirement. Confirm them in the original listing or with the employer.</p>`;
   $('role-source').href = safeURL(job.link);
   $('role-dialog').showModal();
   $('role-content').scrollTop = 0;
@@ -130,6 +129,14 @@ async function decide(action, job = deckJobs()[0]) {
     if (action === 'prepare') {preparationId = entry.id;}
   }
   saveDiscovery();
+  if (action === 'prepare') {
+    const url = safeURL(job.link);
+    if (url) {
+      const tab = window.open(url, '_blank');
+      if (tab) tab.opener = null;
+      else {decisionPending = false; location.assign(url); return;}
+    }
+  }
   const card = $('active-card');
   if (card?.dataset.jobId === job.id && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const direction = action === 'pass' ? -1 : action === 'prepare' ? 1 : 0;
@@ -139,8 +146,7 @@ async function decide(action, job = deckJobs()[0]) {
   }
   decisionPending = false;
   render();
-  if (action === 'prepare' && activeView === 'discover') openPreparation(preparationId);
-  else if (action === 'prepare') toast('Application draft ready in Applications.');
+  if (action === 'prepare') toast('Listing opened. Your CV choice and notes are saved in Applications. Autofill is not connected on this browser.');
   else toast(action === 'pass' ? 'Passed. Undo is here if you change your mind.' : 'Saved to your applications for later.');
 }
 function undoSwipe() {
@@ -170,7 +176,7 @@ function wireSwipe() {
     if (!frame) frame = requestAnimationFrame(() => {
       frame = 0;
       card.style.transform = `translate3d(${dx}px,0,0) rotate(${Math.max(-8,Math.min(8,dx/30))}deg)`;
-      const label = card.querySelector('.swipe-label'); label.style.opacity = Math.min(1,Math.abs(dx)/threshold()); label.textContent = dx > 0 ? 'PREPARE' : 'PASS';
+      const label = card.querySelector('.swipe-label'); label.style.opacity = Math.min(1,Math.abs(dx)/threshold()); label.textContent = dx > 0 ? 'APPLY' : 'PASS';
       card.dataset.direction = dx > 0 ? 'prepare' : 'pass';
     });
   });
@@ -331,7 +337,7 @@ $('pass-job').addEventListener('click',() => decide('pass'));
 $('save-job').addEventListener('click',() => decide('save'));
 $('prepare-job').addEventListener('click',() => decide('prepare'));
 $('undo-swipe').addEventListener('click',undoSwipe);
-$('job-deck').addEventListener('click',e => {if (e.target.closest('[data-role-details]')) openRoleDetails(); if (e.target.closest('#empty-refresh')) refreshJobs(); if (e.target.closest('#revisit-passed')) {Object.keys(discovery.decisions).forEach(id => {if (discovery.decisions[id] === 'pass') delete discovery.decisions[id];}); saveDiscovery(); renderDeck();}});
+$('job-deck').addEventListener('click',e => {if (e.target.closest('[data-read-role]')) document.querySelector('.inline-role')?.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'}); if (e.target.closest('[data-role-details]')) openRoleDetails(); if (e.target.closest('#empty-refresh')) refreshJobs(); if (e.target.closest('#revisit-passed')) {Object.keys(discovery.decisions).forEach(id => {if (discovery.decisions[id] === 'pass') delete discovery.decisions[id];}); saveDiscovery(); renderDeck();}});
 $('applications').addEventListener('click',e => {const edit = e.target.closest('[data-edit]'), prepare = e.target.closest('[data-prepare]'); if (edit) openEditor(entries.find(item => item.id === edit.dataset.edit)); if (prepare) openPreparation(prepare.dataset.prepare);});
 $('add-button').addEventListener('click',() => openEditor()); $('empty-add-button').addEventListener('click',() => openEditor()); $('close-editor').addEventListener('click',() => editor.close()); form.addEventListener('submit',upsert);
 $('delete-button').addEventListener('click',() => {if (!confirm('Delete this application and its notes?')) return; const id = $('entry-id').value; entries = entries.filter(e => e.id !== id); if (saveEntries()) {render(); editor.close();}});

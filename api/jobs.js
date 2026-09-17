@@ -1,4 +1,4 @@
-import { plainText, safeURL } from '../lib/model.js';
+import { plainText, safeURL, descriptionText } from '../lib/model.js';
 let cached;
 let pending;
 const TTL = 6 * 60 * 60 * 1000;
@@ -16,7 +16,7 @@ export async function fetchJobs(fetcher = fetch) {
   const jobs = successful.flatMap(r => r.value).filter(j => {
     if (!j.slug || !j.title || !j.company_name || !safeURL(j.url) || seen.has(j.slug)) return false;
     seen.add(j.slug); return true;
-  }).map(j => ({id: `arbeitnow-${j.slug}`, company: plainText(j.company_name), title: plainText(j.title), location: plainText(j.location || 'Location not stated'), remote: !!j.remote, link: safeURL(j.url), description: plainText(j.description).slice(0,24000), publishedAt: Number.isFinite(Number(j.created_at)) && Number(j.created_at) > 0 && Number(j.created_at) < 1e11 ? new Date(Number(j.created_at) * 1000).toISOString() : '', source: 'Arbeitnow', fetchedAt: new Date().toISOString()}));
+  }).map(j => ({id: `arbeitnow-${j.slug}`, company: plainText(j.company_name), title: plainText(j.title), location: plainText(j.location || 'Location not stated'), remote: !!j.remote, link: safeURL(j.url), description: descriptionText(j.description).slice(0,24000), publishedAt: Number.isFinite(Number(j.created_at)) && Number(j.created_at) > 0 && Number(j.created_at) < 1e11 ? new Date(Number(j.created_at) * 1000).toISOString() : '', source: 'Arbeitnow', fetchedAt: new Date().toISOString()}));
   return {jobs, fetchedAt: new Date().toISOString(), partial: successful.length < results.length, source: 'Arbeitnow'};
 }
 export default async function handler(req, res) {

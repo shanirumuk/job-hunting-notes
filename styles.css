@@ -478,3 +478,12 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 }
 .job-card { scroll-padding-bottom: 85px; }
 .role-checks { flex-shrink: 0; }
+/* The listing itself stays in the deck; uncertainties live behind its info button. */
+.listing-info { position: relative; flex-shrink: 0; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #decfae; border-radius: 50%; background: #fff8e8; color: #725420; font-size: 25px; }
+.listing-info small { position: absolute; right: -3px; top: -5px; min-width: 19px; padding: 2px 4px; border-radius: 12px; background: #725420; color: white; font-size: 11px; }
+.inline-role { border-top: 1px solid var(--line); padding-top: 18px; margin-top: 5px; scroll-margin-top: 15px; }
+.inline-role h3 { font-size: 17px; margin: 0 0 12px; }
+.inline-role p { font-size: 16px; line-height: 1.65; white-space: pre-wrap; margin: 0; }
+.card-body { flex-shrink: 0; }
+@media (max-width: 599px) { .company-monogram { display: none; } .company-line { gap: 8px; } .intro-row .subtitle { max-width: 270px; } }
+@media (orientation: landscape) and (min-width: 600px) and (max-height: 600px) { .card-body { min-height: 0; } .listing-info { width: 44px; } }

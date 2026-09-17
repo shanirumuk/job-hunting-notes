@@ -1,6 +1,6 @@
 # Job notebook
 
-A mobile-first job discovery and application notebook with bottom navigation, a viewport-sized swipe deck, persistent decision buttons and full-width detail sheets on phones. Browse a ranked deck, swipe left to pass, save for later, or swipe right to prepare an application. Review the draft, use the optional browser autofill helper, and submit on the employer’s website.
+A mobile-first job discovery and application notebook with bottom navigation, a viewport-sized swipe deck, persistent decision buttons and full-width detail sheets on phones. Browse a ranked deck, swipe left to pass, save for later, or swipe right to open the source listing directly. The CV choice and optional draft are saved in the background. Full role text appears under “Why this fits”; the header info icon contains uncertain requirements.
 
 The labelled **Refresh** button in the header checks for a new app shell and service worker, then reloads with a fresh URL. It preserves saved applications, profile and CV PDFs. Offline failures leave the current app open. The circular discovery arrow separately refreshes job listings.
 
@@ -38,12 +38,12 @@ The app is compatible with Vercel’s Node serverless functions. `api/jobs.js` i
 - Matching runs locally. Prioritises operational problem-solving, systems improvement, analysis, stakeholder collaboration and delivery with light coding. Core titles include implementation, onboarding, professional services, BA, systems consulting, product operations, technical delivery and systems-focused customer success.
 - Excludes recognisable US-only locations, architect/developer titles, quota-led sales and senior leadership. Germany ranks above other European locations. International preferences can be enabled in Profile.
 - Adjacent-role exploration is on by default. Systems specialists, digital adoption, technical account management, product ownership and unfamiliar titles can qualify when the description demonstrates systems work plus relevant collaboration, analysis or delivery. Promising adjacent matches appear between groups of core matches, with a “Worth exploring” label. Turn this off in Profile if desired.
-- Keyword scores explain role relevance; they do not verify qualifications, language requirements, working-time mix, visa eligibility or whether an opening is still accepting applications. Unconfirmed work rights are always visible. Open the source listing to check the details.
+- Keyword scores explain role relevance; they do not verify qualifications, language requirements, working-time mix, visa eligibility or whether an opening is still accepting applications. Unconfirmed work rights are available through the listing header’s info icon. Open the source listing to check the details.
 - Pass/save/prepare decisions survive reloads. Undo reverses the last swipe, and passed roles can be revisited. Existing applications are deduplicated against discovery.
 
 ## Application preparation
 
-A right swipe creates a **Preparing** record with a CV recommendation, an editable introduction based on verified profile facts, practical answers and a checklist. These are deterministic drafts, not AI-generated tailored CVs. Existing PDFs retain their layout and content. Original job descriptions are treated as text.
+A right swipe opens the source URL in a new tab (same-tab fallback if popups are blocked), without opening a notebook form. Arbeitnow links may lead to a job-board listing, requiring a further Apply click. It also creates a **Preparing** record with a CV recommendation, an editable introduction based on verified profile facts, practical answers and a checklist. The optional draft remains accessible in Applications. This does not autofill the external page or attach a CV. These are deterministic drafts, not AI-generated tailored CVs. Existing PDFs retain their layout and content. Original job descriptions are treated as text.
 
 Standard-field autofill is available through the optional desktop Chrome/Edge extension:
 

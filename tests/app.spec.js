@@ -5,13 +5,21 @@ const jobs = [
   {id:'fixture-consulting',company:'Systems Ltd',title:'Implementation Consultant',location:'Dublin, Ireland',description:'English. Customer workshops, configuration and testing.',link:'https://example.org/consulting',source:'Arbeitnow'},
   {id:'fixture-us',company:'USA Ltd',title:'Implementation Consultant',location:'United States',description:'Customer implementation',link:'https://example.org/us',source:'Arbeitnow'}
 ];
-async function setup(page) {await page.route('**/api/jobs',route => route.fulfill({json:{jobs,fetchedAt:new Date().toISOString()}}));await page.goto('/');await expect(page.locator('#active-card')).toBeVisible();}
+async function setup(page) {await mockListingTab(page);await page.route('**/api/jobs',route => route.fulfill({json:{jobs,fetchedAt:new Date().toISOString()}}));await page.goto('/');await expect(page.locator('#active-card')).toBeVisible();}
+async function mockListingTab(page) {await page.addInitScript(() => {window.openedListings=[];window.open=(url)=>{window.openedListings.push(url);return {opener:null};};});}
+async function reviewSaved(page) {
+  await expect(page.locator('#preparation-dialog')).not.toBeVisible();
+  await expect.poll(async ()=>(await records(page)).filter(e=>e.status==='Preparing').length).toBeGreaterThan(0);
+  const entry=(await records(page)).find(e=>e.status==='Preparing');
+  await page.locator('.main-nav [data-view="notebook"]').click();
+  await page.locator(`[data-prepare="${entry.id}"]`).click();
+}
 async function records(page) {return page.evaluate(() => JSON.parse(localStorage.getItem('job-notebook-v1')));}
 test('swipe, undo, preparation, review and submission preserve existing records',async ({page}) => {
   await setup(page); await expect(page.locator('#deck-count')).toHaveText('2 roles to explore');
   await page.locator('#pass-job').click(); await expect(page.locator('#active-card')).toContainText('Systems Ltd');
   await page.locator('#undo-swipe').click(); await expect(page.locator('#active-card')).toContainText('Workflow Ltd');
-  await page.locator('#prepare-job').click(); await expect(page.locator('#preparation-dialog')).toBeVisible();
+  await page.locator('#prepare-job').click(); await reviewSaved(page);await expect(page.locator('#preparation-dialog')).toBeVisible();
   await expect(page.locator('#mark-applied')).toBeDisabled();
   let data = await records(page); expect(data.find(e=>e.id==='fixture-ba').status).toBe('Preparing'); expect(data.find(e=>e.id==='deliverect').applicationDate).toBe('2026-09-15');
   await page.locator('#prep-pitch').fill('Reviewed introduction.'); await page.locator('#save-preparation').click();
@@ -28,14 +36,14 @@ test('actual drag works on mobile and card title stays below company row',async 
   const line = await page.locator('.company-line').boundingBox(), title = await page.locator('#active-card h2').boundingBox();expect(title.y).toBeGreaterThanOrEqual(line.y+line.height);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const card = await page.locator('.card-top').boundingBox();await page.mouse.move(card.x+60,card.y+80);await page.mouse.down();await page.mouse.move(card.x+195,card.y+80,{steps:12});await page.mouse.up();
-  await expect(page.locator('#preparation-dialog')).toBeVisible();
+  await reviewSaved(page);await expect(page.locator('#preparation-dialog')).toBeVisible();
 });
 test('profile setup imports PDFs locally and chooses the BA CV',async ({page}) => {
   await setup(page);await page.locator('[data-view="profile"]').first().click();
   const bundle={profile:{name:'Test Applicant',email:'test@example.org',evidence:'Delivered a project in 1.5 months.',workRights:'Employment permit required.',startDate:'2027-01-01'},cvs:{analyst:{name:'BA.pdf',base64:Buffer.from('%PDF-1.4\n%%EOF').toString('base64')}}};
   await page.locator('#profile-import').setInputFiles({name:'setup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(bundle))});
   await expect(page.locator('#profile-message')).toContainText('with 1 CV PDFs');await expect(page.locator('#analyst-file-status')).toContainText('BA.pdf');
-  await page.locator('[data-view="discover"]').first().click();await page.locator('#prepare-job').click();await expect(page.locator('#prep-pitch')).toContainText('Test Applicant');await expect(page.locator('#prep-cv-status')).toContainText('BA.pdf');
+  await page.locator('[data-view="discover"]').first().click();await page.locator('#prepare-job').click();await reviewSaved(page);await expect(page.locator('#prep-pitch')).toContainText('Test Applicant');await expect(page.locator('#prep-cv-status')).toContainText('BA.pdf');
   const downloadPromise = page.waitForEvent('download');await page.locator('#download-cv').click();const download=await downloadPromise;expect(download.suggestedFilename()).toBe('BA.pdf');
 });
 test('old notebook migration preserves custom records and progressed statuses',async ({page}) => {
@@ -77,7 +85,7 @@ for (const [width,height] of [[320,568],[360,640],[375,667],[390,844],[430,932],
     });
     expect(layout.width).toBeLessThanOrEqual(width);expect(layout.height).toBeLessThanOrEqual(height+1);expect(layout.navBottom).toBe(height);
     for (const action of layout.actions) {expect(action.top).toBeGreaterThan(0);expect(action.bottom).toBeLessThanOrEqual(layout.navTop);expect(action.width).toBeGreaterThanOrEqual(44);expect(action.height).toBeGreaterThanOrEqual(44);expect(action.hit).toBe(true);}
-    await page.getByRole('button',{name:'Role details',exact:false}).click();await expect(page.locator('#role-dialog')).toBeVisible();
+    await page.getByRole('button',{name:/missing or uncertain requirements/}).click();await expect(page.locator('#role-dialog')).toBeVisible();
     await expect(page.locator('#role-content')).toContainText('Work rights and permit support are unconfirmed.');
     const footer=await page.locator('#role-prepare').boundingBox();expect(footer.y+footer.height).toBeLessThanOrEqual(height);
     await page.locator('#close-role').click();await page.locator('.main-nav [data-view="profile"]').click();
@@ -94,18 +102,18 @@ test('third CV imports, downloads and can be selected without losing draft edits
   await page.locator('#profile-import').setInputFiles({name:'setup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(bundle))});
   await expect(page.locator('#profile-message')).toContainText('with 3 CV PDFs');await expect(page.locator('#developer-file-status')).toContainText('Full_Stack.pdf');
   const downloadPromise=page.waitForEvent('download');await page.locator('#developer-download').click();const downloaded=await downloadPromise;expect(downloaded.suggestedFilename()).toBe('Full_Stack.pdf');expect(await readFile(await downloaded.path())).toEqual(pdf);
-  await page.locator('.main-nav [data-view="discover"]').click();await page.locator('#prepare-job').click();await page.locator('#prep-pitch').fill('Keep my edited draft.');await page.locator('#prep-cv-choice').selectOption('Full Stack Developer CV');
+  await page.locator('.main-nav [data-view="discover"]').click();await page.locator('#prepare-job').click();await reviewSaved(page);await page.locator('#prep-pitch').fill('Keep my edited draft.');await page.locator('#prep-cv-choice').selectOption('Full Stack Developer CV');
   await expect(page.locator('#prep-pitch')).toHaveValue('Keep my edited draft.');await expect(page.locator('#prep-cv-status')).toContainText('Full_Stack.pdf');
   expect((await records(page)).find(e=>e.id==='fixture-ba').preparation.cv).toBe('Full Stack Developer CV');
 });
 test('long role names and all review flags remain available on a small screen',async ({page}) => {
-  await page.setViewportSize({width:320,height:568});const longTitle='Business Systems Specialist — Enterprise Applications, Customer Workflows and Service Delivery';
+  await mockListingTab(page);await page.setViewportSize({width:320,height:568});const longTitle='Business Systems Specialist — Enterprise Applications, Customer Workflows and Service Delivery';
   const description='English. Stakeholder workshops, workflows, ERP configuration and rollout testing. Fluent German required. No visa sponsorship.';
   await page.route('**/api/jobs',r=>r.fulfill({json:{jobs:[{...jobs[0],title:longTitle,description}],fetchedAt:new Date().toISOString()}}));await page.goto('/');
-  await expect(page.locator('#active-card')).toContainText('Worth exploring');await page.getByRole('button',{name:'Role details',exact:false}).click();
+  await expect(page.locator('#active-card')).toContainText('Worth exploring');await page.getByRole('button',{name:/missing or uncertain requirements/}).click();
   await expect(page.locator('.role-heading')).toHaveText(longTitle);await expect(page.locator('#role-content')).toContainText('German requirement');await expect(page.locator('#role-content')).toContainText('existing work rights');
   expect(await page.locator('#role-dialog').evaluate(el=>el.scrollWidth)).toBeLessThanOrEqual(320);
-  await page.locator('#role-prepare').click();await expect(page.locator('#preparation-dialog')).toBeVisible();await expect(page.locator('#preparation-title')).toHaveText('Workflow Ltd');
+  await page.locator('#role-prepare').click();await reviewSaved(page);await expect(page.locator('#preparation-dialog')).toBeVisible();await expect(page.locator('#preparation-title')).toHaveText('Workflow Ltd');
 });
 test('touch scrolling stays inside the card and a horizontal touch prepares the role',async ({browser}) => {
   const context=await browser.newContext({viewport:{width:375,height:667},isMobile:true,hasTouch:true,serviceWorkers:'block'});const page=await context.newPage();await setup(page);
@@ -114,8 +122,8 @@ test('touch scrolling stays inside the card and a horizontal touch prepares the 
   await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
   for(let n=1;n<=8;n++) await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+n*17,y}]});
   await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-  await expect(page.locator('#preparation-dialog')).toBeVisible();
-  await page.locator('#close-preparation').click();await page.locator('#undo-swipe').click();
+  await reviewSaved(page);await expect(page.locator('#preparation-dialog')).toBeVisible();
+  await page.locator('#close-preparation').click();await page.locator('.main-nav [data-view="discover"]').click();await page.locator('#undo-swipe').click();
   await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:180,y:card.y+card.height-85}]});
   for(let n=1;n<=6;n++) await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:180,y:card.y+card.height-85-n*17}]});
   await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
@@ -134,9 +142,9 @@ for (const [width,height] of [[384,832],[393,852],[412,892],[384,720],[832,384],
     });
     expect(layout.width).toBeLessThanOrEqual(width);expect(layout.height).toBeLessThanOrEqual(height+1);
     for(const control of layout.controls){expect(control.x).toBeGreaterThanOrEqual(0);expect(control.bottom).toBeLessThanOrEqual(height);expect(control.right).toBeLessThanOrEqual(width);expect(control.width).toBeGreaterThanOrEqual(44);expect(control.height).toBeGreaterThanOrEqual(44);expect(control.hit).toBe(true);}
-    if(width<height && height>=780) {await page.locator('.role-checks').scrollIntoViewIfNeeded();expect(await page.locator('.role-checks').evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);}
+    if(width<height && height>=780) {expect(await page.locator('.listing-info').evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);}
     if(width>height){expect(layout.nav.width).toBeLessThan(width*.15);expect(layout.body.x).toBeGreaterThan(layout.top.x);expect(layout.body.y).toBe(layout.top.y);}else{expect(layout.body.y).toBeGreaterThan(layout.top.y);}
-    await page.locator('#prepare-job').click();await expect(page.locator('#preparation-dialog')).toBeVisible();await page.locator('#prep-pitch').fill('Keep this draft when I rotate.');
+    await page.locator('#prepare-job').click();await reviewSaved(page);await expect(page.locator('#preparation-dialog')).toBeVisible();await page.locator('#prep-pitch').fill('Keep this draft when I rotate.');
     await page.setViewportSize({width:height,height:width});await expect(page.locator('#prep-pitch')).toHaveValue('Keep this draft when I rotate.');
     await page.locator('#save-preparation').click();expect((await records(page)).find(e=>e.id==='fixture-ba').preparation.pitch).toBe('Keep this draft when I rotate.');
     await context.close();
@@ -150,7 +158,7 @@ test('rotation preserves the role and a burst of decisions only passes it once',
   expect(await page.evaluate(()=>Object.keys(JSON.parse(localStorage.getItem('job-notebook-discovery-v1')).decisions).length)).toBe(1);
 });
 test('reduced motion still saves and prepares applications',async ({page})=>{
-  await page.emulateMedia({reducedMotion:'reduce'});await setup(page);await page.locator('#prepare-job').click();await expect(page.locator('#preparation-dialog')).toBeVisible();expect((await records(page)).find(e=>e.id==='fixture-ba').status).toBe('Preparing');
+  await page.emulateMedia({reducedMotion:'reduce'});await setup(page);await page.locator('#prepare-job').click();await reviewSaved(page);await expect(page.locator('#preparation-dialog')).toBeVisible();expect((await records(page)).find(e=>e.id==='fixture-ba').status).toBe('Preparing');
 });
 
 test('app refresh reloads the latest shell and preserves saved records and PDFs',async ({browser})=>{
@@ -166,4 +174,21 @@ test('phone reading text and app refresh remain readable and reachable',async ({
   await page.setViewportSize({width:384,height:832});await setup(page);
   for(const selector of ['.fit-list li','.job-location'])expect(await page.locator(selector).first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
   for(const [width,height] of [[320,568],[384,832],[832,384]]){await page.setViewportSize({width,height});expect(await page.locator('#refresh-app').evaluate(el=>{const r=el.getBoundingClientRect();return r.width>=44&&r.height>=44&&el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);}
+});
+
+test('role text is inline, uncertainties are in the header, and Apply opens the original site without a notebook form',async ({page})=>{
+  await setup(page);await expect(page.locator('.inline-role')).toContainText(jobs[0].description);
+  expect(await page.locator('.inline-role').evaluate(el=>el.previousElementSibling.classList.contains('fit-list'))).toBe(true);
+  await expect(page.locator('.card-top .listing-info')).toBeVisible();await expect(page.locator('.role-checks')).toHaveCount(0);
+  await page.locator('#prepare-job').click();await expect.poll(()=>page.evaluate(()=>window.openedListings)).toEqual([jobs[0].link]);
+  await expect(page.locator('#preparation-dialog')).not.toBeVisible();
+  const entry=(await records(page)).find(e=>e.id===jobs[0].id);expect(entry.materials).toBe('Business Analyst CV');expect(entry.status).toBe('Preparing');expect(entry.applicationDate).toBe('');
+});
+
+test('Apply opens a real separate tab with no opener and retains the notebook',async ({page,context})=>{
+  await context.route('https://example.org/**',r=>r.fulfill({contentType:'text/html',body:'<h1>Employer application</h1>'}));
+  await page.route('**/api/jobs',r=>r.fulfill({json:{jobs,fetchedAt:new Date().toISOString()}}));await page.goto('/');await expect(page.locator('#active-card')).toBeVisible();
+  const popupPromise=page.waitForEvent('popup');await page.locator('#prepare-job').click();const popup=await popupPromise;await popup.waitForLoadState();
+  expect(popup.url()).toBe(jobs[0].link);expect(await popup.evaluate(()=>window.opener)).toBe(null);await expect(page.locator('#preparation-dialog')).not.toBeVisible();
+  expect((await records(page)).find(e=>e.id===jobs[0].id).status).toBe('Preparing');await popup.close();
 });
