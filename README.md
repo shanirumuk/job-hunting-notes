@@ -97,7 +97,7 @@ The details sheet and summary use larger relative text sizes with scrolling rath
 
 `api/setup.js` serves a gzip/base64 setup bundle from the sensitive production environment variable `JOB_NOTEBOOK_CV_SETUP`, protected by the existing device bearer token. Neither the bundle nor its PDFs are committed or publicly hosted. A private `#connect=` link saves the device connection, immediately removes the fragment from browser history, and loads the saved details and three PDFs. Already connected devices automatically restore missing CVs while preserving existing PDFs and edited profile fields; **Load my saved CVs** explicitly restores the server library. CVs remain available locally afterward. Anyone holding the connection link can access the private bundle, so keep it private; rotate the server access token to revoke all existing connections.
 
-## Employer-specific summaries (release 17)
+## Employer-specific summaries (release 18)
 
 Cards now display the employer’s actual responsibility, requirement, preferred-skill, benefit and contract sections, with limited removal of verbal padding. They no longer replace those facts with broad skill categories. Original text remains available for checking. The percentage badge and generic “Why this fits” claims are removed: internal keyword weights only order suggestions and are not an eligibility probability. Internship and commercial-focus facts lower ordering priority. Student/school agreement requirements are surfaced before applying.
 
