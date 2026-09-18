@@ -302,3 +302,56 @@ test('generated summaries stay with their own role and are reused after undo and
  await page.locator('#undo-swipe').click();await expect(page.locator('#role-summary')).toContainText('Summary for Technical Business Analyst');
  await page.reload();await expect(page.locator('#role-summary')).toContainText('Summary for Technical Business Analyst');expect(calls).toBe(2);
 });
+
+test('loads later pages before the deck empties without moving the current card or repeating passed roles',async({page})=>{
+ const first=Array.from({length:6},(_,i)=>({...jobs[0],id:'page-one-'+i,company:'Employer '+i,link:'https://example.org/role-'+i}));
+ let release;const wait=new Promise(resolve=>release=resolve);let laterCalls=0;
+ await page.route('**/api/jobs*',async route=>{
+  if(new URL(route.request().url()).searchParams.get('page')==='4'){
+   laterCalls++;await wait;
+   return route.fulfill({json:{jobs:[{...first[0],id:'duplicate-on-another-source'},...Array.from({length:3},(_,i)=>({...jobs[0],id:'later-'+i,company:'Later '+i,link:'https://example.org/later-'+i}))],nextPage:null}});
+  }
+  return route.fulfill({json:{jobs:first,nextPage:4}});
+ });
+ await page.goto('/');await expect(page.locator('#deck-count')).toHaveText('6 roles to explore');expect(laterCalls).toBe(0);
+ await page.locator('#pass-job').click();await expect(page.locator('#deck-count')).toHaveText('5 roles to explore');
+ await page.locator('#pass-job').click();await expect.poll(()=>laterCalls).toBe(1);
+ const current=await page.locator('#active-card').getAttribute('data-job-id');
+ await page.locator('.qualification-details > summary').click();release();
+ await expect(page.locator('#deck-count')).toHaveText('7 roles to explore');
+ await expect(page.locator('#active-card')).toHaveAttribute('data-job-id',current);
+ await expect(page.locator('.qualification-details')).toHaveAttribute('open','');
+ const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-discovery-v1')));
+ expect(stored.nextPage).toBe(null);expect(stored.decisions[first[0].id]).toBe('pass');
+});
+
+test('empty matching batches are skipped automatically until a suitable role is found',async({page})=>{
+ const requested=[];
+ await page.route('**/api/jobs*',route=>{
+  const n=Number(new URL(route.request().url()).searchParams.get('page')||1);requested.push(n);
+  return route.fulfill({json:{jobs:n===7?[jobs[0]]:[jobs[2]],nextPage:n===7?null:n+3}});
+ });
+ await page.goto('/');await expect(page.locator('#active-card')).toContainText('Workflow Ltd');expect(requested).toEqual([1,4,7]);
+ await page.locator('#pass-job').click();await expect(page.locator('.deck-empty')).toContainText('No more matching roles');
+ await expect(page.locator('#empty-refresh')).toHaveText('Check for new jobs');
+});
+
+test('failed continuation pauses automatically and retries the failed page on request',async({page})=>{
+ let later=0;
+ await page.route('**/api/jobs*',route=>{
+  if(new URL(route.request().url()).searchParams.get('page')==='4')return ++later===1?route.fulfill({status:503,json:{error:'Offline'}}):route.fulfill({json:{jobs:[jobs[0]],nextPage:null}});
+  return route.fulfill({json:{jobs:[],nextPage:4}});
+ });
+ await page.goto('/');await expect(page.locator('#empty-refresh')).toHaveText('Retry search');expect(later).toBe(1);
+ await page.locator('#empty-refresh').click();await expect(page.locator('#active-card')).toContainText('Workflow Ltd');expect(later).toBe(2);
+});
+
+test('saved continuation resumes after reload and a bounded scan never claims false exhaustion',async({page})=>{
+ await page.addInitScript(()=>{if(!localStorage.getItem('job-notebook-discovery-v1'))localStorage.setItem('job-notebook-discovery-v1',JSON.stringify({jobs:[],decisions:{},fetchedAt:new Date().toISOString(),nextPage:10}));});
+ const requested=[];
+ await page.route('**/api/jobs*',route=>{const n=Number(new URL(route.request().url()).searchParams.get('page')||1);requested.push(n);return route.fulfill({json:{jobs:[],nextPage:n+3}});});
+ await page.goto('/');await expect(page.locator('#empty-refresh')).toHaveText('Keep searching');
+ await expect.poll(()=>requested.length).toBe(3);expect(requested).toEqual([10,13,16]);
+ await expect(page.locator('.deck-empty')).not.toContainText('No more matching roles');
+ await page.reload();await expect.poll(()=>requested.length).toBe(6);expect(requested.slice(3)).toEqual([19,22,25]);
+});

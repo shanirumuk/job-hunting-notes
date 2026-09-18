@@ -1,5 +1,5 @@
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=19';
+import {roleInsights, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=20';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -18,6 +18,9 @@ try {profile = validateProfile(read(PROFILE_KEY, defaultProfile));} catch {profi
 let discovery = read(DISCOVERY_KEY, {jobs: [], decisions: {}, fetchedAt: ''});
 if (!discovery || !Array.isArray(discovery.jobs) || !discovery.decisions || typeof discovery.decisions !== 'object') {discovery = {jobs: [], decisions: {}, fetchedAt: ''}; storageError = true;}
 let activeFilter = 'all', activeView = 'discover', undoAction = null, preparationId = null, loading = false, toastTimer, selectedRole = null, decisionPending = false;
+let pinnedJobId=null, feedError=false, autoBudget=3;
+if(!Object.hasOwn(discovery,'nextPage'))discovery.nextPage=discovery.fetchedAt?4:1;
+feedError=!!discovery.sourceErrors?.length&&discovery.nextPage===null;
 let matchCache = new WeakMap(), cachedProfile = profile;
 const editor = $('editor-dialog'), backup = $('backup-dialog'), form = $('application-form');
 function toast(message) {$('toast').textContent = message; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').hidden = true, 5500);}
@@ -44,6 +47,7 @@ function setView(view) {
   document.querySelectorAll('.view').forEach(el => el.hidden = el.id !== `${view}-view`);
   document.querySelectorAll('.nav-button').forEach(el => {el.classList.toggle('active',el.dataset.view === view); if (el.dataset.view === view) el.setAttribute('aria-current','page'); else el.removeAttribute('aria-current');});
   if (view === 'profile') populateProfile();
+  if(view==='discover')maybeLoadMore(deckJobs().length);
   history.replaceState(null, '', `#${view}`);
 }
 function render() {
@@ -64,15 +68,18 @@ function deckJobs() {
   const historical = entries.filter(e => e.status === 'To apply' && !e.preparation).map(e => ({...e, description: e.requirements, source: 'Your notebook', historical: true}));
   const all = [...discovery.jobs, ...historical];
   const result = [];
+  const reviewed=Object.values(discovery.reviewed||{}).filter(j=>discovery.decisions[j.id]);
   for (const job of all) {
-    if (discovery.decisions[job.id] || result.some(j => sameJob(j,job))) continue;
+    if (discovery.decisions[job.id] || reviewed.some(j=>sameJob(j,job)) || result.some(j => sameJob(j,job))) continue;
     if (entries.some(e => sameJob(e,job) && (e.status !== 'To apply' || e.preparation))) continue;
     let match = matchCache.get(job);
     if (!match) {match = matchJob(job,profile); matchCache.set(job,match);}
     // Previously saved roles remain accessible in the notebook even outside current search preferences.
     if (match.eligible) result.push({...job, match});
   }
-  return rankJobs(result);
+  const ranked=rankJobs(result);
+  const pinned=ranked.findIndex(j=>j.id===pinnedJobId);if(pinned>0)ranked.unshift(...ranked.splice(pinned,1));
+  return ranked;
 }
 const storedSummaries=read('job-notebook-summaries-v1',{});
 const summaryCache=storedSummaries&&typeof storedSummaries==='object'&&!Array.isArray(storedSummaries)?storedSummaries:{};
@@ -118,11 +125,13 @@ function renderDeck() {
   if (decisionPending) return;
   document.querySelectorAll('.swipe-button').forEach(button => button.disabled = false);
   const jobs = deckJobs(), job = jobs[0];
+  pinnedJobId=job?.id||null;
+  maybeLoadMore(jobs.length);
   $('deck-count').textContent = `${jobs.length} role${jobs.length === 1 ? '' : 's'} to explore`;
   $('undo-swipe').disabled = !undoAction;
   $('swipe-actions').hidden = !job;
   if (!job) {
-  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${loading ? 'Finding your next possibility…' : discovery.fetchedAt ? 'You’re all caught up.' : 'Let’s find your kind of work.'}</h2><p>${loading ? 'Looking for consulting, implementation and business analysis roles.' : 'Fresh suggestions, guided by your direction.<br>Your saved roles are waiting in Applications.'}</p><button class="primary-button" id="empty-refresh" ${loading ? 'disabled' : ''}>${loading ? 'Finding roles…' : 'Find fresh roles'}</button>${Object.keys(discovery.decisions).length ? '<button class="text-button" id="revisit-passed">Revisit passed roles</button>' : ''}<p class="source-note">Listings from <a href="https://www.arbeitnow.com" target="_blank" rel="noopener noreferrer">Arbeitnow</a> · A selection of recent openings, mainly in Europe.</p></div>`;
+  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${loading ? 'Finding your next possibility…' : feedError ? 'The search paused.' : discovery.nextPage ? 'More roles to check.' : discovery.fetchedAt ? 'You’re all caught up.' : 'Let’s find your kind of work.'}</h2><p>${loading ? 'Looking for consulting, implementation and business analysis roles.' : feedError ? 'A source could not be reached. Retry to keep searching; your saved roles are safe.' : discovery.nextPage ? 'Continue searching later listings for roles that match your preferences.' : 'No more matching roles in the available feeds right now. Check for new postings later, or revisit roles you passed.'}</p><button class="primary-button" id="empty-refresh" ${loading ? 'disabled' : ''}>${loading ? 'Finding roles…' : feedError?'Retry search':discovery.nextPage?'Keep searching':'Check for new jobs'}</button>${Object.keys(discovery.decisions).length ? '<button class="text-button" id="revisit-passed">Revisit passed roles</button>' : ''}<p class="source-note">Listings from <a href="https://www.arbeitnow.com" target="_blank" rel="noopener noreferrer">Arbeitnow</a> and <a href="https://remotive.com" target="_blank" rel="noopener noreferrer">Remotive</a>. Your location and role preferences still apply.</p></div>`;
     return;
   }
   const {match}=job,insights=roleInsights(job,profile),checks=insights.questions.length;
@@ -141,19 +150,45 @@ function openRoleDetails() {
   $('role-dialog').showModal();
   $('role-content').scrollTop = 0;
 }
-async function refreshJobs() {
-  if (loading) return;
-  loading = true; $('refresh-jobs').disabled = true; $('feed-status').textContent = 'Checking the job feed…'; renderDeck();
-  try {
-    const response = await fetch('/api/jobs', {signal: AbortSignal.timeout(20000)});
-    const data = await response.json();
-    if (!response.ok || !Array.isArray(data.jobs)) throw new Error(data.error || 'Could not load the job feed.');
-    discovery.jobs = data.jobs.filter(j => j && typeof j.id === 'string' && typeof j.company === 'string' && typeof j.title === 'string' && safeURL(j.link));
-    discovery.fetchedAt = typeof data.fetchedAt==='string'&&Number.isFinite(Date.parse(data.fetchedAt))?data.fetchedAt:new Date().toISOString(); saveDiscovery();
-    $('feed-status').textContent = `${data.stale ? 'Saved feed' : data.partial ? 'Partial feed' : 'Arbeitnow'} · Updated ${new Date(discovery.fetchedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · Check listing availability`;
-  } catch (error) {
-    $('feed-status').textContent = `Couldn’t refresh. ${discovery.jobs.length ? 'Showing saved suggestions.' : 'Try again, or add a role in Applications.'}`;
-  } finally {loading = false; $('refresh-jobs').disabled = false; renderDeck();}
+function maybeLoadMore(count){
+ if(count>4||loading||feedError||autoBudget<=0||!discovery.fetchedAt||!discovery.nextPage||activeView!=='discover')return;
+ queueMicrotask(()=>{if(!loading&&!feedError&&autoBudget>0&&discovery.nextPage&&activeView==='discover'){autoBudget--;refreshJobs(true);}});
+}
+async function refreshJobs(more=false) {
+ more=more===true;
+ if (loading) return;
+ if(!more)autoBudget=3;
+ const page=more?discovery.nextPage:1;if(!page)return;
+ loading=true;feedError=false;$('refresh-jobs').disabled=true;$('feed-status').textContent=more?'Finding more matching roles…':'Checking for new jobs…';
+ if(!$('active-card'))renderDeck();
+ try {
+  const response=await fetch(page===1?'/api/jobs':`/api/jobs?page=${page}`,{signal:AbortSignal.timeout(20000)});
+  const data=await response.json();
+  if(!response.ok||!Array.isArray(data.jobs))throw new Error('Could not load jobs.');
+  const incoming=data.jobs.filter(j=>j&&typeof j.id==='string'&&typeof j.company==='string'&&typeof j.title==='string'&&safeURL(j.link));
+  discovery.reviewed ||= {};
+  for(const job of discovery.jobs)if(discovery.decisions[job.id])discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link};
+  const merged=new Map(discovery.jobs.map(j=>[j.id,j]));for(const job of incoming)merged.set(job.id,job);
+  // Keep full descriptions for relevant roles, plus recent reviewed cards for undo/revisit.
+  const all=[...merged.values()];
+  discovery.jobs=[...all.filter(j=>!discovery.decisions[j.id]&&matchJob(j,profile).eligible),...all.filter(j=>discovery.decisions[j.id]).slice(-50)];
+  discovery.nextPage=Number.isInteger(data.nextPage)&&data.nextPage>0?data.nextPage:null;
+  if(data.stale){discovery.nextPage=page;feedError=true;}
+  if(data.retryPage)feedError=true;
+  if(!more)discovery.sourceErrors=data.sourceErrors||[];
+  discovery.fetchedAt=typeof data.fetchedAt==='string'&&Number.isFinite(Date.parse(data.fetchedAt))?data.fetchedAt:new Date().toISOString();saveDiscovery();
+  const failures=(discovery.sourceErrors||[]).length;
+  if(failures&&!discovery.nextPage)feedError=true;
+  $('feed-status').textContent=feedError?'Search paused · Retry to continue':failures?`${discovery.sourceErrors.join(', ')} unavailable · Other listings are still available`:discovery.nextPage?'More roles load as you swipe · Arbeitnow + Remotive':'Available feeds checked · Refresh later for new jobs';
+ } catch {
+  feedError=true;discovery.nextPage=page;
+  $('feed-status').textContent=more?'Couldn’t load more roles · Retry search':'Couldn’t refresh · Retry search';
+ } finally {
+  loading=false;$('refresh-jobs').disabled=false;
+  const jobs=deckJobs();
+  if(more&&jobs[0]&&$('active-card')?.dataset.jobId===jobs[0].id){$('deck-count').textContent=`${jobs.length} role${jobs.length===1?'':'s'} to explore`;maybeLoadMore(jobs.length);}
+  else renderDeck();
+ }
 }
 async function decide(action, job = deckJobs()[0]) {
   if (!job || decisionPending) return;
@@ -163,6 +198,8 @@ async function decide(action, job = deckJobs()[0]) {
   const existing = entries.find(e => sameJob(e,job));
   undoAction = {jobId: job.id, previousDecision: discovery.decisions[job.id], entry: existing ? structuredClone(existing) : null, newId: null};
   discovery.decisions[job.id] = action;
+  discovery.reviewed ||= {};discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link};
+  autoBudget=3;
   if (action !== 'pass') {
     const entry = existing || {id: job.id, company: job.company, title: job.title, location: job.location, link: job.link, requirements: job.description || job.requirements || '', status: 'To apply', materials: job.match.cv, notes: '', applicationDate: '', interviewDate: '', source: job.source};
     if (!existing) {entries.unshift(entry); undoAction.newId = entry.id;}
@@ -201,6 +238,7 @@ function undoSwipe() {
   if (previousDecision) discovery.decisions[jobId] = previousDecision; else delete discovery.decisions[jobId];
   if (newId) entries = entries.filter(e => e.id !== newId);
   else if (entry) entries = entries.map(e => e.id === entry.id ? entry : e);
+  pinnedJobId=jobId;
   undoAction = null; saveEntries(); saveDiscovery(); render(); toast('Last swipe undone.');
 }
 function wireSwipe() {
@@ -287,7 +325,7 @@ function saveProfile(event) {
   event.preventDefault(); const next = {...profile};
   for (const key of Object.keys(defaultProfile)) {const el = $(`profile-${key}`); if (el) next[key] = el.type === 'checkbox' ? el.checked : el.value.trim();}
   profile = validateProfile(next);
-  if (persist(PROFILE_KEY,profile)) {$('profile-message').textContent = 'Saved. New drafts will use this profile.'; render(); toast('Profile saved. Suggestions now reflect your preferences.');}
+  if (persist(PROFILE_KEY,profile)) {$('profile-message').textContent = 'Saved. New drafts will use this profile.'; discovery.nextPage=1;autoBudget=3;feedError=false;render();refreshJobs(); toast('Profile saved. Suggestions now reflect your preferences.');}
 }
 function exportData() {download(JSON.stringify({version:2,exportedAt:new Date().toISOString(),entries,profile,discovery},null,2),`job-notebook-backup-${today()}.json`); $('backup-message').textContent = 'Backup downloaded, including your profile and swipe history. CV PDFs are separate; keep their original files.';}
 async function importData(file) {
@@ -300,7 +338,7 @@ async function importData(file) {
     if (!Array.isArray(nextDiscovery.jobs) || !nextDiscovery.decisions || typeof nextDiscovery.decisions !== 'object' || Array.isArray(nextDiscovery.decisions)) throw new Error('Invalid discovery');
     if (nextDiscovery.jobs.some(j => !j || typeof j.id !== 'string' || typeof j.company !== 'string' || typeof j.title !== 'string' || !safeURL(j.link))) throw new Error('Invalid job');
     if (!confirm(`Restore ${nextEntries.length} applications? This replaces the current notebook, profile and swipe history. Download a backup first if you want to keep them.`)) return;
-    entries = nextEntries; profile = nextProfile; discovery = nextDiscovery; undoAction = null;
+    entries = nextEntries; profile = nextProfile; discovery = nextDiscovery; undoAction = null;pinnedJobId=null;feedError=false;autoBudget=3;if(!Object.hasOwn(discovery,'nextPage'))discovery.nextPage=discovery.fetchedAt?4:1;
     const saved = saveEntries() & persist(PROFILE_KEY,profile) & saveDiscovery();
     render(); populateProfile(); $('backup-message').textContent = saved ? 'Backup restored. CV files already on this device are unchanged.' : 'Restored in memory, but device storage failed. Download a backup before closing.';
   } catch {$('backup-message').textContent = 'That file is not a valid Job notebook backup. Your notebook has not been replaced.';}
@@ -446,7 +484,7 @@ $('pass-job').addEventListener('click',() => decide('pass'));
 $('save-job').addEventListener('click',() => decide('save'));
 $('prepare-job').addEventListener('click',() => decide('prepare'));
 $('undo-swipe').addEventListener('click',undoSwipe);
-$('job-deck').addEventListener('click',e => {if (e.target.closest('[data-read-role]')) document.querySelector('.inline-role')?.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'}); if (e.target.closest('[data-role-details]')) openRoleDetails(); if (e.target.closest('#empty-refresh')) refreshJobs(); if (e.target.closest('#revisit-passed')) {Object.keys(discovery.decisions).forEach(id => {if (discovery.decisions[id] === 'pass') delete discovery.decisions[id];}); saveDiscovery(); renderDeck();}});
+$('job-deck').addEventListener('click',e => {if (e.target.closest('[data-read-role]')) document.querySelector('.inline-role')?.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'}); if (e.target.closest('[data-role-details]')) openRoleDetails(); if (e.target.closest('#empty-refresh')) {autoBudget=3;refreshJobs(!!discovery.nextPage);} if (e.target.closest('#revisit-passed')) {Object.keys(discovery.decisions).forEach(id => {if (discovery.decisions[id] === 'pass') delete discovery.decisions[id];}); discovery.nextPage=1;autoBudget=3;feedError=false;saveDiscovery();renderDeck();refreshJobs();}});
 $('applications').addEventListener('click',e => {const edit = e.target.closest('[data-edit]'), prepare = e.target.closest('[data-prepare]'); if (edit) openEditor(entries.find(item => item.id === edit.dataset.edit)); if (prepare) openPreparation(prepare.dataset.prepare);const start=e.target.closest('[data-start-browser]');if(start){const entry=entries.find(item=>item.id===start.dataset.startBrowser);startApplicationBrowser(entry,entry.id);}});
 $('add-button').addEventListener('click',() => openEditor()); $('empty-add-button').addEventListener('click',() => openEditor()); $('close-editor').addEventListener('click',() => editor.close()); form.addEventListener('submit',upsert);
 $('delete-button').addEventListener('click',() => {if (!confirm('Delete this application and its notes?')) return; const id = $('entry-id').value; entries = entries.filter(e => e.id !== id); if (saveEntries()) {render(); editor.close();}});
@@ -521,6 +559,11 @@ if(connectionFragment){
 setView(location.hash.slice(1)); render();
 if (storageError) toast('Some saved data could not be read. Export a backup before making changes.');
 if (discovery.fetchedAt) $('feed-status').textContent = `Saved feed · ${dateText(discovery.fetchedAt)} · Refresh for recent roles`;
-if (!discovery.fetchedAt || Date.now() - new Date(discovery.fetchedAt).getTime() > 6*60*60*1000) refreshJobs();
+if (!discovery.fetchedAt || Date.now() - new Date(discovery.fetchedAt).getTime() > 60*60*1000) refreshJobs();
 
 document.addEventListener('click',event=>{if(event.target.closest('[data-retry-summary]')){const job=deckJobs()[0];if(job){summaryErrors.delete(job.id);$('role-summary').innerHTML=summaryMarkup(job);requestSummary(job);}}});
+
+// Check for new postings when returning to an older feed, without polling hidden tabs.
+function checkFreshFeed(){if(!document.hidden&&activeView==='discover'&&!loading&&Date.now()-Date.parse(discovery.fetchedAt||0)>60*60*1000)refreshJobs();}
+document.addEventListener('visibilitychange',checkFreshFeed);
+setInterval(checkFreshFeed,60000);

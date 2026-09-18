@@ -46,7 +46,7 @@ test('deduplicates listing and apply links across providers',() => {
 });
 test('job source handles partial failure, normalises and deduplicates results',async () => {
   let calls = 0;
-  const data = await fetchJobs(async () => {if (++calls === 2) throw new Error('down'); return {ok:true,json:async () => ({data:[{slug:'a',company_name:'Example',title:'Business Analyst',location:'Berlin',url:'https://example.org/a',description:'<b>Workflow</b>',created_at:1789645215},{slug:'bad',company_name:'Bad',title:'Bad',url:'javascript:alert(1)'}]})};});
+  const data = await fetchJobs(async () => {if (++calls === 2) throw new Error('down'); return {ok:true,json:async () => ({links:{next:'https://www.arbeitnow.com/api/job-board-api?page=4'},data:[{slug:'a',company_name:'Example',title:'Business Analyst',location:'Berlin',url:'https://example.org/a',description:'<b>Workflow</b>',created_at:1789645215},{slug:'bad',company_name:'Bad',title:'Bad',url:'javascript:alert(1)'}]})};});
   assert.equal(data.partial,true); assert.equal(data.jobs.length,1); assert.equal(data.jobs[0].description,'Workflow');
   await assert.rejects(() => fetchJobs(async () => {throw new Error('down');}));
 });
