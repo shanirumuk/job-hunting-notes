@@ -3,6 +3,10 @@
     "api/prepare.js": {
       "maxDuration": 300,
       "includeFiles": "node_modules/@browserbasehq/stagehand/dist/assets/stagehand-extension.zip"
+    },
+    "api/summary.js": {
+      "maxDuration": 120,
+      "includeFiles": "node_modules/@browserbasehq/stagehand/dist/assets/stagehand-extension.zip"
     }
   }
 }

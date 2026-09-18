@@ -740,3 +740,14 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 #role-dialog .role-panel { height: 100%; min-height: 0; }
 #role-dialog .sheet-header, #role-dialog .sheet-actions { position: relative; z-index: 1; background: white; }
 #role-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-padding-top: 20px; }
+
+/* The default view is a short synopsis, with evidence available on demand. */
+#role-summary > p { margin-bottom: 16px; }
+.summary-essential, .summary-benefits { margin-top: 16px; }
+.summary-essential strong, .summary-benefits strong { font-size: 1rem; }
+.inline-role .fit-caution { margin-top: 16px; font-size: 1rem; color: #755c2c; }
+.qualification-details { border-top: 1px solid var(--line); margin-top: 20px; }
+.qualification-details > summary { padding: 14px 0; min-height: 48px; font-size: 1.125rem; font-weight: 600; cursor: pointer; }
+@media (max-width: 599px) {
+  #role-summary p { font-size: 1rem; line-height: 1.5; }
+}

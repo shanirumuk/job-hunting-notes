@@ -222,7 +222,7 @@ test('practice inspection reports unchecked required consent without changing it
 });
 test('summary checks and missing-requirement sheet are readable on a Galaxy-sized screen',async({page})=>{
  await page.setViewportSize({width:412,height:892});await page.route('**/api/jobs',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Responsibilities:\nAnalyse requirements and implement API integrations.\nRequirements:\nGerman B2 required.\nBenefits:\nFlexible working hours and 30 days annual leave.'}]}}));
- await page.goto('/');await expect(page.locator('.qualification.gap')).toContainText('German B2');await expect(page.locator('.benefit-list')).toContainText('30 days');
+ await page.goto('/');await page.locator('.qualification-details > summary').click();await expect(page.locator('.qualification.gap')).toContainText('German B2');await page.locator('.source-description > summary').click();await expect(page.locator('.source-description')).toContainText('30 days');await page.locator('.source-description > summary').click();
  await expect(page.locator('.source-description')).not.toHaveAttribute('open','');
  await page.locator('.listing-info').click();await expect(page.locator('#role-content .flag-box')).not.toContainText('German');await expect(page.locator('.qualification.gap')).toContainText('B1');
  for(const selector of ['#role-content .role-heading','#role-content .prep-meta','#role-content li'])expect(await page.locator(selector).first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(19);
@@ -260,16 +260,45 @@ test('automatic CV recovery preserves a newer local PDF and edited profile',asyn
  await expect(page.locator('#analyst-file-status')).toContainText('BA.pdf');
 });
 
-test('reported Back Market card presents employer facts without an invented percentage or irrelevant German advice',async({page})=>{
+test('Back Market opens with a short synopsis, keeping the long checklist and source optional',async({page})=>{
+ const summary={overview:'Help marketplace sellers get started, analyse their performance in Excel and Salesforce, and improve onboarding processes.',essentials:'Six months from January 2027. French-school internship agreement, fluent English and Excel pivot tables required. French and Salesforce are bonuses.',benefits:'€1,200–€1,400/month; two remote days weekly, one remote week quarterly and three flex days.'};
+ await page.addInitScript(({job,summary})=>localStorage.setItem('job-notebook-summaries-v1',JSON.stringify({[job.id]:{source:JSON.stringify([job.title,job.location,job.description]),summary}})),{job:sellerIntern,summary});
  await page.setViewportSize({width:412,height:892});await page.route('**/api/jobs',r=>r.fulfill({json:{jobs:[sellerIntern]}}));await page.goto('/');
  await expect(page.locator('#active-card')).toBeVisible();await expect(page.locator('.match-badge')).toHaveCount(0);
- await expect(page.locator('.decision-alert')).toContainText('French school');await expect(page.locator('.decision-alert')).toContainText('Lower priority');
- const facts=page.locator('.listing-facts');await expect(facts).toContainText(['Salesforce','€1.2K']);
+ await expect(page.locator('#role-summary')).toContainText('French-school internship agreement');
+ await expect(page.locator('#role-summary')).toContainText('Excel and Salesforce');
+ expect((await page.locator('#role-summary').innerText()).split(/\s+/).length).toBeLessThan(110);
+ await expect(page.locator('.qualification-list')).not.toBeVisible();
+ await expect(page.locator('.source-description')).not.toHaveAttribute('open','');
+ await page.locator('.qualification-details > summary').click();
  await expect(page.locator('.qualification-list')).toContainText('pivot tables');await expect(page.locator('.qualification-list')).toContainText('Fluent English');
  await expect(page.locator('.qualification-list')).not.toContainText('German');
- await expect(page.locator('.benefit-list')).toContainText('2 remote days');await expect(page.locator('.benefit-list')).not.toContainText('Salary');
- await page.locator('[data-read-role]').click();await page.screenshot({path:'private/backmarket-corrected-card.png'});
- await page.locator('.listing-info').click();await expect(page.locator('#role-content')).toContainText('permit support');await expect(page.locator('#role-content .flag-box')).not.toContainText('German');await expect(page.locator('#role-content')).not.toContainText('pivot tables');
- const header=await page.locator('#role-dialog .sheet-header').boundingBox();const content=await page.locator('#role-content').boundingBox();expect(content.y).toBeGreaterThanOrEqual(header.y+header.height-1);
- await page.screenshot({path:'private/backmarket-corrected-info.png'});
+ await page.locator('.qualification-details > summary').click();
+ await page.locator('[data-read-role]').click();await page.screenshot({path:'private/backmarket-short-summary.png'});
+ await page.locator('.listing-info').click();await expect(page.locator('#role-content')).toContainText('permit support');await expect(page.locator('#role-content .flag-box')).not.toContainText('German');
+});
+
+test('a missing summary never expands the listing as a fallback',async({page})=>{
+ await page.route('**/api/jobs',r=>r.fulfill({json:{jobs:[sellerIntern]}}));await page.goto('/');
+ await expect(page.locator('#role-summary')).toContainText('Connect your saved setup');
+ await expect(page.locator('.qualification-list')).not.toBeVisible();
+ await expect(page.locator('.source-description p')).not.toBeVisible();
+});
+
+test('generated summaries stay with their own role and are reused after undo and reload',async({page})=>{
+ let releaseFirst;const pendingFirst=new Promise(resolve=>releaseFirst=resolve);let calls=0;
+ await page.route('**/api/summary',async route=>{
+  calls++;const job=route.request().postDataJSON();
+  expect(Object.keys(job).sort()).toEqual(['description','location','title']);
+  if(job.title===jobs[0].title)await pendingFirst;
+  await route.fulfill({json:{summary:{overview:'Summary for '+job.title,essentials:'Check stated requirements.',benefits:'Not stated.',evidence:[]}}});
+ });
+ await setup(page);await page.locator('[data-view="profile"]').first().click();
+ await page.locator('#profile-import').setInputFiles({name:'setup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({automationToken:'summary-test-'.padEnd(43,'x'),profile:{name:'Test Applicant',email:'test@example.org'}}))});
+ await expect.poll(()=>calls).toBe(1);
+ await page.locator('[data-view="discover"]').first().click();await page.locator('#pass-job').click();
+ releaseFirst();await expect(page.locator('#role-summary')).toContainText('Summary for Implementation Consultant');
+ await expect(page.locator('#role-summary')).not.toContainText('Technical Business Analyst');
+ await page.locator('#undo-swipe').click();await expect(page.locator('#role-summary')).toContainText('Summary for Technical Business Analyst');
+ await page.reload();await expect(page.locator('#role-summary')).toContainText('Summary for Technical Business Analyst');expect(calls).toBe(2);
 });

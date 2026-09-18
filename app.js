@@ -1,4 +1,5 @@
-import {roleInsights, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=18';
+import {publishedSummaries} from './lib/summaries.js';
+import {roleInsights, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=19';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -73,6 +74,46 @@ function deckJobs() {
   }
   return rankJobs(result);
 }
+const storedSummaries=read('job-notebook-summaries-v1',{});
+const summaryCache=storedSummaries&&typeof storedSummaries==='object'&&!Array.isArray(storedSummaries)?storedSummaries:{};
+const summaryErrors=new Map();
+const summaryHashes=new Map();
+let summaryBusy=false;
+const summarySource=job=>JSON.stringify([job.title,job.location,job.description||'']);
+function savedSummary(job){
+ const source=summarySource(job);
+ if(summaryCache[job.id]?.source===source)return summaryCache[job.id].summary;
+ const published=publishedSummaries[job.id];
+ return published?.sourceHash&&published.sourceHash===summaryHashes.get(source)?published.summary:null;
+}
+function summaryMarkup(job){
+ if(job.historical)return '<p>Only your saved notes are available for this role. Open the listing for current details.</p>';
+ const summary=savedSummary(job);
+ if(summary)return `<p class="job-overview">${esc(summary.overview)}</p><div class="summary-essential"><strong>Before you apply</strong><p>${esc(summary.essentials)}</p></div><div class="summary-benefits"><strong>Pay & benefits</strong><p>${esc(summary.benefits)}</p></div>`;
+ const message=summaryErrors.get(job.id);
+ return `<p role="status">${esc(message|| (browserConnection?'Writing a short summary…':'Connect your saved setup in My profile to generate a short summary.'))}</p>${message?'<button class="text-button" data-retry-summary>Retry summary</button>':''}`;
+}
+async function requestSummary(job){
+ if(job.historical||savedSummary(job)||summaryBusy)return;
+ summaryBusy=true;
+ try{
+  const source=summarySource(job);
+  if(!summaryHashes.has(source)){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source));summaryHashes.set(source,Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join(''));}
+  if(savedSummary(job)||summaryErrors.has(job.id)||!browserConnection)return;
+  const response=await fetch('/api/summary',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({title:job.title,location:job.location,description:job.description||''}),signal:AbortSignal.timeout(115000)});
+  const data=await response.json();if(!response.ok)throw new Error(data.error||'Summary unavailable.');
+  if(!data.summary||!['overview','essentials','benefits'].every(key=>typeof data.summary[key]==='string'))throw new Error('Summary unavailable.');
+  summaryCache[job.id]={source:summarySource(job),summary:data.summary};
+  const keys=Object.keys(summaryCache);while(keys.length>80)delete summaryCache[keys.shift()];
+  persist('job-notebook-summaries-v1',summaryCache);
+ }catch(error){summaryErrors.set(job.id,error.name==='TimeoutError'?'Summary took too long. Please retry.':error.message);}
+ finally{
+  summaryBusy=false;
+  const current=deckJobs()[0];
+  if(current?.id===job.id){const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(current);}
+  else if(current)requestSummary(current);
+ }
+}
 function renderDeck() {
   if (decisionPending) return;
   document.querySelectorAll('.swipe-button').forEach(button => button.disabled = false);
@@ -85,9 +126,9 @@ function renderDeck() {
     return;
   }
   const {match}=job,insights=roleInsights(job,profile),checks=insights.questions.length;
-  const list=items=>`<ul class="listing-facts">${items.map(item=>`<li>${esc(item)}</li>`).join('')}</ul>`;
-  $('job-deck').innerHTML=`<article class="job-card" id="active-card" data-job-id="${esc(job.id)}" aria-label="${esc(job.title)} at ${esc(job.company)}"><span class="swipe-label" aria-hidden="true"></span><div class="card-top"><div class="company-line"><span class="company-monogram" aria-hidden="true">${esc(job.company.slice(0,1))}</span><div class="company-info"><strong>${esc(job.company)}</strong><small>${job.historical?'Saved role · check availability':'From the employer’s listing'}</small></div><button class="listing-info" data-role-details type="button" aria-label="${checks} unanswered questions" title="Not specified in the listing"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg><small>${checks}</small></button></div><h2>${esc(job.title)}</h2><p class="job-location">◎ ${esc(job.location)}${job.remote?' · Remote option':''}</p></div><div class="card-body"><section class="inline-role" aria-label="Role details">${insights.warnings.length?`<div class="decision-alert"><strong>${esc(insights.decision)}</strong><p>${esc(insights.warnings.join('. ').replace(/\.\./g,'.'))}</p></div>`:''}<h3>The role</h3>${insights.duties.length?list(insights.duties):'<p>No separate responsibilities section was identified. Read the original listing before deciding.</p>'}${insights.terms.length?`<h3>Contract, timing & pay</h3>${list(insights.terms)}`:''}<h3>What they ask for</h3><p class="check-legend">✓ Supported by your details · × Known gap · ? Check</p>${insights.requirements.length?`<ul class="qualification-list">${insights.requirements.map(r=>`<li class="qualification ${r.status}"><span class="qualification-icon" aria-label="${r.status==='match'?'Matches':r.status==='gap'?'Gap':'Check'}">${r.status==='match'?'✓':r.status==='gap'?'×':'?'}</span><div><p class="requirement-text">${r.preferred?'<span class="preference-label">Bonus</span> ':''}${esc(r.label)}</p>${r.detail?`<p class="requirement-evidence">${esc(r.detail)}</p>`:''}</div></li>`).join('')}</ul>`:'<p>No distinct requirements were identified in the supplied text.</p>'}<h3>Benefits</h3>${insights.benefits.length?`<ul class="benefit-list">${insights.benefits.map(b=>`<li>${esc(b.label)}</li>`).join('')}</ul>`:'<p>Not stated in the supplied listing.</p>'}<details class="source-description"><summary>Original listing text</summary><p>${esc(job.description||job.requirements||'No description supplied.')}</p></details></section></div><div class="card-footer"><span class="cv-tag">${esc(match.cv)}<br><a href="${esc(safeURL(job.link))}" target="_blank" rel="noopener noreferrer">${esc(job.source||'Original listing')} ↗</a></span><button class="text-button" data-read-role type="button">Read role ↓</button></div></article>`;
+  $('job-deck').innerHTML=`<article class="job-card" id="active-card" data-job-id="${esc(job.id)}" aria-label="${esc(job.title)} at ${esc(job.company)}"><span class="swipe-label" aria-hidden="true"></span><div class="card-top"><div class="company-line"><span class="company-monogram" aria-hidden="true">${esc(job.company.slice(0,1))}</span><div class="company-info"><strong>${esc(job.company)}</strong><small>${job.historical?'Saved role · check availability':'From the employer’s listing'}</small></div><button class="listing-info" data-role-details type="button" aria-label="${checks} unanswered questions" title="Not specified in the listing"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg><small>${checks}</small></button></div><h2>${esc(job.title)}</h2><p class="job-location">◎ ${esc(job.location)}${job.remote?' · Remote option':''}</p></div><div class="card-body"><section class="inline-role" aria-label="Role details"><h3>In brief</h3><div id="role-summary">${summaryMarkup(job)}</div>${insights.commercial?'<p class="fit-caution">Commercial / sales focus — lower priority for your consulting direction.</p>':''}<details class="qualification-details"><summary>Check my qualifications (${insights.requirements.length})</summary><h3>What they ask for</h3><p class="check-legend">✓ Supported by your details · × Known gap · ? Check</p>${insights.requirements.length?`<ul class="qualification-list">${insights.requirements.map(r=>`<li class="qualification ${r.status}"><span class="qualification-icon" aria-label="${r.status==='match'?'Matches':r.status==='gap'?'Gap':'Check'}">${r.status==='match'?'✓':r.status==='gap'?'×':'?'}</span><div><p class="requirement-text">${r.preferred?'<span class="preference-label">Bonus</span> ':''}${esc(r.label)}</p>${r.detail?`<p class="requirement-evidence">${esc(r.detail)}</p>`:''}</div></li>`).join('')}</ul>`:'<p>No distinct requirements were identified in the supplied text.</p>'}</details><details class="source-description"><summary>Original listing text</summary><p>${esc(job.description||job.requirements||'No description supplied.')}</p></details></section></div><div class="card-footer"><span class="cv-tag">${esc(match.cv)}<br><a href="${esc(safeURL(job.link))}" target="_blank" rel="noopener noreferrer">${esc(job.source||'Original listing')} ↗</a></span><button class="text-button" data-read-role type="button">Read role ↓</button></div></article>`;
   wireSwipe();
+  requestSummary(job);
 }
 function openRoleDetails() {
   selectedRole = deckJobs()[0];
@@ -109,7 +150,7 @@ async function refreshJobs() {
     if (!response.ok || !Array.isArray(data.jobs)) throw new Error(data.error || 'Could not load the job feed.');
     discovery.jobs = data.jobs.filter(j => j && typeof j.id === 'string' && typeof j.company === 'string' && typeof j.title === 'string' && safeURL(j.link));
     discovery.fetchedAt = typeof data.fetchedAt==='string'&&Number.isFinite(Date.parse(data.fetchedAt))?data.fetchedAt:new Date().toISOString(); saveDiscovery();
-    $('feed-status').textContent = `${data.stale ? 'Saved feed' : data.partial ? 'Partial feed' : 'Arbeitnow'} · Updated ${new Date(data.fetchedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · Check listing availability`;
+    $('feed-status').textContent = `${data.stale ? 'Saved feed' : data.partial ? 'Partial feed' : 'Arbeitnow'} · Updated ${new Date(discovery.fetchedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · Check listing availability`;
   } catch (error) {
     $('feed-status').textContent = `Couldn’t refresh. ${discovery.jobs.length ? 'Showing saved suggestions.' : 'Try again, or add a role in Applications.'}`;
   } finally {loading = false; $('refresh-jobs').disabled = false; renderDeck();}
@@ -310,6 +351,7 @@ async function loadBrowserConnection(restore=true) {
   $('browser-connection-status').textContent=browserConnection?'Private application browser connected on this device.':'Import your private CV setup to connect application preparation.';
   $('load-saved-cvs').disabled=!browserConnection;
   if(restore&&browserConnection){const files=await Promise.all(['consulting','analyst','developer'].map(key=>cvStore('get',key)));if(files.some(file=>!file))await loadSavedCVs({missingOnly:true});}
+  const job=deckJobs()[0];if(job){const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(job);requestSummary(job);}
   $('test-browser').disabled=!browserConnection;$('disconnect-browser').hidden=!browserConnection;
 }
 function releaseBrowserSession() {
@@ -480,3 +522,5 @@ setView(location.hash.slice(1)); render();
 if (storageError) toast('Some saved data could not be read. Export a backup before making changes.');
 if (discovery.fetchedAt) $('feed-status').textContent = `Saved feed · ${dateText(discovery.fetchedAt)} · Refresh for recent roles`;
 if (!discovery.fetchedAt || Date.now() - new Date(discovery.fetchedAt).getTime() > 6*60*60*1000) refreshJobs();
+
+document.addEventListener('click',event=>{if(event.target.closest('[data-retry-summary]')){const job=deckJobs()[0];if(job){summaryErrors.delete(job.id);$('role-summary').innerHTML=summaryMarkup(job);requestSummary(job);}}});
