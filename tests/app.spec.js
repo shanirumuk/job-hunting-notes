@@ -1,3 +1,4 @@
+import {sellerIntern} from './fixtures/seller-intern.js';
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 const jobs = [
@@ -85,7 +86,7 @@ for (const [width,height] of [[320,568],[360,640],[375,667],[390,844],[430,932],
     });
     expect(layout.width).toBeLessThanOrEqual(width);expect(layout.height).toBeLessThanOrEqual(height+1);expect(layout.navBottom).toBe(height);
     for (const action of layout.actions) {expect(action.top).toBeGreaterThan(0);expect(action.bottom).toBeLessThanOrEqual(layout.navTop);expect(action.width).toBeGreaterThanOrEqual(44);expect(action.height).toBeGreaterThanOrEqual(44);expect(action.hit).toBe(true);}
-    await page.getByRole('button',{name:/missing or uncertain requirements/}).click();await expect(page.locator('#role-dialog')).toBeVisible();
+    await page.getByRole('button',{name:/unanswered questions/}).click();await expect(page.locator('#role-dialog')).toBeVisible();
     await expect(page.locator('#role-content')).toContainText('Work rights and permit support are unconfirmed.');
     const footer=await page.locator('#role-prepare').boundingBox();expect(footer.y+footer.height).toBeLessThanOrEqual(height);
     await page.locator('#close-role').click();await page.locator('.main-nav [data-view="profile"]').click();
@@ -110,8 +111,8 @@ test('long role names and all review flags remain available on a small screen',a
   await mockListingTab(page);await page.setViewportSize({width:320,height:568});const longTitle='Business Systems Specialist — Enterprise Applications, Customer Workflows and Service Delivery';
   const description='English. Stakeholder workshops, workflows, ERP configuration and rollout testing. Fluent German required. No visa sponsorship.';
   await page.route('**/api/jobs',r=>r.fulfill({json:{jobs:[{...jobs[0],title:longTitle,description}],fetchedAt:new Date().toISOString()}}));await page.goto('/');
-  await expect(page.locator('#active-card')).toContainText('Worth exploring');await page.getByRole('button',{name:/missing or uncertain requirements/}).click();
-  await expect(page.locator('.role-heading')).toHaveText(longTitle);await expect(page.locator('#role-content')).toContainText('German requirement');await expect(page.locator('#role-content')).toContainText('existing work rights');
+  await expect(page.locator('#active-card')).toContainText('From the employer’s listing');await page.getByRole('button',{name:/unanswered questions/}).click();
+  await expect(page.locator('.role-heading')).toHaveText(longTitle);await expect(page.locator('#role-content .flag-box')).not.toContainText('German');await expect(page.locator('#role-content')).toContainText('Pay is not stated');await expect(page.locator('.inline-role')).toContainText('Fluent German required');
   expect(await page.locator('#role-dialog').evaluate(el=>el.scrollWidth)).toBeLessThanOrEqual(320);
   await page.locator('#role-prepare').click();await reviewSaved(page);await expect(page.locator('#preparation-dialog')).toBeVisible();await expect(page.locator('#preparation-title')).toHaveText('Workflow Ltd');
 });
@@ -172,13 +173,13 @@ test('app refresh reloads the latest shell and preserves saved records and PDFs'
 });
 test('phone reading text and app refresh remain readable and reachable',async ({page})=>{
   await page.setViewportSize({width:384,height:832});await setup(page);
-  for(const selector of ['.fit-list li','.job-location'])expect(await page.locator(selector).first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+  for(const selector of ['.inline-role p','.job-location'])expect(await page.locator(selector).first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
   for(const [width,height] of [[320,568],[384,832],[832,384]]){await page.setViewportSize({width,height});expect(await page.locator('#refresh-app').evaluate(el=>{const r=el.getBoundingClientRect();return r.width>=44&&r.height>=44&&el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);}
 });
 
 test('role text is inline, uncertainties are in the header, and Apply opens the original site without a notebook form',async ({page})=>{
   await setup(page);await expect(page.locator('.inline-role')).toContainText(jobs[0].description);
-  expect(await page.locator('.inline-role').evaluate(el=>el.previousElementSibling.classList.contains('fit-list'))).toBe(true);
+  await expect(page.locator('.match-badge')).toHaveCount(0);await expect(page.locator('.fit-list')).toHaveCount(0);
   await expect(page.locator('.card-top .listing-info')).toBeVisible();await expect(page.locator('.role-checks')).toHaveCount(0);
   await page.locator('#prepare-job').click();await expect.poll(()=>page.evaluate(()=>window.openedListings)).toEqual([jobs[0].link]);
   await expect(page.locator('#preparation-dialog')).not.toBeVisible();
@@ -220,10 +221,10 @@ test('practice inspection reports unchecked required consent without changing it
  expect(await page.evaluate(()=>window.practiceSubmitted)).toBe(false);
 });
 test('summary checks and missing-requirement sheet are readable on a Galaxy-sized screen',async({page})=>{
- await page.setViewportSize({width:412,height:892});await page.route('**/api/jobs',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Your role: requirements analysis and API integration. German B2 required. Flexible working hours. 30 days annual leave.'}]}}));
+ await page.setViewportSize({width:412,height:892});await page.route('**/api/jobs',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Responsibilities:\nAnalyse requirements and implement API integrations.\nRequirements:\nGerman B2 required.\nBenefits:\nFlexible working hours and 30 days annual leave.'}]}}));
  await page.goto('/');await expect(page.locator('.qualification.gap')).toContainText('German B2');await expect(page.locator('.benefit-list')).toContainText('30 days');
  await expect(page.locator('.source-description')).not.toHaveAttribute('open','');
- await page.locator('.listing-info').click();await expect(page.locator('#role-content')).toContainText('B1');
+ await page.locator('.listing-info').click();await expect(page.locator('#role-content .flag-box')).not.toContainText('German');await expect(page.locator('.qualification.gap')).toContainText('B1');
  for(const selector of ['#role-content .role-heading','#role-content .prep-meta','#role-content li'])expect(await page.locator(selector).first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(19);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
@@ -257,4 +258,18 @@ test('automatic CV recovery preserves a newer local PDF and edited profile',asyn
  await page.reload();await expect(page.locator('#saved-cv-status')).toContainText('All three saved CVs');
  await expect(page.locator('#consulting-file-status')).toContainText('Newer-local.pdf');await expect(page.locator('#profile-name')).toHaveValue('Edited Name');
  await expect(page.locator('#analyst-file-status')).toContainText('BA.pdf');
+});
+
+test('reported Back Market card presents employer facts without an invented percentage or irrelevant German advice',async({page})=>{
+ await page.setViewportSize({width:412,height:892});await page.route('**/api/jobs',r=>r.fulfill({json:{jobs:[sellerIntern]}}));await page.goto('/');
+ await expect(page.locator('#active-card')).toBeVisible();await expect(page.locator('.match-badge')).toHaveCount(0);
+ await expect(page.locator('.decision-alert')).toContainText('French school');await expect(page.locator('.decision-alert')).toContainText('Lower priority');
+ const facts=page.locator('.listing-facts');await expect(facts).toContainText(['Salesforce','€1.2K']);
+ await expect(page.locator('.qualification-list')).toContainText('pivot tables');await expect(page.locator('.qualification-list')).toContainText('Fluent English');
+ await expect(page.locator('.qualification-list')).not.toContainText('German');
+ await expect(page.locator('.benefit-list')).toContainText('2 remote days');await expect(page.locator('.benefit-list')).not.toContainText('Salary');
+ await page.locator('[data-read-role]').click();await page.screenshot({path:'private/backmarket-corrected-card.png'});
+ await page.locator('.listing-info').click();await expect(page.locator('#role-content')).toContainText('permit support');await expect(page.locator('#role-content .flag-box')).not.toContainText('German');await expect(page.locator('#role-content')).not.toContainText('pivot tables');
+ const header=await page.locator('#role-dialog .sheet-header').boundingBox();const content=await page.locator('#role-content').boundingBox();expect(content.y).toBeGreaterThanOrEqual(header.y+header.height-1);
+ await page.screenshot({path:'private/backmarket-corrected-info.png'});
 });

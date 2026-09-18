@@ -1,5 +1,5 @@
-const CACHE = 'job-notebook-v16';
-const ASSETS = ['/', '/index.html', '/styles.css?v=16', '/app.js?v=16', '/lib/model.js?v=16', '/lib/insights.js', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'job-notebook-v17';
+const ASSETS = ['/', '/index.html', '/styles.css?v=17', '/app.js?v=17', '/lib/model.js?v=17', '/lib/insights.js', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => /^job-notebook-v\d+$/.test(key) && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', event => {

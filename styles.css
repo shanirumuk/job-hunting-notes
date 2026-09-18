@@ -727,3 +727,16 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 .qualification details { min-width: 0; flex: 1; }
 .qualification summary { min-height: 48px; font-weight: 650; font-size: 1.1875rem; line-height: 1.45; cursor: pointer; }
 .fit-list li::before { content: '•'; }
+
+/* Employer facts are the primary content; explanations no longer dominate each row. */
+.listing-facts { padding-left: 22px; margin: 10px 0 24px; }
+.listing-facts li, .benefit-list li { margin: 10px 0; font-size: 1.1875rem; line-height: 1.5; }
+.inline-role { margin-top: 0; padding-top: 0; border-top: 0; }
+.inline-role .requirement-text { font-size: 1.1875rem; line-height: 1.5; }
+.inline-role .requirement-evidence { margin-top: 7px; font-size: 1rem; line-height: 1.45; color: var(--muted); }
+.preference-label { display: inline-block; font-size: .9rem; font-weight: 650; background: #eee6ec; border-radius: 6px; padding: 2px 7px; }
+.decision-alert .listing-facts { margin: 8px 0 0; }
+#role-dialog { height: min(900px,calc(100dvh - 12px)); max-height: calc(100dvh - 12px); }
+#role-dialog .role-panel { height: 100%; min-height: 0; }
+#role-dialog .sheet-header, #role-dialog .sheet-actions { position: relative; z-index: 1; background: white; }
+#role-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-padding-top: 20px; }
