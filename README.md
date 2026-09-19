@@ -107,7 +107,7 @@ The info sheet contains only relevant missing or conflicting details, not a dupl
 
 Content regression tests use the reported Back Market seller internship: Salesforce seller activation, Excel pivot tables, preferred French, French-school agreement, January start, six-month duration, monthly pay, and the exact remote-work allowance. Live verification also checks the original feed text, not only the shortened test fixture.
 
-### Private device transfer and sync (release 21)
+### Private device transfer and sync (release 22)
 
 Open **Backup → Transfer & sync** on the connected source device. Create a pairing code, paste it on the receiving device, review the actual application/PDF counts, and confirm. The source notebook is kept intact. The receiver verifies every PDF's SHA-256 digest and reads the saved notebook back before acknowledging success. A durable IndexedDB journal recovers interrupted imports; the previous local copy can be restored from the transfer screen.
 

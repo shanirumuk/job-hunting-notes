@@ -27,7 +27,7 @@ async function edit(p,text){await p.evaluate(text=>{const k='job-notebook-v1',a=
 test('private one-time pairing previews all records, verifies PDFs, syncs and asks about conflicts',async({browser})=>{
  process.env.JOB_NOTEBOOK_ACCESS_TOKEN=owner;const handler=service();const a=await browser.newContext(),b=await browser.newContext({viewport:{width:393,height:851}}),c=await browser.newContext();const laptop=await a.newPage(),phone=await b.newPage(),intruder=await c.newPage();
  await boot(laptop,handler);await seed(laptop,5,true);await boot(phone,handler);await seed(phone,3,false);const before=await snapshot(laptop),oldPhone=await snapshot(phone);
- await openDialog(laptop);await laptop.locator('[data-device="send"]').click();const code=await laptop.locator('#device-share-code').inputValue();
+ await openDialog(laptop);await laptop.locator('[data-device="send"]').click();const code=await laptop.locator('#device-share-code').inputValue();await laptop.locator('#device-close').click();await openDialog(laptop);await laptop.locator('[data-device="send"]').click();expect(await laptop.locator('#device-share-code').inputValue()).toBe(code);
  await openDialog(phone);await phone.locator('#device-code').fill(code);await phone.locator('[data-device="receive"]').click();await expect(phone.locator('#device-content')).toContainText('5 applications · 3 PDFs');expect(await snapshot(phone)).toEqual(oldPhone);
  await phone.locator('[data-device="confirm"]').click();await expect(phone.locator('#device-status')).toContainText('verified and confirmed');expect(await snapshot(phone)).toEqual(before);expect(await snapshot(laptop)).toEqual(before);
  expect(await phone.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
