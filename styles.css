@@ -751,3 +751,4 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 @media (max-width: 599px) {
   #role-summary p { font-size: 1rem; line-height: 1.5; }
 }
+#device-dialog{width:min(100% - 24px,620px);max-height:90dvh;overflow:auto}#device-content{display:grid;gap:16px;font-size:17px;line-height:1.5}#device-content button{min-height:48px;white-space:normal}#device-content label{display:grid;gap:8px}#device-content input,#device-content textarea{width:100%;font-size:17px;min-height:56px;overflow-wrap:anywhere;box-sizing:border-box}#device-status{font-size:16px;line-height:1.5}#device-dialog[aria-busy="true"] button{pointer-events:none;opacity:.6}

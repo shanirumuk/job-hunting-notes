@@ -1,5 +1,8 @@
+import {recoverImport,getItem as deviceItem} from './lib/device-store.js';
+import {startDeviceSync} from './lib/device-sync.js';
+await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=20';
+import {roleInsights, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=21';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -25,7 +28,7 @@ let matchCache = new WeakMap(), cachedProfile = profile;
 const editor = $('editor-dialog'), backup = $('backup-dialog'), form = $('application-form');
 function toast(message) {$('toast').textContent = message; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').hidden = true, 5500);}
 function persist(key, value) {
-  try {localStorage.setItem(key, JSON.stringify(value)); return true;}
+  try {if(localStorage.getItem('job-notebook-importing'))throw Error('Import in progress');localStorage.setItem(key, JSON.stringify(value));document.dispatchEvent(new Event('notebook-change')); return true;}
   catch {toast('Could not save on this device. Download a backup before closing this page.'); return false;}
 }
 function saveEntries() {return persist(KEY, entries);}
@@ -349,8 +352,9 @@ function cvDB() {
   return dbPromise ||= new Promise((resolve,reject) => {const request = indexedDB.open('job-notebook-cvs',1); request.onupgradeneeded = () => request.result.createObjectStore('files'); request.onsuccess = () => resolve(request.result); request.onerror = () => {dbPromise = null; reject(request.error);};});
 }
 async function cvStore(mode, key, value) {
+  if(mode!=='get'&&localStorage.getItem('job-notebook-importing'))throw Error('Device import in progress. Try again shortly.');
   const db = await cvDB();
-  return new Promise((resolve,reject) => {const transaction = db.transaction('files',mode === 'get' ? 'readonly' : 'readwrite'); const store = transaction.objectStore('files'); const request = mode === 'get' ? store.get(key) : mode === 'delete' ? store.delete(key) : store.put(value,key); transaction.oncomplete = () => resolve(request.result); transaction.onerror = () => reject(transaction.error); transaction.onabort = () => reject(transaction.error);});
+  return new Promise((resolve,reject) => {const transaction = db.transaction('files',mode === 'get' ? 'readonly' : 'readwrite'); const store = transaction.objectStore('files'); const request = mode === 'get' ? store.get(key) : mode === 'delete' ? store.delete(key) : store.put(value,key); transaction.oncomplete = () => {if(mode!=='get')document.dispatchEvent(new Event('notebook-change'));resolve(request.result);}; transaction.onerror = () => reject(transaction.error); transaction.onabort = () => reject(transaction.error);});
 }
 async function updateCVStatuses() {
   for (const key of ['consulting','analyst','developer']) {
@@ -388,7 +392,7 @@ async function loadBrowserConnection(restore=true) {
   try {browserConnection=(await cvStore('get','connection'))?.token||null;}catch{browserConnection=null;}
   $('browser-connection-status').textContent=browserConnection?'Private application browser connected on this device.':'Import your private CV setup to connect application preparation.';
   $('load-saved-cvs').disabled=!browserConnection;
-  if(restore&&browserConnection){const files=await Promise.all(['consulting','analyst','developer'].map(key=>cvStore('get',key)));if(files.some(file=>!file))await loadSavedCVs({missingOnly:true});}
+  if(restore&&browserConnection&&!await deviceItem('device-sync')){const files=await Promise.all(['consulting','analyst','developer'].map(key=>cvStore('get',key)));if(files.some(file=>!file))await loadSavedCVs({missingOnly:true});}
   const job=deckJobs()[0];if(job){const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(job);requestSummary(job);}
   $('test-browser').disabled=!browserConnection;$('disconnect-browser').hidden=!browserConnection;
 }
@@ -550,7 +554,7 @@ $('preparation-content').addEventListener('change',e => {
 if (e.target.matches('[data-check]')) {persistPreparation(); $('mark-applied').disabled = !Array.from(document.querySelectorAll('[data-check]')).every(el => el.checked);}});
 $('preparation-content').addEventListener('click',e => {if (e.target.closest('#copy-pack')) copyPack(); if (e.target.closest('#download-draft')) {persistPreparation(); const entry = entries.find(e => e.id === preparationId); download(draftText(entry),`${entry.company.replace(/[^a-z0-9]/gi,'-')}-application-draft.txt`,'text/plain');} if (e.target.closest('#download-cv')) downloadCV();});
 $('mark-applied').addEventListener('click',() => {if ($('mark-applied').disabled) return; persistPreparation(); const entry = entries.find(e => e.id === preparationId); entry.status = 'Applied'; entry.applicationDate = today(); if (saveEntries()) {$('preparation-dialog').close(); undoAction = null; render(); toast('Application recorded as submitted. One more step forward.');}});
-if ('serviceWorker' in navigator) window.addEventListener('load',() => navigator.serviceWorker.register('service-worker.js').catch(() => {}));
+if ('serviceWorker' in navigator) {const register=()=>navigator.serviceWorker.register('service-worker.js').catch(()=>{});if(document.readyState==='complete')register();else window.addEventListener('load',register);}
 const connectionFragment=location.hash.match(/^#connect=([A-Za-z0-9_-]{40,100})$/);
 if(connectionFragment){
   history.replaceState(null,'',location.pathname+location.search+'#profile');
@@ -567,3 +571,6 @@ document.addEventListener('click',event=>{if(event.target.closest('[data-retry-s
 function checkFreshFeed(){if(!document.hidden&&activeView==='discover'&&!loading&&Date.now()-Date.parse(discovery.fetchedAt||0)>60*60*1000)refreshJobs();}
 document.addEventListener('visibilitychange',checkFreshFeed);
 setInterval(checkFreshFeed,60000);
+
+startDeviceSync({state:()=>({entries:validateEntries(read(KEY,entries)),profile:validateProfile(read(PROFILE_KEY,profile)),discovery:read(DISCOVERY_KEY,discovery)}),applied:pack=>{entries=pack.entries;profile=pack.profile;discovery=pack.discovery;pinnedJobId=null;undoAction=null;matchCache=new WeakMap();populateProfile();render();loadBrowserConnection(false);},notify:toast});
+window.addEventListener('storage',event=>{if(event.key==='job-notebook-device-updated')location.reload();});

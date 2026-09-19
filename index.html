@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20" />
+  <link rel="stylesheet" href="styles.css?v=21" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -134,8 +134,8 @@
   <dialog id="backup-dialog" aria-labelledby="backup-title">
     <div class="backup-panel">
       <div class="sheet-header"><div><p class="eyebrow">YOUR DATA</p><h2 id="backup-title">Backup & restore</h2></div><button class="icon-button" id="close-backup" type="button" aria-label="Close">×</button></div>
-      <p>Export a copy after important changes. This app does not send your notes anywhere.</p>
-      <div class="backup-actions"><button class="primary-button" id="export-button" type="button">Download backup</button><label class="secondary-button file-button">Restore backup<input id="import-input" type="file" accept="application/json" class="file-input" /></label></div>
+      <p>Export a copy after important changes. Private transfer and sync store only encrypted copies. JSON backups exclude PDFs.</p>
+      <button class="primary-button" id="device-open" type="button">Transfer & sync</button><div class="backup-actions"><button class="primary-button" id="export-button" type="button">Download backup</button><label class="secondary-button file-button">Restore backup<input id="import-input" type="file" accept="application/json" class="file-input" /></label></div>
       <p class="small-note" id="backup-message" aria-live="polite"></p>
     </div>
   </dialog>
@@ -161,6 +161,7 @@
     <details id="browser-keyboard" hidden><summary>Type into a form field</summary><p>Tap a field in the application above, then type here and send.</p><div class="browser-input-row"><input id="browser-text" aria-label="Text for selected application field" maxlength="5000" autocomplete="off"><button type="button" data-browser-input="type">Send text</button><button type="button" data-browser-input="backspace">⌫</button><button type="button" data-browser-input="tab">Next field</button></div></details>
     <div class="sheet-actions"><a id="browser-original" class="secondary-button" target="_blank" rel="noopener noreferrer">Open original ↗</a><button id="browser-submitted" class="primary-button" hidden>I submitted it</button><button id="browser-end" class="secondary-button">End session</button></div></div>
   </dialog>
-  <script type="module" src="app.js?v=20"></script>
+  <dialog id="device-dialog" aria-labelledby="device-title"><div class="backup-panel"><div class="sheet-header"><h2 id="device-title">Transfer & sync</h2><button class="icon-button" id="device-close" aria-label="Close transfer">×</button></div><p id="device-status" role="status">Private, encrypted device connection.</p><div id="device-content"></div></div></dialog>
+  <script type="module" src="app.js?v=21"></script>
 </body>
 </html>
