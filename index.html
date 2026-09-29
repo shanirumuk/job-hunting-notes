@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=22" />
+  <link rel="stylesheet" href="styles.css?v=39" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -38,35 +38,44 @@
           <aside class="search-compass">
             <p class="eyebrow">YOUR DIRECTION</p><h2>Good problems.<br>Meaningful work.</h2><p class="muted">Follow the work you enjoy. Be open to a different title.</p>
             <div class="preference-group"><span class="mini-label">LOOKING FOR</span><div class="chips"><span>Systems & processes</span><span>Analysis & delivery</span><span>Client collaboration</span><span>Adjacent roles, too</span></div></div>
-            <div class="preference-group"><span class="mini-label">THE PRACTICAL DETAILS</span><p id="compass-location">◎ Germany & Europe first</p><p>↗ Consulting & stakeholder work</p><p>⌘ Light coding, real technical depth</p></div>
+            <div class="preference-group"><span class="mini-label">THE PRACTICAL DETAILS</span><p id="compass-location">◎ International · excluding the US</p><p>↗ Consulting & stakeholder work</p><p>⌘ Light coding, real technical depth</p></div>
             <button class="text-button" data-view="profile">Fine-tune your profile →</button>
             <div class="compass-note"><span aria-hidden="true">✧</span><p>A match is a starting point. Every role includes the things worth checking.</p></div>
           </aside>
           <div class="deck-area">
-            <div class="deck-meta"><span id="deck-count">Your role shortlist</span><button id="undo-swipe" class="text-button" disabled>↶ Undo</button></div>
+            <div class="deck-meta"><span id="deck-count">Your role shortlist</span><button id="location-filter" class="text-button" aria-label="Filter locations" aria-haspopup="dialog">Locations ▾</button><button id="undo-swipe" class="text-button" disabled>↶ Undo</button></div>
             <div id="job-deck" aria-live="polite" aria-atomic="true"></div>
             <div class="swipe-actions" id="swipe-actions" hidden>
-              <button id="pass-job" class="swipe-button pass" aria-label="Pass on this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-close"/></svg></span><small>Pass</small></button>
-              <button id="save-job" class="swipe-button later" aria-label="Save this role for later"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-save"/></svg></span><small>Save</small></button>
-              <button id="prepare-job" class="swipe-button prepare" aria-label="Open application for this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-check"/></svg></span><small>Apply ↗</small></button>
+              <button id="pass-job" aria-keyshortcuts="ArrowLeft" title="Pass (←)" class="swipe-button pass" aria-label="Pass on this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-close"/></svg></span><small>Pass</small></button>
+              <button id="save-job" aria-keyshortcuts="S" title="Save (S)" class="swipe-button later" aria-label="Save this role for later"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-save"/></svg></span><small>Save</small></button>
+              <button id="prepare-job" aria-keyshortcuts="ArrowRight" title="Apply (→)" class="swipe-button prepare" aria-label="Open application for this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-check"/></svg></span><small>Apply ↗</small></button>
             </div>
-            <p class="gesture-hint">Your next step starts with a swipe.</p>
-            <p class="feed-status" id="feed-status" role="status"></p>
+            <p class="gesture-hint">Two-finger swipe or drag · ← Pass · → Apply · S Save</p>
+            <p class="feed-status" id="feed-status" role="status"></p><button class="text-button" id="retry-jobs" hidden>Retry search</button><button class="text-button" id="load-more-jobs" hidden>Load more results</button>
           </div>
-          <aside class="search-progress"><div class="progress-card"><p class="eyebrow">ONE STEP AT A TIME</p><div class="progress-number" id="progress-applied">2</div><p>applications out in the world</p><div class="progress-divider"></div><p><strong id="progress-preparing">0</strong> being prepared</p><button class="text-button" data-view="notebook">Your applications →</button></div><div class="workflow-note"><p class="eyebrow">AFTER A RIGHT SWIPE</p><ol><li>CV choice & notes saved</li><li>Open the original listing</li><li>Complete the employer’s form</li></ol><p>You make the final call.</p></div></aside>
+          <aside class="search-progress" aria-labelledby="next-steps-title">
+            <div class="progress-card">
+              <p class="eyebrow">YOUR NOTEBOOK</p><h2 id="next-steps-title">Your next steps</h2>
+              <button type="button" class="next-step" data-notebook-filter="to apply"><span><strong>Review saved jobs</strong><small>Decide which to pursue</small></span><span class="step-count" id="progress-saved">0</span></button>
+              <button type="button" class="next-step" data-notebook-filter="preparing"><span><strong>Finish applying</strong><small>Started, not marked submitted</small></span><span class="step-count" id="progress-preparing">0</span></button>
+              <button type="button" class="next-step" data-notebook-filter="follow-up"><span><strong>Follow-ups due</strong><small>Scheduled for today or earlier</small></span><span class="step-count" id="progress-follow-up">0</span></button>
+              <p class="progress-note">Set a follow-up date in an application’s notes. Clear or reschedule it after following up.</p>
+              <button class="text-button" type="button" data-notebook-filter="all">All applications →</button>
+            </div>
+          </aside>
         </div>
       </section>
       <section id="notebook-view" class="view" aria-labelledby="notebook-title" hidden>
         <div class="intro"><p class="eyebrow">YOUR APPLICATION SPACE</p><h1 id="notebook-title">Your <em>applications.</em></h1><p class="subtitle">From a promising role to your next conversation.</p></div>
         <section class="toolbar" aria-label="Application tools"><label class="search-field"><span class="sr-only">Search applications</span><input id="search-input" type="search" placeholder="Search your applications" autocomplete="off" /></label><button class="primary-button" id="add-button" type="button" aria-label="Add application">+ Add</button></section>
-        <section class="status-line"><p id="summary-text" aria-live="polite"></p><div class="filters" role="group" aria-label="Filter applications"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="preparing">Preparing</button><button class="filter" data-filter="to apply">Saved</button><button class="filter" data-filter="applied">Applied</button><button class="filter" data-filter="interview">Interview</button></div></section>
+        <section class="status-line"><p id="summary-text" aria-live="polite"></p><div class="filters" role="group" aria-label="Filter applications"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="not applied">Not applied</button><button class="filter" data-filter="preparing">Preparing</button><button class="filter" data-filter="to apply">Saved</button><button class="filter" data-filter="applied">Applied</button><button class="filter" data-filter="interview">Interview</button><button class="filter" data-filter="follow-up">Follow-ups due</button></div></section>
         <section id="applications" class="application-list" aria-label="Applications"></section>
         <div class="empty-state" id="empty-state" hidden><h2>No applications here yet</h2><p>Save a role from Discover, or add one yourself.</p><button class="text-button" id="empty-add-button">Add your first role</button></div>
       </section>
       <section id="profile-view" class="view" aria-labelledby="profile-title" hidden>
         <div class="intro"><p class="eyebrow">MAKE IT YOURS</p><h1 id="profile-title">Your <em>profile.</em></h1><p class="subtitle">Your preferences guide suggestions. Your verified experience shapes the drafts.</p></div>
         <form id="profile-form" class="profile-card">
-          <div class="cv-library"><h3>Your CVs</h3><div class="browser-connection"><p id="browser-connection-status" role="status">Checking private browser connection…</p><button type="button" class="secondary-button" id="load-saved-cvs" disabled>Load my saved CVs</button><p id="saved-cv-status" role="status"></p><button type="button" class="secondary-button" id="test-browser" disabled>Try a practice application</button><button type="button" class="text-button" id="disconnect-browser" hidden>Disconnect this device</button><p class="small-note">Import your private CV setup once to connect. A swipe sends the selected PDF and your contact details to a temporary browser. Employer forms may save uploads before you submit. You control final submission.</p></div><p class="small-note">All three versions, ready when you need them. Your original PDF layout stays intact. A private server copy lets your connected device restore these PDFs; keep a separate backup.</p><div class="cv-library-row"><label class="secondary-button file-button">Add Consulting PDF<input id="consulting-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="consulting-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="consulting-download" hidden>Download</button><button type="button" class="text-button" id="consulting-remove" hidden>Remove</button></div></div><div class="cv-library-row"><label class="secondary-button file-button">Add Business Analyst PDF<input id="analyst-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="analyst-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="analyst-download" hidden>Download</button><button type="button" class="text-button" id="analyst-remove" hidden>Remove</button></div></div><div class="cv-library-row"><label class="secondary-button file-button">Add Full Stack Developer PDF<input id="developer-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="developer-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="developer-download" hidden>Download</button><button type="button" class="text-button" id="developer-remove" hidden>Remove</button></div></div></div>
+          <div class="cv-library"><h3>Your CVs</h3><div class="cv-json-import"><label class="secondary-button file-button">Import CV details (JSON)<input id="cv-json-upload" type="file" accept="application/json,.json" multiple class="file-input" /></label><p class="small-note">Choose up to three CV versions. Review your combined experience, skills, education and languages before saving. PDFs below are used for applications.</p><p id="cv-json-status" role="status"></p></div><div class="browser-connection"><p id="browser-connection-status" role="status">Checking private browser connection…</p><button type="button" class="secondary-button" id="load-saved-cvs" disabled>Load my saved CVs</button><p id="saved-cv-status" role="status"></p><button type="button" class="secondary-button" id="test-browser" disabled>Try a practice application</button><button type="button" class="text-button" id="disconnect-browser" hidden>Disconnect this device</button><p class="small-note">Import your private CV setup once to connect. A swipe sends the selected PDF and your contact details to a temporary browser. Employer forms may save uploads before you submit. You control final submission.</p></div><p class="small-note">All three versions, ready when you need them. Your original PDF layout stays intact. A private server copy lets your connected device restore these PDFs; keep a separate backup.</p><div class="cv-library-row"><label class="secondary-button file-button">Add Consulting PDF<input id="consulting-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="consulting-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="consulting-download" hidden>Download</button><button type="button" class="text-button" id="consulting-remove" hidden>Remove</button></div></div><div class="cv-library-row"><label class="secondary-button file-button">Add Business Analyst PDF<input id="analyst-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="analyst-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="analyst-download" hidden>Download</button><button type="button" class="text-button" id="analyst-remove" hidden>Remove</button></div></div><div class="cv-library-row"><label class="secondary-button file-button">Add Full Stack Developer PDF<input id="developer-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="developer-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="developer-download" hidden>Download</button><button type="button" class="text-button" id="developer-remove" hidden>Remove</button></div></div></div>
 <details class="profile-section" open><summary><span>Your details<small>Contact info & availability</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
             <label>Full name<input id="profile-name" maxlength="150" autocomplete="name" /></label>
             <label>Earliest start date<input id="profile-startDate" type="date" /></label>
@@ -75,16 +84,17 @@
             <label class="wide">LinkedIn URL<input id="profile-linkedin" type="url" placeholder="https://www.linkedin.com/in/…" /></label>
 </div></details>
 <details class="profile-section"><summary><span>Search preferences<small>Location & languages</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
-            <label>Search geography<select id="profile-geography"><option value="europe">Germany & Europe first</option><option value="international">International, excluding the US</option></select></label>
+            <label>Search geography<select id="profile-geography"><option value="europe">Across Europe</option><option value="international">All continents, excluding the US</option><option value="africa">Africa</option><option value="asia">Asia</option><option value="oceania">Oceania</option><option value="north-america">North America, excluding the US</option><option value="south-america">South America</option></select></label>
             <label>German level<select id="profile-germanLevel"><option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option></select></label>
             <label class="wide">Languages & levels<input id="profile-languages" maxlength="300" /></label>
             <label class="wide checkbox-label"><input id="profile-includeAdjacent" type="checkbox" /> Explore adjacent roles when the responsibilities fit my direction</label>
 <label class="wide checkbox-label"><input id="profile-includeConditional" type="checkbox" /> Include conditional matches with language, seniority or eligibility flags</label>
 </div></details>
-<details class="profile-section"><summary><span>Your experience<small>Work rights, motivation & achievements</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
+<details class="profile-section"><summary><span>Your experience<small>CV details & personal preferences</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
             <label class="wide">Your work-authorisation position<textarea id="profile-workRights" rows="4" placeholder="Current country, permit restrictions and expiry, and where you need a work-permit route. This is a reference for your review, not an automatic yes/no answer."></textarea></label>
+            <label class="wide">Pay target<input id="profile-salaryTarget" maxlength="300" placeholder="e.g. €55,000 gross per year; include country, currency and pay period" /></label>
             <label class="wide">What you want to do<textarea id="profile-motivation" rows="3"></textarea></label>
-            <label class="wide">Verified experience for application drafts<textarea id="profile-evidence" rows="6" placeholder="Add achievements you can back up. Use your own words; only these facts will appear in your drafts."></textarea></label>
+            <label class="wide">Experience, skills & qualifications<textarea id="profile-evidence" rows="6" placeholder="Import your CV JSON above to fill this in, or add your own details. Review and edit these facts for qualification checks and application drafts."></textarea></label>
 </div></details>
 <details class="profile-section"><summary><span>CV file reminders<small>Optional filenames</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
             <label>Consulting CV filename<input id="profile-consultingCV" placeholder="e.g. Shanise_Consulting.pdf" maxlength="200" /></label>
@@ -99,6 +109,20 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status" hidden></div>
+  <dialog id="cv-import-dialog" aria-labelledby="cv-import-title">
+    <form id="cv-import-form">
+      <div class="sheet-header"><h2 id="cv-import-title">Review your CV details</h2><button class="icon-button" id="cv-import-close" type="button" aria-label="Cancel CV import">×</button></div>
+      <div class="sheet-scroll"><p id="cv-import-files"></p><p>Repeated facts are combined. Existing profile text is included. Edit anything below before saving; your PDFs and application records stay as they are.</p>
+        <div class="form-grid">
+          <label>Name<input id="cv-import-name" maxlength="200" /></label><label>Email<input id="cv-import-email" type="email" /></label>
+          <label>Phone<input id="cv-import-phone" /></label><label>LinkedIn<input id="cv-import-linkedin" type="url" /></label>
+          <label class="wide">Languages and levels<input id="cv-import-languages" maxlength="300" /></label>
+          <label>German level<select id="cv-import-germanLevel"><option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option></select></label>
+          <label class="wide">Experience, skills and qualifications<textarea id="cv-import-evidence" rows="16" maxlength="50000" required></textarea></label>
+        </div><p class="small-note">Work rights, pay targets and career preferences remain as you entered them. A CV does not establish your current work authorisation.</p>
+      </div><div class="sheet-actions"><span id="cv-import-error" role="status"></span><button class="primary-button" type="submit">Save reviewed CV details</button></div>
+    </form>
+  </dialog>
   <dialog id="editor-dialog" aria-labelledby="editor-title">
     <form id="application-form" method="dialog">
       <div class="sheet-header">
@@ -114,17 +138,17 @@
           <label>Company<input id="company" required maxlength="90" placeholder="e.g. Deliverect" /></label>
           <label>Role title<input id="title" required maxlength="120" placeholder="e.g. Implementation Consultant" /></label>
           <label>Location<input id="location" maxlength="100" placeholder="e.g. Berlin · Hybrid" /></label>
-          <label>Status<select id="status"><option>To apply</option><option>Preparing</option><option>Applied</option><option>Interview</option><option>Offer</option><option>Archived</option></select></label>
+          <label>Status<select id="status"><option value="To apply">Saved</option><option>Not applied</option><option>Preparing</option><option>Applied</option><option>Interview</option><option>Offer</option><option>Archived</option></select></label>
           <label>Application date<input id="application-date" type="date" /></label>
-          <label>Interview date<input id="interview-date" type="date" /></label>
+          <label>Interview date<input id="interview-date" type="date" /></label><label>Follow-up date<input id="follow-up-date" type="date" /><small>Reminder for an applied, interview or offer stage. Clear when done.</small></label>
           <label class="wide">Application link<input id="link" type="url" placeholder="https://…" /></label>
           <label class="wide">CV / materials used<input id="materials" maxlength="150" placeholder="e.g. Consulting CV PDF · tailored cover letter" /></label>
           <label class="wide">Fit & required knowledge<textarea id="requirements" rows="4" placeholder="Role fit, key requirements, gaps, work-right note…"></textarea></label>
-          <label class="wide">Notes<textarea id="notes" rows="5" placeholder="What you submitted, follow-up date, recruiter details, reflections…"></textarea></label>
+          <label class="wide">Notes<textarea id="notes" rows="5" placeholder="What you submitted, recruiter details, follow-up notes…"></textarea></label>
         </div>
       </div>
       <div class="sheet-actions">
-        <button class="danger-button" id="delete-button" type="button" hidden>Delete</button>
+        <button class="text-button" id="edit-materials" type="button" hidden>Application materials</button><button class="danger-button" id="delete-button" type="button" hidden>Delete</button>
         <span class="save-status" id="save-status" aria-live="polite"></span>
         <button class="primary-button" type="submit">Save application</button>
       </div>
@@ -143,7 +167,7 @@
 
   <dialog id="role-dialog" aria-labelledby="role-title">
     <div class="role-panel">
-      <div class="sheet-header"><div><p class="eyebrow">A CLOSER LOOK</p><h2 id="role-title">Role details</h2></div><button class="icon-button" id="close-role" aria-label="Close role details">×</button></div>
+      <div class="sheet-header"><div><p class="eyebrow">YOUR APPLICATION FIT</p><h2 id="role-title">Role details</h2></div><button class="icon-button" id="close-role" aria-label="Close role details">×</button></div>
       <div id="role-content" class="sheet-scroll"></div>
       <div class="sheet-actions"><a class="secondary-button" id="role-source" target="_blank" rel="noopener noreferrer">View listing ↗</a><button class="primary-button" id="role-prepare">Open application ↗</button></div>
     </div>
@@ -162,6 +186,16 @@
     <div class="sheet-actions"><a id="browser-original" class="secondary-button" target="_blank" rel="noopener noreferrer">Open original ↗</a><button id="browser-submitted" class="primary-button" hidden>I submitted it</button><button id="browser-end" class="secondary-button">End session</button></div></div>
   </dialog>
   <dialog id="device-dialog" aria-labelledby="device-title"><div class="backup-panel"><div class="sheet-header"><h2 id="device-title">Transfer & sync</h2><button class="icon-button" id="device-close" aria-label="Close transfer">×</button></div><p id="device-status" role="status">Private, encrypted device connection.</p><div id="device-content"></div></div></dialog>
-  <script type="module" src="app.js?v=22"></script>
+  <dialog id="location-dialog" aria-labelledby="location-title"><div class="backup-panel">
+    <div class="sheet-header"><h2 id="location-title">Where would you like to work?</h2><button type="button" class="icon-button" id="close-locations" aria-label="Close location filters">×</button></div>
+    <div class="location-controls">
+      <label for="filter-region">Continent</label><select id="filter-region"></select>
+      <div id="filter-country-group"><label for="filter-country">European country</label><select id="filter-country"></select></div>
+      <label class="checkbox-label"><input type="checkbox" id="filter-broad-remote" /> Also include broad regional and worldwide remote listings</label><p id="location-help">By default, results must explicitly list a location in your selection. Broad remote listings may still require country or timezone checks. US-only roles remain excluded.</p>
+      <p>Country filters request more listings for that country. Availability varies by source; an empty result does not mean there are no jobs there.</p>
+    </div>
+    <div class="sheet-actions"><button id="reset-locations" type="button" class="secondary-button">All locations</button><button id="apply-locations" type="button" class="primary-button">Show matching roles</button></div>
+  </div></dialog>
+  <script type="module" src="app.js?v=39"></script>
 </body>
 </html>

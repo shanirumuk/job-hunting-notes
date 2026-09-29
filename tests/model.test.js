@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {matchJob,defaultProfile,prepareApplication,safeURL,plainText,validateEntries,validateProfile,sameJob} from '../lib/model.js';
 import {fetchJobs} from '../api/jobs.js';
 const job = {id:'one',company:'Example',title:'Implementation Consultant',location:'Berlin, Germany',description:'English. Customer workshops, workflow requirements and API integrations.',link:'https://example.org/jobs/one'};
-test('prioritises relevant Germany work and selects BA vs consulting CV',() => {
-  const match = matchJob(job); assert.ok(match.eligible); assert.ok(match.score >= 85); assert.equal(match.cv,'Consulting CV');
+test('prioritises relevant systems work and selects BA vs consulting CV',() => {
+  const match = matchJob(job); assert.ok(match.eligible); assert.ok(match.score >= 80); assert.equal(match.cv,'Consulting CV');
   assert.equal(matchJob({...job,title:'Technical Business Analyst'}).cv,'Business Analyst CV');
   assert.ok(match.flags.some(f => f.includes('unconfirmed')));
 });
@@ -16,9 +16,9 @@ test('excludes US-only, architecture, coding-first and quota-led work',() => {
 });
 test('allows Europe among multiple regions and supports international preferences',() => {
   assert.equal(matchJob({...job,location:'Europe or United States'}).eligible,true);
-  assert.equal(matchJob({...job,location:'Canada'}).eligible,false);
+  assert.equal(matchJob({...job,location:'Canada'},{...defaultProfile,geography:'europe'}).eligible,false);
   assert.equal(matchJob({...job,location:'Canada'},{...defaultProfile,geography:'international'}).eligible,true);
-  assert.ok(matchJob({...job,location:'Remote'}).flags.some(f => f.includes('Location needs')));
+  assert.equal(matchJob({...job,location:'Remote'},{...defaultProfile,geography:'europe'}).eligible,false);
 });
 test('language and sponsorship gaps remain visible and strict mode can hide conditional jobs',() => {
   const conditional = {...job,description:'Must speak fluent German. No visa sponsorship. English.'};
@@ -79,4 +79,15 @@ test('promising adjacent roles are interleaved and weak exploratory matches stay
   const list = [90,85,80,75,70].map((score,n)=>({id:`core-${n}`,match:{score,exploration:false}}));
   const ranked = rankJobs([...list,{id:'adjacent',match:{score:82,exploration:true}},{id:'weak',match:{score:35,exploration:true}}]);
   assert.equal(ranked[3].id,'adjacent'); assert.equal(ranked.at(-1).id,'weak');
+});
+test('international search includes other continents without a Germany ranking bonus',()=>{
+ for(const location of ['Berlin, Germany','Toronto, Canada','Cape Town, South Africa','Singapore','Sydney, Australia','Auckland, New Zealand','USA, Canada']){
+  const result=matchJob({...job,location});assert.equal(result.eligible,true,location);
+  assert.equal(result.score,matchJob(job).score,location);
+ }
+});
+test('location variety promotes similarly relevant roles without lifting poor matches',async()=>{
+ const {rankJobs}=await import('../lib/model.js');
+ const rows=[['a','Berlin, Germany',90],['b','Munich, Germany',89],['c','Toronto, Canada',85],['d','Cape Town, South Africa',30]].map(([id,location,score])=>({id,location,match:{score}}));
+ assert.deepEqual(rankJobs(rows).map(j=>j.id),['a','c','b','d']);
 });

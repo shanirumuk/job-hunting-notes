@@ -12,7 +12,7 @@ test('German levels are scoped to the language and compared with B1',()=>{
  assert.equal(germanRequirement('German B2 preferred.').optional,true);
 });
 test('summaries retain the advertised tasks and requirements rather than substituting skill categories',()=>{
- const result=roleInsights({description:'Responsibilities:\nBuild API integrations for insurance policies.\nRequirements:\nExperience with API integrations.\nAt least 6 years experience.\nBenefits:\nFlexible working hours and 30 days annual leave.'},{evidence:'Requirements documentation and XML integrations.',germanLevel:'B1'});
+ const result=roleInsights({description:'Responsibilities:\nBuild API integrations for insurance policies.\nRequirements:\nExperience with API integrations.\nAt least 6 years experience.\nBenefits:\nFlexible working hours and 30 days annual leave.'},{evidence:'Requirements documentation and API integrations.',germanLevel:'B1'});
  assert.deepEqual(result.duties,['Build API integrations for insurance policies.']);
  assert.equal(result.requirements.find(r=>r.label==='Experience with API integrations.').status,'match');
  assert.equal(result.requirements.find(r=>r.label.includes('6 years')).status,'unknown');
@@ -44,5 +44,52 @@ test('training in benefits cannot become an applicant workshop requirement',()=>
 });
 test('a match for one skill cannot certify a compound language or platform requirement',()=>{
  const info=roleInsights({description:'Requirements:\nFluent English and French.\nAPI integration and SAP experience.'},{languages:'English C1',evidence:'API integration'});
- assert(info.requirements.every(r=>r.status==='unknown'));
+ assert(info.requirements.every(r=>r.status==='partial'));
+ assert.deepEqual(info.requirements[0].checks.map(c=>c.status),['match','unknown']);
+ assert.deepEqual(info.requirements[1].checks.map(c=>c.status),['match','unknown']);
+});
+
+test('HTML entities, international headings and optional sections preserve all actual requirements',()=>{
+ const info=roleInsights({description:'<h3>Dein Profil&nbsp;</h3><ul><li>Excel und SQL Kenntnisse.</li><li>Deutsch B2 und Englisch C1.</li></ul><h3>Das ist ein Plus - oder Du lernst es bei uns:</h3><li>Python Erfahrung.</li><h3>Was wir Dir bieten</h3><li>Leadership training and 30 days holiday.</li><h3>Der Interviewprozess</h3><p>Technical assessment.</p>'},{evidence:'Excel and SQL reporting.',germanLevel:'B1',languages:'English C1, German B1'});
+ assert.equal(info.requirements.length,3);assert.equal(info.requirements[0].status,'match');
+ assert.equal(info.requirements[1].status,'gap');assert.deepEqual(info.requirements[1].checks.map(c=>c.status),['gap','match']);
+ assert.equal(info.requirements[2].preferred,true);assert.equal(info.assessmentCounts.unknown,0);
+ assert(!info.requirements.some(r=>/holiday|assessment/.test(r.source)));
+ const ideal=roleInsights({description:'Ideal Profile\nSQL experience.\nPreferred Qualifications\nSalesforce familiarity.\nBenefits\nTraining budget.'});
+ assert.equal(ideal.requirements.length,2);assert.equal(ideal.requirements[1].preferred,true);
+});
+test('unheaded requirements and inline headings are usable without treating duties or benefits as qualifications',()=>{
+ for(const description of ['SQL experience required. Fluent English.','Requirements: SQL experience. Benefits: Training and 30 days leave.','Responsibilities:\nRun customer workshops.\nQualifications:\nSQL experience.\nBenefits:\nTraining and 30 days leave.']){
+  const info=roleInsights({description},{evidence:'SQL reporting.',languages:'English C1'});
+  assert(info.requirements.some(r=>/SQL/.test(r.source)));assert(!info.requirements.some(r=>/30 days/.test(r.source)));
+ }
+});
+test('specific evidence supports each skill, alternatives work, and missing skills stay visible',()=>{
+ const info=roleInsights({description:'Requirements:\nAPI integrations and SAP experience.\nSalesforce experience or CRM familiarity.\nAdvanced Excel including pivot tables.'},{evidence:'Delivered API integrations. Used Salesforce for customer onboarding. Excel reporting.'});
+ assert.equal(info.requirements[0].status,'partial');assert.equal(info.requirements[0].checks[1].status,'unknown');
+ assert.equal(info.requirements[1].status,'match');
+ assert.equal(info.requirements[2].status,'partial');assert.equal(info.requirements[2].checks.find(c=>c.label==='Pivot tables').status,'unknown');
+ assert.equal(info.requirements[0].checks[0].evidence,'Delivered API integrations.');
+ assert.equal(roleInsights({description:'Requirements:\nAPI experience.'},{evidence:'XML file transfer.'}).requirements[0].status,'unknown');
+});
+test('negated skills and aspirations do not certify experience, and duration stays scoped to the requested work',()=>{
+ for(const evidence of ['No Salesforce experience.','Currently learning Salesforce.','I want to use Salesforce.'])assert.equal(roleInsights({description:'Requirements:\nSalesforce experience.'},{evidence}).requirements[0].status,'unknown');
+ const info=roleInsights({description:'Requirements:\n5 years of SQL experience.\nExpert SQL for healthcare reporting.\nBachelor degree in computing.'},{evidence:'10 years of customer service. SQL reporting.'});
+ assert.equal(info.requirements[0].status,'partial');assert.equal(info.requirements[0].checks.find(c=>c.label==='Experience duration').status,'unknown');
+ assert.equal(info.requirements[1].status,'partial');assert.equal(info.requirements[2].status,'unknown');
+ const positive=roleInsights({description:'Requirements:\n5 years of SQL experience.'},{evidence:'6 years of SQL experience.'});
+ assert.equal(positive.requirements[0].status,'match');
+});
+test('language levels are assessed individually and unsupported languages are not invented as gaps',()=>{
+ const info=roleInsights({description:'Requirements:\nEnglish C1 and German B2.\nFrench B2.\nNative English.'},{languages:'English C1, German B1',germanLevel:'B1'});
+ assert.deepEqual(info.requirements[0].checks.map(c=>c.status),['match','gap']);
+ assert.equal(info.requirements[1].status,'unknown');assert.equal(info.requirements[2].status,'unknown');
+ const communication=roleInsights({description:'Requirements:\nDu kommunizierst sicher auf Deutsch und bist sicher in der Englischen Kommunikation.'},{languages:'English C1, German B1',germanLevel:'B1'});
+ assert.equal(communication.requirements[0].status,'partial');assert.deepEqual(communication.requirements[0].checks.map(c=>c.status),['unknown','match']);
+});
+test('empty experience and missing requirement text have explicit coverage information',()=>{
+ const info=roleInsights({description:'Requirements:\nSQL experience.'},{});
+ assert.equal(info.hasExperience,false);assert.equal(info.assessmentCounts.unknown,1);assert(info.requirements[0].checks.every(c=>c.detail));
+ assert.equal(roleInsights({description:'We build software for shops.'}).requirements.length,0);
+ assert.equal(roleInsights({requirements:'Customer workflows and testing.'}).sourceKind,'saved notes');
 });
