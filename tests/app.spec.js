@@ -503,7 +503,7 @@ test('refresh preserves expanded listing text and the reading position',async({p
 });
 test('vertical dragging while reading does not accidentally pass or apply',async({page})=>{
  await setup(page);
- const body=await page.locator('.card-body').boundingBox();
+ const body=await page.locator('.inline-role > h3').boundingBox();
  await page.mouse.move(body.x+30,body.y+25);await page.mouse.down();await page.mouse.move(body.x+34,body.y+160,{steps:8});await page.mouse.up();
  await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','fixture-ba');
  expect(await page.evaluate(()=>window.openedListings)).toEqual([]);
@@ -590,7 +590,7 @@ for(const [region,location,wrong,broad] of [
 test('card body drags show direction, snap back, pass and apply with undo',async({page})=>{
  await setup(page);
  const drag=async(distance,release=true)=>{
-  const box=await page.locator('.card-body').boundingBox(),x=box.x+box.width/2,y=box.y+24;
+  const box=await page.locator('.inline-role > h3').boundingBox(),x=box.x+box.width/2,y=box.y+24;
   await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+distance,y,{steps:10});
   if(release)await page.mouse.up();
  };
@@ -614,7 +614,7 @@ test('touch swipes on the body work while vertical touch gestures scroll the lis
   for(let i=1;i<=12;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+dx*i/12,y:y+dy*i/12}]});
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  };
- let body=await page.locator('.card-body').boundingBox();
+ let body=await page.locator('.inline-role > h3').boundingBox();
  await gesture(body.x+body.width/2,body.y+24,-150,0);
  await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','fixture-consulting');
  await page.locator('#undo-swipe').click();
@@ -628,7 +628,7 @@ test('touch swipes on the body work while vertical touch gestures scroll the lis
 
 test('trackpad swipes need no held button and momentum cannot decide the next card',async({page})=>{
  await setup(page);
- const before=await records(page),body=await page.locator('.card-body').boundingBox();
+ const before=await records(page),body=await page.locator('.inline-role > h3').boundingBox();
  await page.mouse.move(body.x+body.width/2,body.y+30);
  await page.mouse.wheel(0,50);await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','fixture-ba');
  await page.mouse.wheel(30,0);await expect(page.locator('#active-card')).toHaveClass(/dragging/);
@@ -710,4 +710,14 @@ test('application status selector replaces review draft and supports not applied
  page.once('dialog',dialog=>dialog.accept());await status.selectOption('delete');await expect(status).toHaveCount(0);
  expect((await records(page)).some(e=>e.id==='fixture-ba')).toBe(false);
  await page.reload();expect((await records(page)).some(e=>e.id==='fixture-ba')).toBe(false);
+});
+
+test('saved CV evidence rates a sparse match provisionally and explains missing advert details',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('job-notebook-profile-v1',JSON.stringify({geography:'europe',evidence:'Built API integrations.',cvImportSources:'Example CV.json'})));
+ await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Requirements:\nAPI experience.\nExperience in underwater robotics.\nMasters degree in physics.'}],nextPage:null}}));await page.goto('/');
+ await expect(page.locator('.card-fit-summary')).toContainText('10/10 · Provisional · 33% assessed');
+ await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('10 / 10');await expect(page.locator('.fit-provisional')).toHaveText('Provisional');await expect(page.locator('.fit-rating')).toContainText('only 1 of 3');await expect(page.locator('.fit-rating')).not.toContainText('Add profile evidence');
+ await page.keyboard.press('Escape');await page.reload();await expect(page.locator('.card-fit-summary')).toContainText('Provisional');
+ await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Responsibilities:\nImprove workflows and coordinate implementation.'}],nextPage:null}}));await page.locator('#refresh-jobs').click();await expect(page.locator('.card-fit-summary')).toContainText('Advert needs more detail');
+ await page.locator('.listing-info').click();await expect(page.locator('.fit-rating')).toContainText('Your CV details are saved');await expect(page.locator('.fit-rating')).not.toContainText('Import your CV');
 });

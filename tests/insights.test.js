@@ -93,3 +93,9 @@ test('empty experience and missing requirement text have explicit coverage infor
  assert.equal(roleInsights({description:'We build software for shops.'}).requirements.length,0);
  assert.equal(roleInsights({requirements:'Customer workflows and testing.'}).sourceKind,'saved notes');
 });
+
+test('imported CV wording supports database, documentation, testing and degree checks',()=>{
+ const result=roleInsights({description:'Must-haves\nSQL experience.\nTechnical documentation skills.\nTesting experience.\nBachelor degree in Business.\nWhat we provide\nTraining budget.'},{evidence:'CV skill: Supabase/PostgreSQL.\nWrote technical documentation.\nBuilt automated tests with Playwright.\nEducation: BSc · Business · Example University.'});
+ assert.equal(result.requirements.length,4);assert.equal(result.requirements[0].status,'match');assert.equal(result.requirements[1].status,'match');assert.equal(result.requirements[2].status,'match');assert.equal(result.requirements[3].checks.find(c=>c.label==='Education or certification').status,'match');assert.equal(result.requirements[3].status,'partial');
+ assert.equal(result.benefits.length,1);
+});
