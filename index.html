@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=43" />
+  <link rel="stylesheet" href="styles.css?v=44" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -109,6 +109,13 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status" hidden></div>
+  <dialog id="listing-tab-dialog" class="sheet" aria-labelledby="listing-tab-title">
+    <form method="dialog">
+      <div class="sheet-header"><h2 id="listing-tab-title">Open application in a new tab</h2><button class="icon-button" aria-label="Close application link">×</button></div>
+      <div class="sheet-scroll"><p>Your browser blocked the automatic tab. Your notebook will stay open.</p><p id="listing-tab-job"></p><p>The job is saved as Preparing in Applications.</p></div>
+      <div class="sheet-actions"><button class="text-button">Stay here</button><a id="listing-tab-link" class="primary-button" target="_blank" rel="noopener noreferrer">Open application ↗</a></div>
+    </form>
+  </dialog>
   <dialog id="cv-import-dialog" aria-labelledby="cv-import-title">
     <form id="cv-import-form">
       <div class="sheet-header"><h2 id="cv-import-title">Review your CV details</h2><button class="icon-button" id="cv-import-close" type="button" aria-label="Cancel CV import">×</button></div>
@@ -196,6 +203,6 @@
     </div>
     <div class="sheet-actions"><button id="reset-locations" type="button" class="secondary-button">All locations</button><button id="apply-locations" type="button" class="primary-button">Show matching roles</button></div>
   </div></dialog>
-  <script type="module" src="app.js?v=43"></script>
+  <script type="module" src="app.js?v=44"></script>
 </body>
 </html>

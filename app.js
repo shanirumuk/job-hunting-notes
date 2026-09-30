@@ -4,7 +4,7 @@ import {recoverImport,getItem as deviceItem} from './lib/device-store.js';
 import {startDeviceSync} from './lib/device-sync.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=43';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=44';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -307,9 +307,10 @@ async function refreshJobs(more=false) {
   renderDeck();
  }
 }
-async function decide(action, job = deckJobs()[0], {openInCurrentTab=false} = {}) {
+async function decide(action, job = deckJobs()[0]) {
   if (!job || decisionPending) return;
   decisionPending = true;
+  let listingOpened=false;
   document.querySelectorAll('.swipe-button').forEach(button => button.disabled = true);
   $('undo-swipe').disabled = true;
   const existing = entries.find(e => sameJob(e,job));
@@ -330,9 +331,13 @@ async function decide(action, job = deckJobs()[0], {openInCurrentTab=false} = {}
   } else if (action === 'prepare') {
     const url = safeURL(job.link);
     if (url) {
-      const tab = openInCurrentTab ? null : window.open(url, '_blank');
-      if (tab) tab.opener = null;
-      else {decisionPending = false; location.assign(url); return;}
+      const tab = window.open(url, '_blank');
+      if (tab) {tab.opener = null;listingOpened=true;}
+      else {
+        $('listing-tab-link').href=url;
+        $('listing-tab-job').textContent=job.title+' · '+job.company;
+        $('listing-tab-dialog').showModal();
+      }
     }
   }
   const card = $('active-card');
@@ -344,7 +349,7 @@ async function decide(action, job = deckJobs()[0], {openInCurrentTab=false} = {}
   }
   decisionPending = false;
   render();
-  if (action === 'prepare' && !browserConnection) toast('Listing opened. Your CV choice and notes are saved in Applications. Autofill is not connected on this browser.');
+  if (action === 'prepare' && !browserConnection) toast(listingOpened?'Listing opened in a new tab. Your CV choice and notes are saved in Applications.':'Saved as Preparing. Use Open application to open the blocked tab.');
   else if(action !== 'prepare') toast(action === 'pass' ? 'Passed. Undo is here if you change your mind.' : 'Saved to your applications for later.');
 }
 function undoSwipe() {
@@ -436,8 +441,8 @@ function wireTrackpadAndKeys() {
     const label=card.querySelector('.swipe-label');label.style.top=(card.scrollTop+Math.min(75,card.clientHeight/4))+'px';label.style.opacity=Math.min(1,Math.abs(distance)/threshold);label.textContent=distance>0?'APPLY':'PASS';card.dataset.direction=distance>0?'prepare':'pass';
     if(gesture.events>=4 && Math.abs(distance)>=threshold){
       gesture.committed=true;card.classList.remove('dragging');
-      // Trackpad gestures open the source in this tab, avoiding popup blockers.
-      decide(distance>0?'prepare':'pass',gesture.job,{openInCurrentTab:true});
+      // Keep the notebook open for every gesture; offer a link if the browser blocks the tab.
+      decide(distance>0?'prepare':'pass',gesture.job);
     }
   },{passive:false});
   document.addEventListener('keydown',e=>{

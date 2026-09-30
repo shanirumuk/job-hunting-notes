@@ -641,11 +641,10 @@ test('trackpad swipes need no held button and momentum cannot decide the next ca
  // A new small gesture after the momentum gap must snap back without deciding.
  await page.waitForTimeout(400);
  await page.mouse.wheel(-20,0);await expect(page.locator('#active-card')).toHaveClass(/dragging/);await expect(page.locator('#active-card')).not.toHaveClass(/dragging/);
- await page.route('https://example.org/consulting',r=>r.fulfill({contentType:'text/html',body:'<h1>Employer application</h1><form><label>Name<input name=applicant></label><button>Submit application</button></form>'}));
- for(let i=0;i<4;i++)await page.mouse.wheel(-90,0);await expect(page).toHaveURL('https://example.org/consulting');
- await expect(page.getByRole('heading',{name:'Employer application'})).toBeVisible();
- await expect(page.locator('input[name=applicant]')).toHaveValue('');
- await page.goBack();await expect(page.locator('#discover-view')).toBeVisible();
+ const notebookURL=page.url();
+ for(let i=0;i<4;i++)await page.mouse.wheel(-90,0);
+ await expect.poll(()=>page.evaluate(()=>window.openedListings)).toEqual(['https://example.org/consulting']);
+ await expect(page).toHaveURL(notebookURL);await expect(page.locator('#discover-view')).toBeVisible();
  expect((await records(page)).find(e=>e.id==='fixture-consulting').status).toBe('Preparing');
  await expect(page.locator('#preparation-dialog')).not.toBeVisible();
 });
@@ -772,4 +771,23 @@ test('consulting contract review separates real qualifications, daily work and p
  for(const width of [1440,390]){await page.setViewportSize({width,height:900});expect(await page.locator('#role-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);}
  await page.screenshot({path:'private/consulting-review-mobile.png'});
  await page.keyboard.press('Escape');await page.reload();await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('4 / 10');await expect(page.locator('.fit-review')).toContainText('6 core requirements');
+});
+
+for(const blocked of [false,true])test(`right trackpad swipe keeps the notebook open with ${blocked?'blocked':'allowed'} popups`,async({page,context})=>{
+ await context.route('https://example.org/**',r=>r.fulfill({contentType:'text/html',body:'<h1>Employer application</h1>'}));
+ await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs,nextPage:null}}));
+ if(blocked)await page.addInitScript(()=>{window.open=()=>null;});
+ await page.goto('/');await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','fixture-ba');const url=page.url();
+ const body=await page.locator('.inline-role > h3').boundingBox();await page.mouse.move(body.x+body.width/2,body.y+20);
+ const popupPromise=blocked?null:context.waitForEvent('page');
+ for(let i=0;i<4;i++)await page.mouse.wheel(-90,0);
+ let popup;
+ if(blocked){
+  await expect(page.locator('#listing-tab-dialog')).toBeVisible();await expect(page.locator('#listing-tab-link')).toHaveAttribute('href',jobs[0].link);await expect(page.locator('#listing-tab-link')).toHaveAttribute('target','_blank');
+  const next= context.waitForEvent('page');await page.locator('#listing-tab-link').click();popup=await next;
+ }else popup=await popupPromise;
+ await popup.waitForLoadState();expect(popup.url()).toBe(jobs[0].link);expect(await popup.evaluate(()=>window.opener)).toBe(null);
+ await expect(page).toHaveURL(url);expect((await records(page)).find(e=>e.id==='fixture-ba').status).toBe('Preparing');
+ await popup.close();if(blocked)await page.getByRole('button',{name:'Stay here',exact:true}).click();
+ await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','fixture-consulting');
 });
