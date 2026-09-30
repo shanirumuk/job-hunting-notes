@@ -757,3 +757,19 @@ test('customer success rating works after three CV imports, persists on refresh 
  await page.locator('#refresh-jobs').click();await expect(page.locator('.card-fit-summary')).toContainText('0/10');await page.locator('.listing-info').click();
  await expect(page.locator('.fit-score')).toContainText('0 / 10');await expect(page.locator('.fit-rating')).toContainText('does not mean you cannot do the work');await expect(page.locator('.fit-stats')).toContainText('Not evidenced');
 });
+
+test('consulting contract review separates real qualifications, daily work and practical trade-offs',async({page})=>{
+ const {consultingContract}=await import('./fixtures/consulting-contract.js');const {transferableCV}=await import('./fixtures/customer-success.js');
+ await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[consultingContract],nextPage:null}}));
+ await page.goto('/#profile');await page.locator('#cv-json-upload').setInputFiles({name:'Consulting.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(transferableCV))});await page.getByRole('button',{name:'Save reviewed CV details'}).click();
+ await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('.card-fit-summary')).toContainText('4/10');
+ await page.locator('.qualification-details > summary').click();await expect(page.locator('.qualification-list > li')).toHaveCount(12);
+ await expect(page.locator('.qualification-list')).not.toContainText('meditation');await expect(page.locator('.qualification-list')).not.toContainText('unsolicited resumes');
+ await page.locator('.listing-info').click();await expect(page.locator('.fit-review')).toContainText('6 core requirements · 6 optional advantages');
+ await expect(page.locator('.fit-tradeoffs')).toContainText('Czechia, Slovakia');await expect(page.locator('.fit-tradeoffs')).toContainText('6-month contract');await expect(page.locator('.fit-tradeoffs')).toContainText('700600–700600 CZK yearly');
+ await expect(page.locator('[data-factor="location"]')).toContainText('restricted remote');await expect(page.locator('[data-factor="timing"]')).toContainText('Extension is possible, not guaranteed');
+ await page.locator('.fit-work > summary').click();await expect(page.locator('.fit-work')).toContainText('Requirements discovery');
+ for(const width of [1440,390]){await page.setViewportSize({width,height:900});expect(await page.locator('#role-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);}
+ await page.screenshot({path:'private/consulting-review-mobile.png'});
+ await page.keyboard.press('Escape');await page.reload();await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('4 / 10');await expect(page.locator('.fit-review')).toContainText('6 core requirements');
+});

@@ -84,3 +84,42 @@ test('transferable skills never certify unrelated seniority, specialist tools or
  const info=roleInsights({description:"Requirements:\n5+ years' experience in customer success.\nSalesforce experience."},{evidence:'10 years of software engineering. Help customers by resolving technical issues.'});
  assert.equal(info.requirements[0].status,'partial');assert.equal(info.requirements[0].checks.find(c=>c.label==='Experience duration').status,'unknown');assert.equal(info.requirements[1].status,'unknown');
 });
+
+import {consultingContract} from './fixtures/consulting-contract.js';
+import {listingSections} from '../lib/insights.js';
+test('consulting contract separates six core requirements, six optional advantages, duties and employer boilerplate',()=>{
+ const profile=mergeCVImports([parseCVJSON(transferableCV,'Consulting.json')],defaultProfile);
+ const report=jobFitReport(consultingContract,profile),sections=listingSections(consultingContract.description);
+ assert.equal(report.total,6);assert.equal(report.bonus.total,6);assert.equal(report.score,4);
+ assert.deepEqual(report.counts,{match:1,partial:3,gap:0,unknown:2});
+ assert(sections.preferred.some(s=>s.includes('German')));assert(!sections.requirements.some(s=>/salary|values|coach|meditation|bonus|agency|LI-|looking for|core skills/i.test(s)));
+ assert.equal(report.factors.find(f=>f.key==='location').status,'restricted remote');
+ assert.match(report.factors.find(f=>f.key==='timing').detail,/6-month contract.*not guaranteed/);
+ assert(report.review.concerns.some(s=>s.includes('700600')&&s.includes('CZK yearly')));
+ assert(report.review.concerns.some(s=>s.includes('Czechia, Slovakia')));
+ assert(report.review.concerns.some(s=>s.includes('practice leadership')));
+ assert(report.review.domainChecks.includes('Marketing automation and campaigns'));
+ assert(report.review.workEvidence.some(c=>c.label==='Requirements discovery'));
+ assert(!/Germany|permanent|your current salary|Skip it|€28/.test(JSON.stringify(report.review)));
+});
+test('adding company benefits cannot dilute the score or create applicant evidence',()=>{
+ const profile={...defaultProfile,evidence:'Built SQL reporting.'},description='Requirements:\nSQL experience.\nBenefits:\n';
+ const noise=['Company culture and values.','Leadership training and professional certifications.','Our resident communication coach helps employees.','Parental leave and stock options.','Employees earn an annual performance bonus.','Our recruitment process includes technical interviews.'].join('\n');
+ const before=jobFitReport({...job,description},profile),after=jobFitReport({...job,description:description+noise},profile);
+ assert.equal(after.total,1);assert.equal(after.score,before.score);assert.deepEqual(after.counts,before.counts);
+ for(const heading of ['<h2>Company life</h2>','Unfamiliar company section:']){
+  const info=roleInsights({description:'Requirements:\nSQL experience.\n'+heading+'\nWe organize events and have five values.\n#LI-REMOTE\nAny unsolicited resumes are ignored.'},profile);
+  assert.equal(info.requirements.length,1);
+ }
+});
+test('optional headings with not-required wording remain optional in HTML and plain text',()=>{
+ for(const description of [consultingContract.description,consultingContract.description.replace(/^(Core skills[^\n]*|Skills and experience that[^\n]*|More things[^\n]*|Culture:|Personal Development:|Well-being:|Compensation:)$/gm,'<h3>$1</h3>')]){
+  const sections=listingSections(description);assert.equal(sections.requirements.length,6);assert.equal(sections.preferred.length,6);
+ }
+});
+test('a non-required extra cannot turn a mandatory point into an optional one',()=>{
+ const info=roleInsights({description:'Requirements:\nSQL required; Salesforce is not required.\nAPI experience is not required.'},{evidence:'Built SQL queries.'});
+ assert.equal(info.requirements[0].preferred,false);assert.equal(info.requirements[1].preferred,true);
+ const report=jobFitReport({...job,title:'Implementation Consultant - 6 month contract',description:'Requirements:\nSQL experience.'},defaultProfile);
+ assert.equal(report.factors.find(f=>f.key==='timing').status,'check');assert.match(report.factors.find(f=>f.key==='timing').detail,/6-month contract/);
+});

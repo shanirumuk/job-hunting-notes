@@ -856,6 +856,14 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 
 .fit-cv-detection { padding: 12px 14px; border-radius: 12px; background: #edf0e5; color: #3d5035; font-size: 1rem; line-height: 1.5; }
 
-.fit-evidence-list { list-style: none; padding: 0; display: grid; gap: 16px; }
-.fit-evidence-list li > strong, .fit-evidence-list li > span { display: block; }
-.fit-evidence-list blockquote { margin: 8px 0 0; padding: 10px 14px; border-left: 3px solid var(--sage, #b6c2a8); background: #f6f7f2; border-radius: 0 8px 8px 0; font-size: 14px; overflow-wrap: anywhere; }
+.fit-evidence-list, .fit-work-evidence { list-style: none; padding: 0; display: grid; gap: 16px; }
+.fit-evidence-list li > strong, .fit-evidence-list li > span, .fit-work-evidence li > strong { display: block; }
+.fit-evidence-list blockquote, .fit-work-evidence blockquote { margin: 8px 0 0; padding: 10px 14px; border-left: 3px solid var(--sage, #b6c2a8); background: #f6f7f2; border-radius: 0 8px 8px 0; font-size: 14px; overflow-wrap: anywhere; }
+
+.fit-review h4 { font-size: 21px; margin: 8px 0; line-height: 1.3; }
+.fit-review { background: #f5f6f0; padding: 18px; border-radius: 14px; }
+.fit-tradeoffs li { margin-bottom: 10px; }
+
+.fit-score-explanation { margin-top: 12px; font-size: 1rem; }
+#role-content .fit-review p { font-size: 1rem; line-height: 1.5; }
+#role-content .fit-review .source-note { font-size: .875rem; }
