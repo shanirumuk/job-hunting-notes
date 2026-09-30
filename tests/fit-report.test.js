@@ -14,7 +14,7 @@ test('missing profile evidence stays unrated while limited coverage is explicitl
  assert.equal(report.score,null);assert.equal(report.coverage,33);
  assert.equal(jobFitReport({...job,description:'Customer workshops and workflow improvements.'}).score,null);
  const mostlyUnknown=jobFitReport({...job,description:'Requirements:\nAPI experience.\nSQL experience.\nFrench B2.\nGerman C2.\nDegree required.'},{...defaultProfile,evidence:'API experience.',languages:'',germanLevel:'C2'});
- assert.equal(mostlyUnknown.score,10);assert.equal(mostlyUnknown.coverage,40);assert.equal(mostlyUnknown.provisional,true);assert.match(mostlyUnknown.ratingReason,/2 of 5/);
+ assert.equal(mostlyUnknown.score,4);assert.equal(mostlyUnknown.coverage,40);assert.equal(mostlyUnknown.provisional,true);assert.match(mostlyUnknown.ratingReason,/all 5 requirements/);
 });
 test('sponsorship conflicts affect priority without declaring unknown work rights eligible',()=>{
  const listing={...job,description:'Requirements:\nAPI experience.\nSQL experience.\nNo visa sponsorship.'};
@@ -39,7 +39,48 @@ test('fit factors retain advertised pay, work arrangement and timing without inv
 
 test('saved CV details produce a provisional score from a single comparable requirement',()=>{
  const report=jobFitReport({...job,description:'Requirements:\nAPI experience.\nExperience with underwater robotics.\nMasters degree in physics.'},{...defaultProfile,evidence:'Built API integrations.'});
- assert.equal(report.score,10);assert.equal(report.provisional,true);assert.equal(report.coverage,33);assert.equal(report.ratingState,'provisional');
+ assert.equal(report.score,3.5);assert.equal(report.provisional,true);assert.equal(report.coverage,33);assert.equal(report.ratingState,'provisional');
  const missing=jobFitReport({...job,description:'An exciting opportunity. Apply today.'},{...defaultProfile,evidence:'Built API integrations.'});assert.equal(missing.score,null);assert.equal(missing.ratingState,'missing-requirements');assert.match(missing.ratingReason,/CV details are saved/);assert.doesNotMatch(missing.ratingReason,/Import your CV/);
- const unmatched=jobFitReport({...job,description:'Requirements:\nExperience with underwater robotics.'},{...defaultProfile,evidence:'Built API integrations.'});assert.equal(unmatched.score,null);assert.equal(unmatched.ratingState,'unassessed');
+ const unmatched=jobFitReport({...job,description:'Requirements:\nExperience with underwater robotics.'},{...defaultProfile,evidence:'Built API integrations.'});assert.equal(unmatched.score,0);assert.equal(unmatched.ratingState,'provisional');assert.equal(unmatched.counts.gap,0);assert.equal(unmatched.counts.unknown,1);
+});
+
+import {customerSuccessJob,transferableCV} from './fixtures/customer-success.js';
+import {parseCVJSON,mergeCVImports} from '../lib/cv-json.js';
+import {roleInsights} from '../lib/insights.js';
+test('customer success advert rates imported CVs with cited transferable evidence and correct section boundaries',()=>{
+ const profile=mergeCVImports(['Analyst.json','Consulting.json','Developer.json'].map(name=>parseCVJSON(transferableCV,name)),defaultProfile);
+ const report=jobFitReport(customerSuccessJob,profile),insights=roleInsights(customerSuccessJob,profile);
+ assert.equal(report.total,13);assert.equal(report.bonus.total,7);assert.equal(insights.duties.length,2);
+ assert.equal(report.score,4);assert.equal(report.counts.match,1);assert.equal(report.counts.partial,8);assert.equal(report.counts.unknown,4);assert.equal(report.counts.gap,0);
+ assert.equal(report.factors.find(f=>f.key==='pay').status,'unknown');assert(report.questions.some(q=>q.startsWith('Pay is not stated')));
+ for(const c of report.evidenceMatches)assert(profile.evidence.includes(c.evidence)||profile.languages.includes(c.evidence));
+ const seniority=insights.requirements.find(r=>r.source.startsWith('5+'));
+ assert.equal(seniority.checks.find(c=>c.label==='Experience duration').status,'unknown');
+ for(const label of ['cyber risk','Own revenue','expansion opportunities'])assert.equal(insights.requirements.find(r=>r.source.includes(label)).status,'unknown');
+ assert(!report.evidenceMatches.some(c=>/cyber|renewal/i.test(c.label)));
+});
+test('missing evidence always produces a transparent zero and adding unknown requirements cannot inflate fit',()=>{
+ const profile={...defaultProfile,evidence:'Built API integrations.'};
+ for(const description of ['Requirements:\nUnderwater robotics expertise.','What do we need from you?\nOwn customer renewal revenue.']){
+  const report=jobFitReport({...job,description},profile);
+  assert.equal(report.score,0);assert.equal(report.counts.gap,0);assert.equal(report.counts.unknown,1);assert.equal(report.provisional,true);assert.match(report.ratingReason,/does not mean you cannot/);
+ }
+ const one=jobFitReport({...job,description:'Requirements:\nAPI experience.'},profile);
+ const two=jobFitReport({...job,description:'Requirements:\nAPI experience.\nUnderwater robotics expertise.'},profile);
+ assert.equal(one.score,10);assert.equal(two.score,5);
+});
+test('salary questions and factors agree and do not mistake allowances for salary',()=>{
+ for(const perk of ['$1500 USD annual Learning & Development allowance.','£400 monthly equipment budget.']){
+  const report=jobFitReport({...job,description:'Requirements:\nAPI experience.\nBenefits:\n'+perk});
+  assert.equal(report.factors.find(f=>f.key==='pay').status,'unknown');assert(report.questions.some(q=>q.startsWith('Pay is not stated')));
+ }
+ const report=jobFitReport({...job,description:'Requirements:\nAPI experience.\nSalary: £60000 per year.'});
+ assert.equal(report.factors.find(f=>f.key==='pay').status,'advertised');assert(!report.questions.some(q=>q.startsWith('Pay is not stated')));
+});
+test('transferable skills never certify unrelated seniority, specialist tools or aspirational experience',()=>{
+ for(const evidence of ['I want to help customers by resolving technical issues.','No experience working with multiple teams.']){
+  const info=roleInsights(customerSuccessJob,{evidence,languages:''});assert.equal(info.assessmentCounts.match,0);assert.equal(info.assessmentCounts.partial,0);
+ }
+ const info=roleInsights({description:"Requirements:\n5+ years' experience in customer success.\nSalesforce experience."},{evidence:'10 years of software engineering. Help customers by resolving technical issues.'});
+ assert.equal(info.requirements[0].status,'partial');assert.equal(info.requirements[0].checks.find(c=>c.label==='Experience duration').status,'unknown');assert.equal(info.requirements[1].status,'unknown');
 });

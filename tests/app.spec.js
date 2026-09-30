@@ -715,8 +715,8 @@ test('application status selector replaces review draft and supports not applied
 test('saved CV evidence rates a sparse match provisionally and explains missing advert details',async({page})=>{
  await page.addInitScript(()=>localStorage.setItem('job-notebook-profile-v1',JSON.stringify({geography:'europe',evidence:'Built API integrations.',cvImportSources:'Example CV.json'})));
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Requirements:\nAPI experience.\nExperience in underwater robotics.\nMasters degree in physics.'}],nextPage:null}}));await page.goto('/');
- await expect(page.locator('.card-fit-summary')).toContainText('10/10 · Provisional · 33% assessed');
- await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('10 / 10');await expect(page.locator('.fit-provisional')).toHaveText('Provisional');await expect(page.locator('.fit-rating')).toContainText('only 1 of 3');await expect(page.locator('.fit-rating')).not.toContainText('Add profile evidence');
+ await expect(page.locator('.card-fit-summary')).toContainText('3.5/10 · Provisional · 33% assessed');
+ await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('3.5 / 10');await expect(page.locator('.fit-provisional')).toHaveText('Provisional');await expect(page.locator('.fit-rating')).toContainText('all 3 requirements');await expect(page.locator('.fit-rating')).not.toContainText('Add profile evidence');
  await page.keyboard.press('Escape');await page.reload();await expect(page.locator('.card-fit-summary')).toContainText('Provisional');
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Responsibilities:\nImprove workflows and coordinate implementation.'}],nextPage:null}}));await page.locator('#refresh-jobs').click();await expect(page.locator('.card-fit-summary')).toContainText('Advert needs more detail');
  await page.locator('.listing-info').click();await expect(page.locator('.fit-rating')).toContainText('Your CV details are saved');await expect(page.locator('.fit-rating')).not.toContainText('Import your CV');
@@ -725,7 +725,7 @@ test('saved CV evidence rates a sparse match provisionally and explains missing 
 test('CV imports in another tab refresh an open fit report and identify the detected files',async({page})=>{
  const {cvJSON}=await import('./fixtures/cv-json.js');
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Requirements:\nAPI experience.\nSQL experience.'}],nextPage:null}}));
- await page.goto('/');await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('Not rated yet');
+ await page.goto('/');await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('Add CV details');
  const other=await page.context().newPage();await other.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[],nextPage:null}}));await other.goto('/#profile');
  const files=['Analyst.json','Consulting.json','Developer.json'].map(name=>({name,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(cvJSON))}));
  await other.locator('#cv-json-upload').setInputFiles(files);await other.getByRole('button',{name:'Save reviewed CV details'}).click();
@@ -735,4 +735,25 @@ test('CV imports in another tab refresh an open fit report and identify the dete
  await other.locator('#analyst-upload').setInputFiles({name:'Original.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\n%%EOF')});await expect(other.locator('#analyst-file-status')).toContainText('Original.pdf');
  await expect(page.locator('#fit-cv-status')).toContainText('1 PDF detected');await expect(page.locator('#fit-cv-status')).toContainText('Original.pdf');
  await other.close();await page.keyboard.press('Escape');await page.reload();await page.locator('.listing-info').click();await expect(page.locator('.fit-cv-detection')).toContainText('3 CV JSON files detected');
+});
+
+test('customer success rating works after three CV imports, persists on refresh and shows evidence on mobile',async({page})=>{
+ const {customerSuccessJob,transferableCV}=await import('./fixtures/customer-success.js');
+ await page.setViewportSize({width:390,height:844});
+ await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[customerSuccessJob],nextPage:null}}));
+ await page.goto('/#profile');
+ await page.locator('#cv-json-upload').setInputFiles(['Analyst.json','Consulting.json','Developer.json'].map(name=>({name,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(transferableCV))})));
+ await page.getByRole('button',{name:'Save reviewed CV details'}).click();
+ await page.locator('.main-nav [data-view="discover"]').click();
+ await expect(page.locator('.card-fit-summary')).toContainText('4/10');await page.locator('.listing-info').click();
+ await expect(page.locator('.fit-score')).toContainText('4 / 10');await expect(page.locator('.fit-cv-detection')).toContainText('3 CV JSON files detected');
+ await expect(page.locator('.fit-coverage')).toContainText('9 of 13');await expect(page.locator('.fit-evidence-list')).toContainText('resolving technical issues');
+ await expect(page.locator('[data-factor="pay"] .factor-status')).toHaveText('unknown');
+ expect(await page.locator('#role-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+ await page.screenshot({path:'private/cv-fit-mobile.png'});
+ await page.keyboard.press('Escape');await page.reload();await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('4 / 10');
+ await page.keyboard.press('Escape');
+ await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...customerSuccessJob,title:'Implementation Consultant',description:'Requirements:\nUnderwater robotics expertise.'}],nextPage:null}}));
+ await page.locator('#refresh-jobs').click();await expect(page.locator('.card-fit-summary')).toContainText('0/10');await page.locator('.listing-info').click();
+ await expect(page.locator('.fit-score')).toContainText('0 / 10');await expect(page.locator('.fit-rating')).toContainText('does not mean you cannot do the work');await expect(page.locator('.fit-stats')).toContainText('Not evidenced');
 });

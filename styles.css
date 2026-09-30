@@ -855,3 +855,7 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 .fit-provisional { display: block; font-family: inherit; font-weight: 600; font-size: .875rem; line-height: 1.5; color: #725420; }
 
 .fit-cv-detection { padding: 12px 14px; border-radius: 12px; background: #edf0e5; color: #3d5035; font-size: 1rem; line-height: 1.5; }
+
+.fit-evidence-list { list-style: none; padding: 0; display: grid; gap: 16px; }
+.fit-evidence-list li > strong, .fit-evidence-list li > span { display: block; }
+.fit-evidence-list blockquote { margin: 8px 0 0; padding: 10px 14px; border-left: 3px solid var(--sage, #b6c2a8); background: #f6f7f2; border-radius: 0 8px 8px 0; font-size: 14px; overflow-wrap: anywhere; }
