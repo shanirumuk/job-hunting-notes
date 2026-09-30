@@ -867,3 +867,16 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 .fit-score-explanation { margin-top: 12px; font-size: 1rem; }
 #role-content .fit-review p { font-size: 1rem; line-height: 1.5; }
 #role-content .fit-review .source-note { font-size: .875rem; }
+
+.qualification-group .qualification-list { margin: 6px 0 20px; }
+.qualification-group h3 { margin: 18px 0 6px; }
+.qualification-group .qualification { padding: 10px 0; gap: 10px; }
+.qualification-group .qualification-icon { flex-basis: 24px; height: 26px; line-height: 26px; font-size: 20px; background: transparent; }
+.qualification.missing .qualification-icon { color: #99382f; }
+.qualification-group .requirement-text { margin: 0; font-size: 1rem; line-height: 1.45; font-weight: 500; }
+.qualification-group .qualification-note { margin: 5px 0 0; font-size: .875rem; line-height: 1.45; color: var(--muted); }
+.qualification-overview span { font-weight: 400; font-size: .875rem; }
+.qualification-details .check-legend { font-size: .875rem; line-height: 1.4; }
+.review-factor-list article { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.review-factor-list h4, .review-factor-list p { margin: 0 0 5px; }
+#full-review-status { padding-top: 10px; border-top: 1px solid var(--line); }

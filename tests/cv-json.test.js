@@ -22,3 +22,12 @@ test('unrecognised or mixed-person CVs fail without producing a profile',()=>{
  assert.throws(()=>mergeCVImports([parseCVJSON(cv),parseCVJSON({...cv,basics:{name:'Another person'}})],defaultProfile),/different names/);
  const sanitized=parseCVJSON({...cv,sections:{experience:{items:[{description:'<script>fetch("secret")</script><p>API delivery.</p>'}]}}});assert.doesNotMatch(sanitized.evidence,/secret|script/);
 });
+
+test('reimporting C1 CVs preserves a reviewed native-English declaration',()=>{
+ const parsed=parseCVJSON(cv,'cv.json');
+ const profile=mergeCVImports([parsed],{...defaultProfile,languages:'English native (C1), German B1'});
+ assert.match(profile.languages,/English C1 \(native\)/);
+ assert.equal(mergeCVImports([parsed],profile).languages,profile.languages);
+ const report=jobFitReport({title:'Analyst',location:'Germany',description:'Requirements:\nNative English speaker.'},profile);
+ assert.equal(report.score,10);
+});

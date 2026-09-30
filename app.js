@@ -1,10 +1,11 @@
+import {REVIEW_VERSION,reviewInsights,factorLabels} from './lib/fit-review.js';
 import {parseCVJSON,mergeCVImports} from './lib/cv-json.js';
 import {regions,europeanCountries,geographicMatch,scopedLocation} from './lib/geography.js';
-import {recoverImport,getItem as deviceItem} from './lib/device-store.js';
+import {recoverImport,getItem as deviceItem,setItem as deviceSetItem} from './lib/device-store.js';
 import {startDeviceSync} from './lib/device-sync.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=44';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=45';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -149,7 +150,7 @@ function summaryMarkup(job){
  return `<p role="status">${esc(message|| (browserConnection?'Writing a short summary…':'Connect your saved setup in My profile to generate a short summary.'))}</p>${message?'<button class="text-button" data-retry-summary>Retry summary</button>':''}`;
 }
 async function requestSummary(job){
- if(job.historical||savedSummary(job)||summaryBusy)return;
+ if(job.historical||fullReview(job)||savedSummary(job)||summaryBusy)return;
  summaryBusy=true;
  try{
   const source=summarySource(job);
@@ -165,21 +166,98 @@ async function requestSummary(job){
  finally{
   summaryBusy=false;
   const current=deckJobs()[0];
-  if(current?.id===job.id){const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(current);if(summarySource(current)!==summarySource(job)){summaryErrors.delete(current.id);requestSummary(current);}}
+  if(current?.id===job.id){const region=$('role-summary');if(region&&!fullReview(current))region.innerHTML=summaryMarkup(current);if(summarySource(current)!==summarySource(job)){summaryErrors.delete(current.id);requestSummary(current);}}
   else if(current)requestSummary(current);
  }
 }
-const qualificationStates={match:['✓','Supported'],partial:['◐','Partly supported'],gap:['×','Gap'],unknown:['?','Not enough information']};
+const fitReviewCache=new Map(),fitReviewErrors=new Map();let fitReviewBusy=false,fitReviewTimer;
+function reviewInputFor(job){return {job:{title:job.title,location:job.location||'',remote:!!job.remote,description:job.description||job.requirements||''},profile:Object.fromEntries(['evidence','languages','workRights','salaryTarget','motivation','startDate','relocation'].map(key=>[key,profile[key]||'']))};}
+const fitReviewKey=job=>JSON.stringify([REVIEW_VERSION,new Date().toISOString().slice(0,10),reviewInputFor(job)]);
+function fullReview(job){return fitReviewCache.get(fitReviewKey(job));}
+function reviewStatusMarkup(job){
+ if(fullReview(job))return '<span>CV review of supplied advert</span>';
+ if(!profile.evidence.trim())return '';
+ const error=fitReviewErrors.get(fitReviewKey(job));
+ if(error)return `${esc(error)} <button class="text-button" data-retry-fit>Retry review</button>`;
+ return browserConnection?'Full CV review in progress. You can keep browsing.':'Quick qualification check. <button class="text-button" data-view="profile">Connect private setup for a full review</button>';
+}
+function scheduleFitReview(job){
+ clearTimeout(fitReviewTimer);
+ if(fullReview(job)){applyFitReview(job);return;}
+ fitReviewTimer=setTimeout(()=>requestFitReview(job),1400);
+}
+async function requestFitReview(job){
+ const key=fitReviewKey(job),input=reviewInputFor(job);
+ if(fitReviewBusy||fullReview(job)||fitReviewErrors.has(key)||!profile.evidence.trim()||!browserConnection||!job.description)return;
+ fitReviewBusy=true;
+ try{
+  const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(key))),b=>b.toString(16).padStart(2,'0')).join('');
+  const stored=await deviceItem('fit-reviews')||{};
+  let review=stored[hash];
+  if(!review){
+   const response=await fetch('/api/fit-review',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify(input),signal:AbortSignal.timeout(295000)});
+   const data=await response.json();if(!response.ok)throw Error(data.error||'Review unavailable.');
+   review=data.review;
+   if(review?.version!==REVIEW_VERSION||!Array.isArray(review.points)||!Array.isArray(review.factors))throw Error('Review response was incomplete. Retry it.');
+   stored[hash]=review;const hashes=Object.keys(stored);while(hashes.length>20)delete stored[hashes.shift()];
+   await deviceSetItem('fit-reviews',stored);
+  }
+  fitReviewCache.set(key,review);if(fitReviewCache.size>30)fitReviewCache.delete(fitReviewCache.keys().next().value);
+  if(key===fitReviewKey(job))applyFitReview(job);
+ }catch(error){fitReviewErrors.set(key,error.name==='TimeoutError'?'The full review took too long. Retry it.':error.message);}
+ finally{
+  fitReviewBusy=false;
+  const current=deckJobs()[0];
+  if(current&&$('full-review-status'))$('full-review-status').innerHTML=reviewStatusMarkup(current);
+  if(current&&fitReviewKey(current)!==key)scheduleFitReview(current);
+ }
+}
+function applyFitReview(job){
+ const review=fullReview(job);if(!review)return;
+ if($('active-card')?.dataset.jobId===job.id){
+  const old=document.querySelector('.qualification-details'),wasOpen=old?.open,scroll=$('active-card').scrollTop;
+  if(old){old.outerHTML=qualificationMarkup(reviewInsights(review));document.querySelector('.qualification-details').open=!!wasOpen;}
+  document.querySelector('.card-fit-summary').textContent=review.overall===null?'Overall rating needs more evidence':`Application fit: ${review.overall}/10${review.provisional?' · Provisional':''} · ${review.coverage}% evidence coverage`;
+  document.querySelector('.listing-info small').textContent=review.overall===null?'Fit':review.overall+'/10';
+  $('role-summary').innerHTML=`<p class="job-overview">${esc(review.summary)}</p>`;
+  const tag=document.querySelector('.cv-tag');if(tag?.firstChild)tag.firstChild.textContent=review.cv;
+  if($('full-review-status'))$('full-review-status').innerHTML=reviewStatusMarkup(job);
+  $('active-card').scrollTop=scroll;
+ }
+ if(selectedRole?.id===job.id&&$('role-dialog').open)openFullReview(job,review);
+}
+function openFullReview(job,review){
+ selectedRole=job;$('role-title').textContent=job.company;
+ const factorStatus={match:'✓',partial:'?',gap:'×',unknown:'?'};
+ $('role-content').innerHTML=`<h3 class="role-heading">${esc(job.title)}</h3><p class="prep-meta">${esc(job.location)}</p><section class="fit-rating"><p class="eyebrow">OVERALL APPLICATION FIT</p><div class="fit-score">${review.overall===null?'More evidence needed':review.overall+'<span> / 10</span>'}${review.provisional?'<small class="fit-provisional">Provisional</small>':''}</div><p>${esc(review.summary)}</p><p class="fit-coverage">Qualification fit: ${review.skills===null?'Unresolved':review.skills+'/10'} · Daily work: ${review.work==null?'Unresolved':review.work+'/10'} · ${review.coverage}% overall evidence coverage</p></section>
+ <section class="fit-section fit-cv"><h3>CV to use</h3><p class="fit-cv-name">${esc(review.cv)}</p><p>${esc(review.cvReason)}</p><p id="fit-cv-status" role="status"></p><button class="secondary-button" id="fit-download-cv" hidden>Download recommended CV</button></section>
+ <section class="fit-section"><h3>What affects the rating</h3><div class="review-factor-list">${review.factors.map(f=>`<article data-factor="${esc(f.key)}"><h4><span aria-hidden="true">${factorStatus[f.status]}</span> ${factorLabels[f.key]}</h4><p>${esc(f.note)}</p></article>`).join('')}</div></section>
+ ${review.issues.length?`<section class="fit-section"><h3>Still uncertain</h3>${fitList(review.issues,'')}</section>`:''}
+ <details class="fit-section"><summary>How the rating is calculated</summary><p>Qualifications 30%, daily work 25%, work rights 15%, pay 10%, career direction 10%, location 5%, contract 5%. Qualification and duty checks earn full credit for support, half for a partial match, and zero for gaps or missing evidence. Unresolved practical factors are excluded. All unresolved points lower coverage. Essential qualifications count twice; optional bonuses do not inflate the qualification score. Duties have their own score. ${esc(review.cap)} Results are rounded to half a point and are not hiring odds.</p><p>The review accounts for ${review.audit.length} supplied advert paragraphs and validates supporting quotes against your saved details. It cannot verify that the source feed contains the entire current employer advert.</p></details>
+ <button class="secondary-button" id="fit-show-checks">See qualification checklist</button><button class="text-button" data-view="profile" id="full-fit-profile">Update my profile</button>`;
+ $('role-source').href=safeURL(job.link);if(!$('role-dialog').open)$('role-dialog').showModal();
+ $('fit-show-checks').onclick=()=>{$('role-dialog').close();const section=document.querySelector('.qualification-details');if(section){section.open=true;section.scrollIntoView({block:'start'});}};
+ $('full-fit-profile').onclick=()=>$('role-dialog').close();updateFitCV(job,review.cv);
+}
+document.addEventListener('click',event=>{if(event.target.closest('[data-retry-fit]')){const job=deckJobs()[0];if(job){fitReviewErrors.delete(fitReviewKey(job));requestFitReview(job);if($('full-review-status'))$('full-review-status').innerHTML=reviewStatusMarkup(job);}}});
+
+const qualificationStates={match:['✓','Supported'],partial:['?','Partly supported'],gap:['×','Gap'],unknown:['?','Unclear']};
 function qualificationMarkup(insights){
- const counts=insights.assessmentCounts;
- const overview=insights.requirements.length?`${counts.match} supported · ${counts.partial} partly supported · ${counts.gap} gap${counts.gap===1?'':'s'} · ${counts.unknown} to check`:'';
+ const required=insights.requirements.filter(r=>!r.preferred),optional=insights.requirements.filter(r=>r.preferred);
+ const mark=r=>r.missing?['×','Not recorded in your CV']:qualificationStates[r.status];
+ const count=symbol=>required.filter(r=>mark(r)[0]===symbol).length;
+ const group=(title,rows,key)=>rows.length?`<section class="qualification-group" data-qualification-group="${key}"><h3>${title}</h3><ul class="qualification-list">${rows.map(r=>{
+  const [symbol,label]=mark(r),note=r.note||r.detail;
+  return `<li class="qualification ${r.status}${r.missing?' missing':''}"><span class="qualification-icon" role="img" aria-label="${esc(label)}" title="${esc(symbol==='✓'?r.checks.filter(c=>c.evidence).map(c=>c.evidence).join(' · '):note)}">${symbol}</span><div class="qualification-comparison"><p class="requirement-text">${esc(r.label)}</p>${symbol==='?'?`<p class="qualification-note">${esc(note)}</p>`:''}${symbol==='×'?`<span class="sr-only">${esc(note)}</span>`:''}</div></li>`;
+ }).join('')}</ul></section>`:'';
  return `<details class="qualification-details"><summary>Your qualification match${insights.requirements.length?' ('+insights.requirements.length+')':''}</summary>
- <p class="qualification-overview">${esc(overview)}</p>
- <p class="check-legend">Compared with your saved experience and languages. Optional bonuses are excluded from these counts.</p>
- ${!insights.hasExperience?'<p class="profile-evidence-notice">Your experience is empty on this device. Add your skills, achievements, education and years of experience to assess more points. Import your CV JSON in My profile to fill these details; PDF uploads are kept for applications.</p>':''}
+ <p class="qualification-overview">✓ ${count('✓')} · × ${count('×')} · ? ${count('?')} <span>required points</span></p>
+ <p class="check-legend">✓ Supported · × Gap or not recorded · ? Partial or unclear. Missing CV evidence does not mean you cannot do it.</p>
+ ${!insights.hasExperience?'<p class="profile-evidence-notice">Your experience is empty on this device. Import your CV JSON to compare it.</p>':''}
+ ${group('Requirements',required,'required')}${group('Nice to have',optional,'optional')}
+ ${group('Day-to-day duties',insights.dutyAssessments||[],'duties')}
+ ${!insights.requirements.length?'<p class="qualification-empty">There isn’t enough requirement text in this listing to assess your fit. Read the full advert.</p>':''}
  <button class="text-button" data-edit-evidence>${insights.hasExperience?'Update my experience':'Add my experience'}</button>
- ${insights.sourceKind==='saved notes'?'<p class="source-note">Based on saved notes. Check the employer’s current advert for the complete requirements.</p>':''}
- ${insights.requirements.length?`<ul class="qualification-list">${insights.requirements.map(r=>{const [symbol,label]=qualificationStates[r.status];return `<li class="qualification ${r.status}"><span class="qualification-icon" aria-hidden="true">${symbol}</span><div class="qualification-comparison"><p class="qualification-status">${label}${r.preferred?' · Optional bonus':''}</p><p class="requirement-text"><strong>They ask:</strong> ${esc(r.label)}</p><ul class="qualification-checks">${r.checks.map(c=>`<li class="check-${c.status}"><strong>${qualificationStates[c.status][0]} ${esc(c.label)}:</strong> ${esc(c.detail)}${c.evidence?`<blockquote><span>Your saved details</span>${esc(c.evidence)}</blockquote>`:''}</li>`).join('')}</ul></div></li>`;}).join('')}</ul>`:'<p class="qualification-empty">There isn’t enough requirement text in this listing to assess your fit. Read the full advert or open the employer’s listing to check the requirements.</p>'}
  </details>`;
 }
 function renderDeck() {
@@ -199,14 +277,14 @@ function renderDeck() {
   }
   const previousCard=$('active-card');
   const signature=JSON.stringify([job.id,job.company,job.title,job.location,job.link,job.description,job.requirements,job.source,job.remote,job.match,profile]);
-  if(previousCard?.listingSignature===signature){requestSummary(job);return;}
+  if(previousCard?.listingSignature===signature){requestSummary(job);scheduleFitReview(job);return;}
   const reading=previousCard?.dataset.jobId===job.id?{scroll:previousCard.scrollTop,open:Object.fromEntries([...previousCard.querySelectorAll('details')].map(el=>[el.className,el.open]))}:null;
   const {match}=job,insights=roleInsights(job,profile),fit=jobFitReport(job,profile);
-  $('job-deck').innerHTML=`<article class="job-card" id="active-card" data-job-id="${esc(job.id)}" aria-label="${esc(job.title)} at ${esc(job.company)}"><span class="swipe-label" aria-hidden="true"></span><div class="card-top"><div class="company-line"><span class="company-monogram" aria-hidden="true">${esc(job.company.slice(0,1))}</span><div class="company-info"><strong>${esc(job.company)}</strong><small>${job.historical?'Saved role · check availability':'From the employer’s listing'}</small></div><button class="listing-info" data-role-details type="button" aria-label="Job fit, rating and recommended CV" title="Job fit, rating and recommended CV"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg><small>${fit.score===null?'Fit':fit.score+'/10'}</small></button></div><h2>${esc(job.title)}</h2><p class="job-location">◎ ${esc(scopedLocation(job,profile))}${job.remote?' · Remote option':''}</p>${profile.geography!=='international'?`<p class="location-evidence">${esc(geographicMatch(job,profile).label)}</p>`:''}</div><div class="card-body"><section class="inline-role" aria-label="Role details"><p class="card-fit-summary">${fit.score!==null?`Documented fit: ${fit.score}/10${fit.provisional?' · Provisional':''} · ${fit.coverage}% assessed`:{'missing-profile':'Add CV details to rate this job','missing-requirements':'CV ready · Advert needs more detail',unassessed:'CV ready · Requirements need review'}[fit.ratingState]}</p><h3>In brief</h3>${scopedLocation(job,profile)!==job.location?`<details class="source-locations"><summary>All advertised locations</summary><p>${esc(job.location)}</p></details>`:''}<div id="role-summary">${summaryMarkup(job)}</div>${insights.commercial?'<p class="fit-caution">Commercial / sales focus — lower priority for your consulting direction.</p>':''}${qualificationMarkup(insights)}<details class="source-description"><summary>Full employer advert</summary><p class="source-note">The complete source text, including responsibilities, requirements and benefits.</p><p>${esc(descriptionText(job.description||job.requirements||'No description supplied.'))}</p></details></section></div><div class="card-footer"><span class="cv-tag">${esc(match.cv)}<br><a href="${esc(safeURL(job.link))}" target="_blank" rel="noopener noreferrer">${esc(job.source||'Original listing')} ↗</a></span><button class="text-button" data-read-role type="button">Read role ↓</button></div></article>`;
+  $('job-deck').innerHTML=`<article class="job-card" id="active-card" data-job-id="${esc(job.id)}" aria-label="${esc(job.title)} at ${esc(job.company)}"><span class="swipe-label" aria-hidden="true"></span><div class="card-top"><div class="company-line"><span class="company-monogram" aria-hidden="true">${esc(job.company.slice(0,1))}</span><div class="company-info"><strong>${esc(job.company)}</strong><small>${job.historical?'Saved role · check availability':'From the employer’s listing'}</small></div><button class="listing-info" data-role-details type="button" aria-label="Job fit, rating and recommended CV" title="Job fit, rating and recommended CV"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg><small>${fit.score===null?'Fit':fit.score+'/10'}</small></button></div><h2>${esc(job.title)}</h2><p class="job-location">◎ ${esc(scopedLocation(job,profile))}${job.remote?' · Remote option':''}</p>${profile.geography!=='international'?`<p class="location-evidence">${esc(geographicMatch(job,profile).label)}</p>`:''}</div><div class="card-body"><section class="inline-role" aria-label="Role details"><p class="card-fit-summary">${fit.score!==null?`Quick qualification fit: ${fit.score}/10${fit.provisional?' · Provisional':''} · ${fit.coverage}% assessed`:{'missing-profile':'Add CV details to rate this job','missing-requirements':'CV ready · Advert needs more detail',unassessed:'CV ready · Requirements need review'}[fit.ratingState]}</p><h3>In brief</h3>${scopedLocation(job,profile)!==job.location?`<details class="source-locations"><summary>All advertised locations</summary><p>${esc(job.location)}</p></details>`:''}<div id="role-summary">${summaryMarkup(job)}</div>${insights.commercial?'<p class="fit-caution">Commercial / sales focus — lower priority for your consulting direction.</p>':''}${qualificationMarkup(insights)}<p id="full-review-status" class="source-note" role="status">${reviewStatusMarkup(job)}</p><details class="source-description"><summary>Full employer advert</summary><p class="source-note">The complete source text, including responsibilities, requirements and benefits.</p><p>${esc(descriptionText(job.description||job.requirements||'No description supplied.'))}</p></details></section></div><div class="card-footer"><span class="cv-tag">${esc(match.cv)}<br><a href="${esc(safeURL(job.link))}" target="_blank" rel="noopener noreferrer">${esc(job.source||'Original listing')} ↗</a></span><button class="text-button" data-read-role type="button">Read role ↓</button></div></article>`;
   const card=$('active-card');card.listingSignature=signature;
   if(reading){card.querySelectorAll('details').forEach(el=>el.open=!!reading.open[el.className]);card.scrollTop=reading.scroll;}
   wireSwipe();
-  requestSummary(job);
+  requestSummary(job);scheduleFitReview(job);
 }
 function fitList(items,empty){return items.length?`<ul>${items.map(value=>`<li>${esc(value)}</li>`).join('')}</ul>`:`<p>${esc(empty)}</p>`;}
 function readSavedProfile(){
@@ -226,9 +304,11 @@ function openRoleDetails(jobToShow=deckJobs()[0]) {
  readSavedProfile();
  selectedRole=jobToShow;if(!selectedRole)return;
  const job=selectedRole,report=jobFitReport(job,profile);
+ if(fullReview(job)){openFullReview(job,fullReview(job));return;}
+ scheduleFitReview(job);
  $('role-title').textContent=job.company;
  $('role-content').innerHTML=`<h3 class="role-heading">${esc(job.title)}</h3><p class="prep-meta">${esc(job.location)}</p>
- <section class="fit-rating" aria-label="Qualification fit rating"><p class="eyebrow">DOCUMENTED QUALIFICATION FIT</p><div class="fit-score">${report.score===null?(report.ratingState==='missing-profile'?'Add CV details':'Advert details needed'):report.score+'<span> / 10</span>'}${report.provisional?'<small class="fit-provisional">Provisional</small>':''}</div><p class="fit-verdict">${esc(report.priority)}</p><details class="fit-score-explanation"><summary>What this score means</summary><p>${esc(report.ratingReason)} This is not your probability of getting the job.</p></details><p class="fit-coverage">${report.assessed} of ${report.total} required points assessed (${report.coverage}% coverage).</p></section>
+ <section class="fit-rating" aria-label="Qualification fit rating"><p class="eyebrow">QUICK QUALIFICATION FIT</p><div class="fit-score">${report.score===null?(report.ratingState==='missing-profile'?'Add CV details':'Advert details needed'):report.score+'<span> / 10</span>'}${report.provisional?'<small class="fit-provisional">Provisional</small>':''}</div><p class="fit-verdict">${esc(report.priority)}</p><details class="fit-score-explanation"><summary>What this score means</summary><p>${esc(report.ratingReason)} This is not your probability of getting the job.</p></details><p class="fit-coverage">${report.assessed} of ${report.total} required points assessed (${report.coverage}% coverage).</p></section>
  <section class="fit-review fit-section" aria-label="Application assessment"><p class="eyebrow">APPLICATION ASSESSMENT</p><h4>${esc(report.review.verdict)}</h4><p>${esc(report.review.summary)}</p><p class="source-note">${report.review.requiredCount} core requirements · ${report.review.optionalCount} optional advantages. The score measures skills evidence; practical trade-offs are assessed separately.</p></section><p class="fit-cv-detection" role="status">${esc(cvDetectionMessage())}</p><p class="fit-priorities">Your priorities: skills & eligibility · pay & career growth</p>
  <div class="fit-stats" aria-label="Required qualification breakdown">${[['Supported',report.counts.match],['Partial',report.counts.partial],['Gaps',report.counts.gap],['Not evidenced',report.counts.unknown]].map(([label,n])=>`<div><strong>${n}</strong><span>${label}</span></div>`).join('')}</div>
  ${report.bonus.total?`<p class="source-note">${report.bonus.supported} of ${report.bonus.total} optional bonuses supported. Bonuses are excluded from the score.</p>`:''}
@@ -319,16 +399,15 @@ async function decide(action, job = deckJobs()[0]) {
   discovery.reviewed ||= {};discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link};
   autoBudget=3;
   if (action !== 'pass') {
-    const entry = existing || {id: job.id, company: job.company, title: job.title, location: job.location, link: job.link, requirements: job.description || job.requirements || '', status: 'To apply', materials: job.match.cv, notes: '', applicationDate: '', interviewDate: '', source: job.source};
+    const recommendedCV=fullReview(job)?.cv||job.match.cv;
+    const entry = existing || {id: job.id, company: job.company, title: job.title, location: job.location, link: job.link, requirements: job.description || job.requirements || '', status: 'To apply', materials: recommendedCV, notes: '', applicationDate: '', interviewDate: '', source: job.source};
     if (!existing) {entries.unshift(entry); undoAction.newId = entry.id;}
-    if (action === 'prepare') {entry.status = 'Preparing'; entry.preparation ||= prepareApplication(job,profile); entry.materials ||= job.match.cv;}
+    if (action === 'prepare') {entry.status = 'Preparing'; if(!entry.preparation){entry.preparation=prepareApplication(job,profile);entry.preparation.cv=recommendedCV;entry.preparation.cvFile=profile[cvKey(recommendedCV)+'CV']||'';} entry.materials ||= recommendedCV;}
     saveEntries();
     if (action === 'prepare') {preparationId = entry.id;}
   }
   saveDiscovery();
-  if (action === 'prepare' && browserConnection) {
-    startApplicationBrowser(job,preparationId);
-  } else if (action === 'prepare') {
+  if (action === 'prepare') {
     const url = safeURL(job.link);
     if (url) {
       const tab = window.open(url, '_blank');
@@ -564,10 +643,25 @@ async function downloadCV() {
 let browserConnection=null, browserController=null, browserEntryId=null, browserSessionId=null, browserRun=0;
 async function loadBrowserConnection(restore=true) {
   try {browserConnection=(await cvStore('get','connection'))?.token||null;}catch{browserConnection=null;}
-  $('browser-connection-status').textContent=browserConnection?'Private application browser connected on this device.':'Import your private CV setup to connect application preparation.';
+  $('browser-connection-status').textContent=browserConnection?'Private reviews and application tools connected on this device.':'Import your private connection or CV setup file to enable full reviews.';
   $('load-saved-cvs').disabled=!browserConnection;
   if(restore&&browserConnection&&!await deviceItem('device-sync')){const files=await Promise.all(['consulting','analyst','developer'].map(key=>cvStore('get',key)));if(files.some(file=>!file))await loadSavedCVs({missingOnly:true});}
-  const job=deckJobs()[0];if(job){const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(job);requestSummary(job);}
+  if(browserConnection)try{
+   const response=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({action:'profile-corrections'})});
+   const {correction}=await response.json();
+   if(response.ok&&typeof correction?.id==='string'&&correction.id!==profile.profileCorrectionVersion){
+    const next={...profile,profileCorrectionVersion:correction.id};
+    for(const field of ['languages','relocation'])if(typeof correction[field]==='string')next[field]=correction[field];
+    if(correction.nativeEnglish===true){
+     const languages=next.languages.split(/[,;\n]/).map(s=>s.trim()).filter(Boolean),english=languages.findIndex(s=>/\bEnglish\b/i.test(s));
+     if(english<0)languages.unshift('English native');
+     else {const level=languages[english].match(/\b[ABC][12]\b/i)?.[0];languages[english]='English native'+(level?' ('+level.toUpperCase()+')':'');}
+     next.languages=languages.join(', ');
+    }
+    profile=validateProfile(next);persist(PROFILE_KEY,profile);populateProfile();renderDeck();
+   }
+  }catch{/* A connection failure must not prevent using locally saved CVs. */}
+  const job=deckJobs()[0];if(job){const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(job);requestSummary(job);scheduleFitReview(job);}
   $('test-browser').disabled=!browserConnection;$('disconnect-browser').hidden=!browserConnection;
 }
 function releaseBrowserSession() {
@@ -728,7 +822,9 @@ $('cv-import-form').addEventListener('submit',e=>{
  }catch(error){$('cv-import-error').textContent=error.message;}
 });
 async function importSetup(parsed) {
-    const next = validateProfile(parsed.profile || parsed);
+    const token=typeof parsed?.automationToken==='string'&&/^[A-Za-z0-9_-]{40,100}$/.test(parsed.automationToken)?parsed.automationToken:null;
+    const connectionOnly=token&&!parsed.profile&&!Object.keys(defaultProfile).some(key=>key in parsed);
+    const next = connectionOnly?{...profile}:validateProfile(parsed?.profile || parsed);
     const cvs = [];
     if (parsed.cvs) {
       for (const key of ['consulting','analyst','developer']) {
@@ -740,10 +836,11 @@ async function importSetup(parsed) {
       }
     }
     for (const [key,cv] of cvs) await cvStore('put',key,cv);
-    if (typeof parsed.automationToken === 'string' && /^[A-Za-z0-9_-]{40,100}$/.test(parsed.automationToken)) await cvStore('put','connection',{token:parsed.automationToken});
-    await loadBrowserConnection(false);
+    if (token) await cvStore('put','connection',{token});
     profile = next;
     if (persist(PROFILE_KEY,profile)) {populateProfile(); render(); $('profile-message').textContent = `Profile imported${cvs.length ? ' with '+cvs.length+' CV PDFs' : ''}. New drafts will use these details.`;}
+    await loadBrowserConnection(false);
+    if(connectionOnly)$('profile-message').textContent='Private reviews connected. Your existing CVs and profile are preserved.';
 }
 async function loadSavedCVs({missingOnly=false}={}) {
   if(!browserConnection)return;

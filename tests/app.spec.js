@@ -266,19 +266,17 @@ test('touch tablet keeps the whole deck usable without desktop-width magnificati
   expect(await page.locator('#active-card').evaluate(el=>el.getBoundingClientRect().height)).toBeGreaterThan(300);
   await page.locator('[data-read-role]').click();await expect(page.locator('.inline-role')).toContainText(jobs[0].description);await context.close();
 });
-test('connected swipe sends the selected PDF privately and never marks a failed preparation applied',async({page})=>{
+test('connected swipe keeps opening the employer separately without sending a preparation request',async({page})=>{
  await setup(page);await page.locator('[data-view="profile"]').first().click();
  const token='test-connection-token-'.padEnd(43,'x');
- const bundle={automationToken:token,profile:{name:'Test Applicant',email:'test@example.org'},cvs:{analyst:{name:'BA.pdf',base64:Buffer.from('%PDF-1.4\n%%EOF').toString('base64')}}};
+ const bundle={automationToken:token,profile:{name:'Test Applicant',email:'test@example.org'},cvs:{analyst:{name:'BA.pdf',base64:Buffer.from('%PDF-1.4\\n%%EOF').toString('base64')}}};
  await page.locator('#profile-import').setInputFiles({name:'setup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(bundle))});
  await expect(page.locator('#browser-connection-status')).toContainText('connected on this device');
- let sent;await page.route('**/api/prepare',async route=>{sent={headers:route.request().headers(),body:route.request().postDataJSON()};await route.fulfill({status:400,json:{error:'Unsupported employer form. Use Open original.'}});});
+ let sent=false;await page.route('**/api/prepare',route=>{sent=true;return route.abort();});
  await page.locator('[data-view="discover"]').first().click();await page.locator('#prepare-job').click();
- await expect(page.locator('#browser-progress')).toContainText('Unsupported employer form');
- expect(sent.headers.authorization).toBe('Bearer '+token);expect(sent.body.cv.name).toBe('BA.pdf');expect(sent.body.fields.email).toBe('test@example.org');
- expect((await records(page)).find(e=>e.id==='fixture-ba').status).toBe('Preparing');expect(await page.evaluate(()=>window.openedListings)).toEqual([]);
+ await expect(page.locator('#browser-dialog')).not.toBeVisible();expect(sent).toBe(false);
+ expect((await records(page)).find(e=>e.id==='fixture-ba').status).toBe('Preparing');expect(await page.evaluate(()=>window.openedListings)).toEqual([jobs[0].link]);
  expect(await page.evaluate(()=>JSON.stringify(localStorage))).not.toContain(token);
- await page.locator('#browser-end').click();await expect(page.locator('#browser-dialog')).not.toBeVisible();
  await page.locator('[data-view="profile"]').first().click();await page.locator('#disconnect-browser').click();await expect(page.locator('#test-browser')).toBeDisabled();
 });
 test('practice inspection reports unchecked required consent without changing it',async({page})=>{
@@ -335,11 +333,11 @@ test('Back Market opens with a short synopsis, keeping the long checklist and so
  await expect(page.locator('#role-summary')).toContainText('French-school internship agreement');
  await expect(page.locator('#role-summary')).toContainText('Excel and Salesforce');
  expect((await page.locator('#role-summary').innerText()).split(/\s+/).length).toBeLessThan(110);
- await expect(page.locator('.qualification-list')).not.toBeVisible();
+ await expect(page.locator('.qualification-list').first()).not.toBeVisible();
  await expect(page.locator('.source-description')).not.toHaveAttribute('open','');
  await page.locator('.qualification-details > summary').click();
- await expect(page.locator('.qualification-list')).toContainText('pivot tables');await expect(page.locator('.qualification-list')).toContainText('Fluent English');
- await expect(page.locator('.qualification-list')).not.toContainText('German');
+ await expect(page.locator('.qualification-details')).toContainText('pivot tables');await expect(page.locator('.qualification-details')).toContainText('Fluent English');
+ await expect(page.locator('.qualification-details')).not.toContainText('German');
  await page.locator('.qualification-details > summary').click();
  await page.locator('[data-read-role]').click();await page.screenshot({path:'private/backmarket-short-summary.png'});
  await page.locator('.listing-info').click();await expect(page.locator('#role-content')).toContainText('permit support');await expect(page.locator('#role-content .flag-box')).not.toContainText('German');
@@ -348,7 +346,7 @@ test('Back Market opens with a short synopsis, keeping the long checklist and so
 test('a missing summary never expands the listing as a fallback',async({page})=>{
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[sellerIntern]}}));await page.goto('/');
  await expect(page.locator('#role-summary')).toContainText('Connect your saved setup');
- await expect(page.locator('.qualification-list')).not.toBeVisible();
+ await expect(page.locator('.qualification-list').first()).not.toBeVisible();
  await expect(page.locator('.source-description p:not(.source-note)')).not.toBeVisible();
 });
 
@@ -363,13 +361,14 @@ test('qualification comparison shows evidence, partial matches and gaps and upda
  await page.getByRole('button',{name:'Save my profile',exact:true}).click();
  await page.locator('[data-view="discover"]').first().click();
  if(!await page.locator('.qualification-details').evaluate(el=>el.open))await page.locator('.qualification-details > summary').click();
- await expect(page.locator('.qualification-overview')).toHaveText('1 supported · 1 partly supported · 1 gap · 1 to check');
- await expect(page.locator('.qualification.match')).toContainText('Delivered API integrations for customers.');
- await expect(page.locator('.qualification.partial')).toContainText('Add a concrete example of your SQL experience.');
+ await expect(page.locator('.qualification-overview')).toHaveText('✓ 1 · × 1 · ? 2 required points');
+ await expect(page.locator('.qualification.match .qualification-icon')).toHaveAttribute('title','Delivered API integrations for customers.');
+ await expect(page.locator('.qualification.match .qualification-note')).toHaveCount(0);
+ await expect(page.locator('.qualification.partial')).toContainText('Excel is supported; SQL needs evidence.');
  await expect(page.locator('.qualification.gap')).toContainText('Requires B2; your saved level is B1.');
  await expect(page.locator('.qualification.unknown').filter({hasText:'French'})).toContainText('French level is not recorded');
- await expect(page.locator('.qualification.unknown').filter({hasText:'Salesforce'})).toContainText('Optional bonus');
- await expect(page.locator('.qualification-list')).not.toContainText('30 days leave');
+ await expect(page.locator('[data-qualification-group="optional"] .qualification.missing .qualification-icon')).toHaveText('×');
+ await expect(page.locator('.qualification-details')).not.toContainText('30 days leave');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.locator('.qualification-overview').evaluate(el=>el.scrollIntoView({block:'start'}));await page.screenshot({path:'private/qualification-comparison-phone.png'});
  await page.locator('[data-edit-evidence]').click();await page.locator('#profile-evidence').fill('Delivered API integrations for customers. Excel and SQL reporting.');
@@ -679,7 +678,7 @@ test('CV JSON review imports multiple versions, preserves profile and PDF data, 
  const profile=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')));
  expect(profile.workRights).toBe('Existing permit note');expect(profile.evidence).toContain('Built API integrations.');expect(profile.evidence.split('Built API integrations.')).toHaveLength(2);expect(profile.cvImportSources.split('\n')).toHaveLength(3);
  await expect(page.locator('#analyst-file-status')).toContainText('Original.pdf');expect(await records(page)).toEqual(before);
- await page.locator('.main-nav [data-view="discover"]').click();await page.locator('.qualification-details summary').click();await expect(page.locator('.qualification-details')).toContainText('Built API integrations.');
+ await page.locator('.main-nav [data-view="discover"]').click();await page.locator('.qualification-details summary').click();await expect(page.locator('.qualification.match .qualification-icon').first()).toHaveAttribute('title',/Built API integrations/);
 });
 test('invalid CV JSON leaves saved profile intact and review fits a phone',async({page})=>{
  const {cvJSON}=await import('./fixtures/cv-json.js');await page.setViewportSize({width:390,height:844});await setup(page);await page.locator('.main-nav [data-view="profile"]').click();
@@ -762,8 +761,8 @@ test('consulting contract review separates real qualifications, daily work and p
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[consultingContract],nextPage:null}}));
  await page.goto('/#profile');await page.locator('#cv-json-upload').setInputFiles({name:'Consulting.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(transferableCV))});await page.getByRole('button',{name:'Save reviewed CV details'}).click();
  await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('.card-fit-summary')).toContainText('4/10');
- await page.locator('.qualification-details > summary').click();await expect(page.locator('.qualification-list > li')).toHaveCount(12);
- await expect(page.locator('.qualification-list')).not.toContainText('meditation');await expect(page.locator('.qualification-list')).not.toContainText('unsolicited resumes');
+ await page.locator('.qualification-details > summary').click();await expect(page.locator('[data-qualification-group="required"] li')).toHaveCount(6);await expect(page.locator('[data-qualification-group="optional"] li')).toHaveCount(6);await expect(page.locator('[data-qualification-group="duties"]')).toBeVisible();
+ await expect(page.locator('.qualification-details')).not.toContainText('meditation');await expect(page.locator('.qualification-details')).not.toContainText('unsolicited resumes');
  await page.locator('.listing-info').click();await expect(page.locator('.fit-review')).toContainText('6 core requirements · 6 optional advantages');
  await expect(page.locator('.fit-tradeoffs')).toContainText('Czechia, Slovakia');await expect(page.locator('.fit-tradeoffs')).toContainText('6-month contract');await expect(page.locator('.fit-tradeoffs')).toContainText('700600–700600 CZK yearly');
  await expect(page.locator('[data-factor="location"]')).toContainText('restricted remote');await expect(page.locator('[data-factor="timing"]')).toContainText('Extension is possible, not guaranteed');

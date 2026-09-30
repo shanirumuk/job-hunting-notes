@@ -1,0 +1,47 @@
+import {test,expect} from '@playwright/test';
+const job={id:'full-review-fixture',company:'Example',title:'Business Analyst',location:'Berlin, Germany',link:'https://example.org/job',description:'Requirements:\nEnglish proficiency is essential.\nSQL experience required.'};
+const review={version:1,overall:6.5,skills:8,coverage:70,requirementCoverage:100,provisional:true,cap:'',summary:'Your SQL and English align. Check the contract duration.',cv:'Business Analyst CV',cvReason:'Lead with SQL reporting.',points:[{text:'English proficiency',sourceQuote:'English proficiency is essential.',category:'required',importance:'essential',status:'match',note:'Native English recorded.',cvQuote:'English native (C1)'},{text:'SQL experience',sourceQuote:'SQL experience required.',category:'required',importance:'standard',status:'partial',note:'Reporting is supported; the required depth is unclear.',cvQuote:'SQL reporting.'}],factors:['eligibility','location','pay','career','workStyle','contract'].map(key=>({key,status:'unknown',note:'Confirm this detail.',sourceQuote:'',cvQuote:''})),audit:[{paragraph:0,kind:'background'}],issues:[]};
+async function connect(page,jobs=[job]){
+ await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs,nextPage:null}}));
+ await page.route('**/api/summary',r=>r.fulfill({status:503,json:{error:'Summary unavailable'}}));
+ await page.addInitScript(()=>{localStorage.setItem('job-notebook-v1','[]');localStorage.setItem('job-notebook-international-v23','1');localStorage.setItem('job-notebook-discovery-v26','1');});
+ const cv={name:'CV.pdf',base64:Buffer.from('%PDF-1.4\n%%EOF').toString('base64')};
+ await page.route('**/api/setup',r=>r.fulfill({json:{profile:{evidence:'SQL reporting.',languages:'English native (C1)',relocation:'Relocation is fine; consider contract length.'},cvs:{consulting:cv,analyst:cv,developer:cv}}}));
+ await page.goto('/#connect='+'test-token-'.padEnd(43,'x'));await page.locator('.main-nav [data-view="discover"]').click();
+}
+test('full review updates compact checks, uses local cache and refreshes after profile edits',async({page})=>{
+ let calls=0;await page.route('**/api/fit-review',async r=>{calls++;const body=r.request().postDataJSON();expect(body.profile.relocation).toContain('contract length');expect(body.profile.email).toBeUndefined();await r.fulfill({json:{review}});});
+ await connect(page);await expect(page.locator('.card-fit-summary')).toContainText('Application fit: 6.5/10');
+ await page.locator('.qualification-details > summary').click();await expect(page.locator('.qualification.match .qualification-icon')).toHaveText('✓');await expect(page.locator('.qualification.partial .qualification-icon')).toHaveText('?');await expect(page.locator('.qualification.partial')).toContainText('required depth');
+ await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('6.5');await expect(page.locator('.fit-cv-name')).toHaveText('Business Analyst CV');await expect(page.locator('#fit-download-cv')).toBeVisible();
+ for(const width of [1440,390]){await page.setViewportSize({width,height:844});expect(await page.locator('#role-dialog').evaluate(e=>e.scrollWidth<=e.clientWidth)).toBe(true);}
+ await page.screenshot({path:'private/full-review-phone.png'});
+ await page.keyboard.press('Escape');await page.reload();await expect(page.locator('.card-fit-summary')).toContainText('Application fit: 6.5/10');expect(calls).toBe(1);
+ await page.locator('.main-nav [data-view="profile"]').click();await page.locator('#profile-languages').evaluate(e=>e.closest('details').open=true);await page.locator('#profile-languages').fill('English native (C1), French B2');await page.getByRole('button',{name:'Save my profile',exact:true}).click();await page.locator('.main-nav [data-view="discover"]').click();await expect.poll(()=>calls).toBe(2);
+});
+test('late reviews cannot replace another job and errors offer a retry',async({page})=>{
+ let release;const gate=new Promise(resolve=>release=resolve);let calls=0;
+ await page.route('**/api/fit-review',async r=>{calls++;if(calls===1){await gate;await r.fulfill({json:{review}});}else if(calls===2)await r.fulfill({status:503,json:{error:'Review unavailable.'}});else await r.fulfill({json:{review:{...review,summary:'Second role reviewed.'}}});});
+ await connect(page,[job,{...job,id:'second-job',link:'https://example.org/second-job',company:'Another',title:'Implementation Consultant'}]);
+ await expect.poll(()=>calls).toBe(1);await page.locator('#pass-job').click();await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','second-job');release();
+ await expect(page.locator('#full-review-status')).toContainText('Review unavailable');await expect(page.locator('#role-summary')).not.toContainText(review.summary);
+ await page.locator('[data-retry-fit]').click();await expect(page.locator('#role-summary')).toContainText('Second role reviewed.');
+});
+
+test('confirmed language and relocation corrections apply once without undoing later profile edits',async({page})=>{
+ await connect(page);await page.route('**/api/fit-review',r=>r.fulfill({status:503,json:{error:'Review unavailable.'}}));
+ await page.route('**/api/setup',r=>r.fulfill({json:{correction:{id:'native-relocation-test',languages:'English native (C1), German B1',relocation:'Relocation is fine; consider contract length.'}}}));
+ await page.reload();await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).profileCorrectionVersion)).toBe('native-relocation-test');
+ await page.locator('.main-nav [data-view="profile"]').click();await page.locator('#profile-languages').evaluate(e=>e.closest('details').open=true);await expect(page.locator('#profile-languages')).toHaveValue('English native (C1), German B1');
+ await page.locator('#profile-languages').fill('English native (C1), German B2');await page.getByRole('button',{name:'Save my profile',exact:true}).click();await page.reload();await expect(page.locator('#profile-languages')).toHaveValue('English native (C1), German B2');
+});
+
+test('connection-only import preserves existing CV details and applies confirmed corrections immediately',async({page})=>{
+ await connect(page);await page.route('**/api/fit-review',r=>r.fulfill({status:503,json:{error:'Review unavailable.'}}));
+ const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')));
+ await page.route('**/api/setup',r=>r.fulfill({json:{correction:{id:'connection-only-native',languages:'English native (C1), German B1',relocation:'Relocation is fine; consider contract length.'}}}));
+ await page.locator('.main-nav [data-view="profile"]').click();await page.locator('#profile-import').setInputFiles({name:'Connect.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({automationToken:'test-token-'.padEnd(43,'x')}))});
+ await expect(page.locator('#profile-message')).toContainText('existing CVs and profile are preserved');
+ const after=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')));
+ expect(after.evidence).toBe(before.evidence);expect(after.languages).toBe('English native (C1), German B1');expect(after.profileCorrectionVersion).toBe('connection-only-native');await expect(page.locator('#analyst-file-status')).toContainText('CV.pdf');
+});

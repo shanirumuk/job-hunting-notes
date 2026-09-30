@@ -99,3 +99,42 @@ test('imported CV wording supports database, documentation, testing and degree c
  assert.equal(result.requirements.length,4);assert.equal(result.requirements[0].status,'match');assert.equal(result.requirements[1].status,'match');assert.equal(result.requirements[2].status,'match');assert.equal(result.requirements[3].checks.find(c=>c.label==='Education or certification').status,'match');assert.equal(result.requirements[3].status,'partial');
  assert.equal(result.benefits.length,1);
 });
+
+import {recordedEmploymentMonths} from '../lib/insights.js';
+test('C1 supports English fluency and proficiency; native identity and certificates remain separate',()=>{
+ const assess=(description,languages)=>roleInsights({description:'Requirements:\n'+description},{languages}).requirements[0];
+ for(const wording of ['Fluent English.','English proficiency is essential.','English language proficiency is essential.','Excellent English.']){
+  assert.equal(assess(wording,'English C1').status,'match',wording);
+  assert.equal(assess(wording,'English native').status,'match',wording);
+ }
+ assert.equal(assess('Native English speaker.','English native (C1)').status,'match');
+ assert.equal(assess('Native English speaker.','English C1').status,'unknown');
+ assert.equal(assess('English C2.','English native (C1)').status,'gap');
+ assert.equal(assess('IELTS English certificate required.','English native (C1)').status,'unknown');
+ const mixed=roleInsights({description:'Requirements:\nEnglish language proficiency is essential, fluency in other languages is a strong plus.'},{languages:'English C1, German B1'});
+ assert.equal(mixed.requirements.length,2);assert.equal(mixed.requirements[0].preferred,false);assert.equal(mixed.requirements[0].status,'match');assert.equal(mixed.requirements[1].preferred,true);
+ const multi=assess('Fluent English and French.','English native');assert.equal(multi.status,'partial');assert.equal(multi.checks.find(c=>c.label==='French').status,'unknown');
+});
+test('dated employment identifies a clear total-duration shortfall without double-counting concurrent roles',()=>{
+ const now=new Date('2026-09-30T12:00:00Z');
+ const profile={evidence:'Experience: Developer · Example · September 2024 - Present\nExperience: Freelance · Example · April 2024 - December 2024\nHelp customers prepare to use a platform.'};
+ assert.equal(recordedEmploymentMonths(profile,now),30);
+ const short=roleInsights({description:'Requirements:\n3+ years of experience in a client-facing role.'},profile,now).requirements[0];
+ assert.equal(short.status,'gap');assert.match(short.note,/2.5 years/);
+ assert.equal(recordedEmploymentMonths({evidence:profile.evidence+'\nExperience: Earlier role · 2020-2023'},now),null);
+ assert.equal(roleInsights({description:'Requirements:\n2+ years in blockchain.'},profile,now).requirements[0].status,'unknown');
+ assert.equal(recordedEmploymentMonths({evidence:'Experience: Future role · January 2027 - Present'},now),null);
+});
+test('source footers are excluded and unrelated domain knowledge cannot certify a blockchain requirement',()=>{
+ const info=roleInsights({description:'Requirements:\nBlockchain and AML knowledge.\nNice to have:\nHubSpot CRM experience.\nOriginally posted on Himalayas\nAdvertised UTC offsets: -1, 0'},{evidence:'AML compliance experience.'});
+ assert.equal(info.requirements.length,2);assert.equal(info.requirements[0].status,'partial');assert.equal(info.requirements[1].missing,true);
+ assert.doesNotMatch(JSON.stringify(info.requirements),/Originally posted|UTC offsets/);
+});
+
+test('equivalent English wording does not create artificial extra qualification conditions',()=>{
+ for(const wording of ['Fluent in English.','English fluency required.','Proficient in English.','Excellent command of English.','Professional English communication skills.','Full professional proficiency in English.']){
+  assert.equal(roleInsights({description:'Requirements:\n'+wording},{languages:'English C1',evidence:'Translate business needs into requirements.'}).requirements[0].status,'match',wording);
+ }
+ for(const wording of ['Native English speaker.','English at native level.','Native-level English.'])assert.equal(roleInsights({description:'Requirements:\n'+wording},{languages:'English native (C1)'}).requirements[0].status,'match',wording);
+ assert.notEqual(roleInsights({description:'Requirements:\nEnglish proficiency and legal contract negotiation experience.'},{languages:'English native (C1)'}).requirements[0].status,'match');
+});
