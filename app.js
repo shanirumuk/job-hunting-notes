@@ -4,7 +4,7 @@ import {recoverImport,getItem as deviceItem} from './lib/device-store.js';
 import {startDeviceSync} from './lib/device-sync.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=40';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=41';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -57,6 +57,7 @@ try {
   }
 } catch {storageError = true;}
 function setView(view) {
+  const changedProfile=readSavedProfile();
   if (!['discover','notebook','profile'].includes(view)) view = 'discover';
   activeView = view;
   document.body.dataset.view = view;
@@ -65,6 +66,7 @@ function setView(view) {
   document.querySelectorAll('.view').forEach(el => el.hidden = el.id !== `${view}-view`);
   document.querySelectorAll('.nav-button').forEach(el => {el.classList.toggle('active',el.dataset.view === view); if (el.dataset.view === view) el.setAttribute('aria-current','page'); else el.removeAttribute('aria-current');});
   if (view === 'profile') populateProfile();
+  if(changedProfile)render();
   if(view==='discover')maybeLoadMore(deckJobs().length);
   history.replaceState(null, '', `#${view}`);
 }
@@ -207,12 +209,26 @@ function renderDeck() {
   requestSummary(job);
 }
 function fitList(items,empty){return items.length?`<ul>${items.map(value=>`<li>${esc(value)}</li>`).join('')}</ul>`:`<p>${esc(empty)}</p>`;}
-function openRoleDetails() {
- selectedRole=deckJobs()[0];if(!selectedRole)return;
+function readSavedProfile(){
+ try{
+  const raw=localStorage.getItem(PROFILE_KEY);if(!raw)return false;
+  const saved=validateProfile(JSON.parse(raw));
+  if(JSON.stringify(saved)===JSON.stringify(profile))return false;
+  profile=saved;matchCache=new WeakMap();return true;
+ }catch{return false;}
+}
+function cvDetectionMessage(){
+ const files=profile.cvImportSources.split('\n').filter(Boolean).length;
+ if(profile.evidence.trim())return files?`${files} CV JSON ${files===1?'file':'files'} detected. Your saved CV details are being used for this comparison.`:'Saved profile experience detected and used for this comparison.';
+ return files?`${files} CV JSON ${files===1?'import is':'imports are'} recorded, but the saved experience text is empty. Check your imported details in My profile.`:'No saved CV experience detected on this browser. PDF availability is checked separately below.';
+}
+function openRoleDetails(jobToShow=deckJobs()[0]) {
+ readSavedProfile();
+ selectedRole=jobToShow;if(!selectedRole)return;
  const job=selectedRole,report=jobFitReport(job,profile);
  $('role-title').textContent=job.company;
  $('role-content').innerHTML=`<h3 class="role-heading">${esc(job.title)}</h3><p class="prep-meta">${esc(job.location)}</p>
- <p class="fit-priorities">Your priorities: skills & eligibility · pay & career growth</p><section class="fit-rating" aria-label="Qualification fit rating"><p class="eyebrow">QUALIFICATION FIT</p><div class="fit-score">${report.score===null?'Not rated yet':report.score+'<span> / 10</span>'}${report.provisional?'<small class="fit-provisional">Provisional</small>':''}</div><p class="fit-verdict">${esc(report.priority)}</p><p>${esc(report.ratingReason)} This is not your probability of getting the job.</p><p class="fit-coverage">${report.assessed} of ${report.total} required points assessed (${report.coverage}% coverage).</p></section>
+ <p class="fit-cv-detection" role="status">${esc(cvDetectionMessage())}</p><p class="fit-priorities">Your priorities: skills & eligibility · pay & career growth</p><section class="fit-rating" aria-label="Qualification fit rating"><p class="eyebrow">QUALIFICATION FIT</p><div class="fit-score">${report.score===null?'Not rated yet':report.score+'<span> / 10</span>'}${report.provisional?'<small class="fit-provisional">Provisional</small>':''}</div><p class="fit-verdict">${esc(report.priority)}</p><p>${esc(report.ratingReason)} This is not your probability of getting the job.</p><p class="fit-coverage">${report.assessed} of ${report.total} required points assessed (${report.coverage}% coverage).</p></section>
  <div class="fit-stats" aria-label="Required qualification breakdown">${[['Supported',report.counts.match],['Partial',report.counts.partial],['Gaps',report.counts.gap],['Unknown',report.counts.unknown]].map(([label,n])=>`<div><strong>${n}</strong><span>${label}</span></div>`).join('')}</div>
  ${report.bonus.total?`<p class="source-note">${report.bonus.supported} of ${report.bonus.total} optional bonuses supported. Bonuses are excluded from the score.</p>`:''}
  ${!report.hasExperience?'<p class="profile-evidence-notice">Your work experience is empty on this device. The comparison currently has limited evidence.</p>':''}
@@ -231,10 +247,12 @@ function openRoleDetails() {
 }
 async function updateFitCV(job,cv){
  try{
-  const stored=await cvStore('get',cvKey(cv));
+  const library=await Promise.all(['consulting','analyst','developer'].map(key=>cvStore('get',key)));
+  const stored=library[['consulting','analyst','developer'].indexOf(cvKey(cv))];
+  const pdfCount=library.filter(file=>file?.blob instanceof Blob).length;
   if(selectedRole?.id!==job.id||!$('role-dialog').open)return;
-  $('fit-cv-status').textContent=stored?stored.name+' · PDF ready on this device.':'No PDF saved for this CV on this device. Upload it in My profile.';
-  $('fit-download-cv').hidden=!stored;
+  $('fit-cv-status').textContent=`${pdfCount} PDF${pdfCount===1?'':'s'} detected on this browser. `+(stored?.blob?stored.name+' · Recommended PDF ready.':'No PDF saved for this CV on this device. Upload it in My profile.');
+  $('fit-download-cv').hidden=!stored?.blob;
   $('fit-download-cv').onclick=()=>download(stored.blob,stored.name,'application/pdf');
  }catch{if(selectedRole?.id===job.id&&$('fit-cv-status'))$('fit-cv-status').textContent='Could not read saved PDFs. Check your CV library in My profile.';}
 }
@@ -776,4 +794,11 @@ document.addEventListener('visibilitychange',checkFreshFeed);
 setInterval(checkFreshFeed,60000);
 
 startDeviceSync({state:()=>({entries:validateEntries(read(KEY,entries)),profile:validateProfile(read(PROFILE_KEY,profile)),discovery:read(DISCOVERY_KEY,discovery)}),applied:pack=>{entries=pack.entries;profile=pack.profile;discovery=pack.discovery;pinnedJobId=null;undoAction=null;matchCache=new WeakMap();populateProfile();render();loadBrowserConnection(false);},notify:toast});
-window.addEventListener('storage',event=>{if(event.key==='job-notebook-device-updated')location.reload();});
+window.addEventListener('storage',event=>{
+ if(event.key==='job-notebook-device-updated'){location.reload();return;}
+ if(event.key===PROFILE_KEY&&readSavedProfile()){
+  const shown=selectedRole;render();
+  if($('role-dialog').open&&shown)openRoleDetails(shown);
+  if(activeView==='profile')toast('Saved CV details changed in another tab. Reopen My profile to load them into the form.');
+ }
+});

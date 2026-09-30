@@ -721,3 +721,18 @@ test('saved CV evidence rates a sparse match provisionally and explains missing 
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Responsibilities:\nImprove workflows and coordinate implementation.'}],nextPage:null}}));await page.locator('#refresh-jobs').click();await expect(page.locator('.card-fit-summary')).toContainText('Advert needs more detail');
  await page.locator('.listing-info').click();await expect(page.locator('.fit-rating')).toContainText('Your CV details are saved');await expect(page.locator('.fit-rating')).not.toContainText('Import your CV');
 });
+
+test('CV imports in another tab refresh an open fit report and identify the detected files',async({page})=>{
+ const {cvJSON}=await import('./fixtures/cv-json.js');
+ await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Requirements:\nAPI experience.\nSQL experience.'}],nextPage:null}}));
+ await page.goto('/');await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('Not rated yet');
+ const other=await page.context().newPage();await other.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[],nextPage:null}}));await other.goto('/#profile');
+ const files=['Analyst.json','Consulting.json','Developer.json'].map(name=>({name,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(cvJSON))}));
+ await other.locator('#cv-json-upload').setInputFiles(files);await other.getByRole('button',{name:'Save reviewed CV details'}).click();
+ await expect(page.locator('.fit-cv-detection')).toContainText('3 CV JSON files detected');await expect(page.locator('.fit-score')).toHaveText('10 / 10');
+ await expect(page.locator('.fit-cv-detection')).toContainText('being used for this comparison');
+ await expect(page.locator('#fit-cv-status')).toContainText('0 PDFs detected');
+ await other.locator('#analyst-upload').setInputFiles({name:'Original.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\n%%EOF')});await expect(other.locator('#analyst-file-status')).toContainText('Original.pdf');
+ await expect(page.locator('#fit-cv-status')).toContainText('1 PDF detected');await expect(page.locator('#fit-cv-status')).toContainText('Original.pdf');
+ await other.close();await page.keyboard.press('Escape');await page.reload();await page.locator('.listing-info').click();await expect(page.locator('.fit-cv-detection')).toContainText('3 CV JSON files detected');
+});
