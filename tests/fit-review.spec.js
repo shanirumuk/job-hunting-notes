@@ -130,3 +130,22 @@ test('CRM and degree confirmations improve the local checklist while AI reviews 
  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence);expect(saved).toContain('SQL reporting.');
  await page.reload();expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence)).toBe(saved);
 });
+
+test('new declared skills persist and English gets its own tick in the bundled communication requirement',async({page})=>{
+ const {customerPartnerships}=await import('./fixtures/customer-partnerships.js');
+ const confirmed=['I have multitasking skills.','I have effective communication skills.','I am willing to travel.','I can manage a single project or multiple projects.'];
+ await page.route('**/api/fit-review',r=>r.fulfill({status:402,json:{code:'REVIEW_QUOTA_EXHAUSTED',error:'Provider allowance exhausted.'}}));
+ await connect(page,[{...job,...customerPartnerships,location:'Berlin, Germany'}]);
+ await page.route('**/api/setup',r=>r.fulfill({json:{correction:{id:'declared-skills',evidenceUpdate:{id:'communication-projects-travel',lines:confirmed}}}}));
+ await page.reload();await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidenceCorrectionVersion)).toBe('communication-projects-travel');
+ await page.locator('.qualification-details > summary').click();
+ await expect(page.locator('.qualification.match').filter({hasText:'Fluent English'})).toHaveCount(1);
+ await expect(page.locator('.qualification.partial').filter({hasText:'strong presentation skills'})).toContainText('presentation-specific');
+ await expect(page.locator('.qualification.partial').filter({hasText:'small talk'})).toContainText('not been confirmed');
+ await expect(page.locator('.qualification-details')).not.toContainText('Unlimited sick leave');
+ expect(await page.locator('.requirement-text').allTextContents()).not.toContain('Key');
+ const evidence=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence);
+ for(const skill of confirmed)expect(evidence).toContain(skill);
+ expect(evidence).toContain('SQL reporting.');
+ await page.reload();expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence)).toBe(evidence);
+});
