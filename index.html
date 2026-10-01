@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=53" />
+  <link rel="stylesheet" href="styles.css?v=54" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -197,15 +197,16 @@
   </dialog>
   <dialog id="device-dialog" aria-labelledby="device-title"><div class="backup-panel"><div class="sheet-header"><h2 id="device-title">Transfer & sync</h2><button class="icon-button" id="device-close" aria-label="Close transfer">×</button></div><p id="device-status" role="status">Private, encrypted device connection.</p><div id="device-content"></div></div></dialog>
   <dialog id="location-dialog" aria-labelledby="location-title"><div class="backup-panel">
-    <div class="sheet-header"><h2 id="location-title">Where would you like to work?</h2><button type="button" class="icon-button" id="close-locations" aria-label="Close location filters">×</button></div>
+    <div class="sheet-header"><h2 id="location-title">Filter your job search</h2><button type="button" class="icon-button" id="close-locations" aria-label="Close location filters">×</button></div>
     <div class="location-controls">
       <label for="filter-region">Continent</label><select id="filter-region"></select>
       <div id="filter-country-group"><label for="filter-country">European country</label><select id="filter-country"></select></div>
       <label class="checkbox-label"><input type="checkbox" id="filter-broad-remote" /> Also include broad regional and worldwide remote listings</label><p id="location-help">By default, results must explicitly list a location in your selection. Broad remote listings may still require country or timezone checks. US-only roles remain excluded.</p>
+      <label class="checkbox-label"><input type="checkbox" id="filter-older-listings" /> Include older or potentially outdated listings</label><p>By default, listings posted over 90 days ago or with a start date over 90 days in the past are hidden. Passed deadlines and source expiry dates are always excluded. Undated listings are labelled; your saved applications stay in your notebook.</p>
       <p>Country filters request more listings for that country. Availability varies by source; an empty result does not mean there are no jobs there.</p>
     </div>
     <div class="sheet-actions"><button id="reset-locations" type="button" class="secondary-button">All locations</button><button id="apply-locations" type="button" class="primary-button">Show matching roles</button></div>
   </div></dialog>
-  <script type="module" src="app.js?v=53"></script>
+  <script type="module" src="app.js?v=54"></script>
 </body>
 </html>

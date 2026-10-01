@@ -1,3 +1,4 @@
+import {listingDate} from '../lib/listing-freshness.js';
 import {plainText,descriptionText,safeURL,sameJob} from '../lib/model.js';
 import {europeanCountries,searchCountryCodes} from '../lib/geography.js';
 
@@ -25,11 +26,11 @@ export async function fetchSearchPage(query,page,fetcher=fetch){
  if(!response.ok)throw new Error('Himalayas unavailable');
  const data=await response.json();
  if(!Array.isArray(data.jobs)||!Number.isInteger(data.totalCount)||data.totalCount<0||!Number.isInteger(data.limit)||data.limit<1||!Number.isInteger(data.offset)||data.offset<0)throw new Error('Invalid Himalayas response');
- const jobs=data.jobs.filter(j=>j&&j.guid&&j.title&&j.companyName&&safeURL(j.guid)&&(!j.expiryDate||Number(j.expiryDate)*1000>Date.now())).map(j=>{
+ const jobs=data.jobs.filter(j=>j&&j.guid&&j.title&&j.companyName&&safeURL(j.guid)&&(!listingDate(j.expiryDate)||Date.parse(listingDate(j.expiryDate))>Date.now())).map(j=>{
   const restrictions=Array.isArray(j.locationRestrictions)?j.locationRestrictions.filter(v=>typeof v==='string'):[];
   const zones=j.timezoneRestrictions||j.timezoneRestriction;
   const salary=j.minSalary||j.maxSalary?'\nSalary: '+[j.minSalary,j.maxSalary].filter(v=>v!=null).join('–')+' '+plainText(j.currency||'')+' '+plainText(j.salaryPeriod||'annual'):'';
-  return {id:'himalayas-'+j.guid,company:plainText(j.companyName),title:plainText(j.title),location:restrictions.length?restrictions.map(plainText).join(', '):'Worldwide (check timezone restrictions)',remote:true,locationCountries:restrictions,link:safeURL(j.guid),description:descriptionText(j.description).slice(0,23000)+salary+(Array.isArray(zones)&&zones.length?'\nAdvertised UTC offsets: '+zones.map(plainText).join(', '):''),publishedAt:Number.isFinite(Number(j.pubDate))&&Number(j.pubDate)>0?new Date(Number(j.pubDate)*1000).toISOString():'',source:'Himalayas',fetchedAt:new Date().toISOString()};
+  return {id:'himalayas-'+j.guid,company:plainText(j.companyName),title:plainText(j.title),location:restrictions.length?restrictions.map(plainText).join(', '):'Worldwide (check timezone restrictions)',remote:true,locationCountries:restrictions,link:safeURL(j.guid),description:descriptionText(j.description).slice(0,23000)+salary+(Array.isArray(zones)&&zones.length?'\nAdvertised UTC offsets: '+zones.map(plainText).join(', '):''),publishedAt:listingDate(j.pubDate),expiresAt:listingDate(j.expiryDate),source:'Himalayas',fetchedAt:new Date().toISOString()};
  });
  return {jobs,more:data.offset+data.jobs.length<data.totalCount&&data.jobs.length>0,total:data.totalCount};
 }

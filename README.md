@@ -227,3 +227,9 @@ Private profile confirmations can extend earlier correction batches. A previousl
 ### Declared skills and communication checks (release 53)
 
 Confirmed multitasking, effective communication, willingness to travel and single/multiple-project management support direct requests for those capabilities. Extra tenure, project scale, domain and travel-frequency conditions remain separate uncertainties. Bundled English fluency, presentation and small-talk requirements are split so proven language proficiency gets its own result; general communication evidence alone does not certify the other conditions. Generic “Key” headings and leave benefits no longer become qualifications, including benefit text that mentions a medical certificate. These checks run locally without model credit.
+
+### Listing freshness (release 54)
+
+Discover checks both newly fetched and browser-cached jobs. By default, source posting dates older than 90 days and explicit contract/start dates more than 90 days in the past are hidden. Search filters can include these older or potentially outdated adverts with a visible warning. Passed application deadlines and provider expiry dates remain excluded. Saved applications, decisions and highlights are retained.
+
+Cards show source posting dates separately from feed retrieval time. Missing, invalid or implausibly future dates are labelled unavailable, not treated as proof of freshness. Company history, award years and software versions do not count as vacancy dates. The deterministic checks recognise explicit ISO or English month-name hiring dates; they do not verify that an employer is still accepting applications. Provider expiry dates are preserved so cached jobs can expire after retrieval.

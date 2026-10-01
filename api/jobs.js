@@ -1,3 +1,4 @@
+import {listingDate} from '../lib/listing-freshness.js';
 import {searchJobs,validSearchCursor} from '../server/job-search.js';
 import {regions,europeanCountries,sourceGeography} from '../lib/geography.js';
 import {plainText,safeURL,descriptionText,sameJob} from '../lib/model.js';
@@ -8,7 +9,7 @@ export async function fetchRemoteJobs(fetcher=fetch){
  const response=await fetcher('https://remotive.com/api/remote-jobs',{signal:AbortSignal.timeout(12000),headers:{Accept:'application/json'}});
  if(!response.ok)throw new Error('Remotive unavailable');
  const data=await response.json();if(!Array.isArray(data.jobs))throw new Error('Invalid Remotive response');
- return data.jobs.filter(j=>j.id&&j.title&&j.company_name&&safeURL(j.url)).map(j=>({id:`remotive-${j.id}`,company:plainText(j.company_name),title:plainText(j.title),location:plainText(j.candidate_required_location||'Location not stated'),remote:true,link:safeURL(j.url),description:descriptionText(j.description).slice(0,23000)+(j.salary?'\nSalary: '+plainText(j.salary):''),publishedAt:Number.isFinite(Date.parse(j.publication_date))?new Date(j.publication_date).toISOString():'',source:'Remotive',fetchedAt:new Date().toISOString()}));
+ return data.jobs.filter(j=>j.id&&j.title&&j.company_name&&safeURL(j.url)).map(j=>({id:`remotive-${j.id}`,company:plainText(j.company_name),title:plainText(j.title),location:plainText(j.candidate_required_location||'Location not stated'),remote:true,link:safeURL(j.url),description:descriptionText(j.description).slice(0,23000)+(j.salary?'\nSalary: '+plainText(j.salary):''),publishedAt:listingDate(j.publication_date),source:'Remotive',fetchedAt:new Date().toISOString()}));
 }
 async function remoteJobs(){
  if(remoteCache&&Date.now()-remoteCache.time<6*TTL)return remoteCache.jobs;
@@ -23,7 +24,7 @@ export async function fetchInternationalJobs(fetcher=fetch,geo=''){
  return data.jobs.filter(j=>j&&j.id&&j.jobTitle&&j.companyName&&safeURL(j.url)).map(j=>({
   id:`jobicy-${j.id}`,company:plainText(j.companyName),title:plainText(j.jobTitle),location:plainText(j.jobGeo||'Location not stated'),remote:true,link:safeURL(j.url),
   description:descriptionText(j.jobDescription).slice(0,23000)+(j.salaryMin||j.salaryMax?'\nSalary: '+[j.salaryMin,j.salaryMax].filter(v=>v!=null).join('–')+' '+plainText(j.salaryCurrency||'')+' '+plainText(j.salaryPeriod||'period not stated'):''),
-  publishedAt:Number.isFinite(Date.parse(j.pubDate))?new Date(j.pubDate).toISOString():'',source:'Jobicy',fetchedAt:new Date().toISOString()
+  publishedAt:listingDate(j.pubDate),source:'Jobicy',fetchedAt:new Date().toISOString()
  }));
 }
 async function internationalJobs(geo=''){
@@ -47,7 +48,7 @@ export async function fetchJobs(fetcher=fetch,start=1){
  const seen=new Set();
  const jobs=results.slice(0,last+1).filter(r=>r.status==='fulfilled').flatMap(r=>r.value.rows).filter(j=>{
   if(!j.slug||!j.title||!j.company_name||!safeURL(j.url)||seen.has(j.slug))return false;seen.add(j.slug);return true;
- }).map(j=>({id:`arbeitnow-${j.slug}`,company:plainText(j.company_name),title:plainText(j.title),location:plainText(j.location||'Location not stated'),remote:!!j.remote,link:safeURL(j.url),description:descriptionText(j.description).slice(0,24000),publishedAt:Number.isFinite(Number(j.created_at))&&Number(j.created_at)>0&&Number(j.created_at)<1e11?new Date(Number(j.created_at)*1000).toISOString():'',source:'Arbeitnow',fetchedAt:new Date().toISOString()}));
+ }).map(j=>({id:`arbeitnow-${j.slug}`,company:plainText(j.company_name),title:plainText(j.title),location:plainText(j.location||'Location not stated'),remote:!!j.remote,link:safeURL(j.url),description:descriptionText(j.description).slice(0,24000),publishedAt:listingDate(j.created_at),source:'Arbeitnow',fetchedAt:new Date().toISOString()}));
  return {jobs,fetchedAt:new Date().toISOString(),partial:failure>=0,retryPage:failure>=0?pages[failure]:null,nextPage:failure>=0?pages[failure]:endIndex>=0?null:start+3,source:'Arbeitnow'};
 }
 export default async function handler(req,res){
