@@ -239,3 +239,9 @@ Cards show source posting dates separately from feed retrieval time. Missing, in
 The local parser recognises Major Responsibilities, Essential Competencies and Capabilities, and Knowledge and experience as section headings. It retains role introductions and separates conditional integration-testing duties from applicant requirements. The EEO confidentiality notice ends candidate requirements before company marketing. The supplied ActivePipe advert is covered by regression tests, including its separated bullet formatting.
 
 Simple alternatives such as “Jira, Confluence or similar technologies” accept recorded evidence for either named tool. Atlassian alone does not establish a specific tool, and alternatives do not waive additional administration, workflow or permission conditions. No applicant skills are inferred from employer requirements.
+
+### Implementation-role sections and evidence (release 56)
+
+Job/candidate qualifications and required/relevant/professional experience labels now start requirements sections rather than becoming scored points. Implementation, platform support, launch QA, client support and operational-excellence sections retain their duties in both HTML and flattened feed text.
+
+The local checker recognises written/verbal communication wording from confirmed communication skills, concrete cross-team work for a generic collaboration requirement, and analytical troubleshooting only when both analytical and technical-resolution evidence exist. Multiple-project management, testing/validation and platform work provide partial evidence with specific remaining conditions; they do not certify prioritisation under pressure, every quality expectation or product-operations ownership. These changes require no paid model calls.
