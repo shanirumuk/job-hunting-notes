@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=57" />
+  <link rel="stylesheet" href="styles.css?v=58" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -44,7 +44,7 @@
           </aside>
           <div class="deck-area">
             <div class="deck-meta"><span id="deck-count">Your role shortlist</span><button id="location-filter" class="text-button" aria-label="Filter locations" aria-haspopup="dialog">Locations ▾</button><button id="undo-swipe" class="text-button" disabled>↶ Undo</button></div>
-            <button id="experience-filter" class="text-button experience-filter" data-change-locations type="button">Required experience: up to 4 years ▾</button>
+            <button id="experience-filter" class="text-button experience-filter" data-change-locations type="button">Experience: up to 4 years · Senior hidden ▾</button>
             <div id="job-deck" aria-live="polite" aria-atomic="true"></div>
             <div class="swipe-actions" id="swipe-actions" hidden>
               <button id="pass-job" aria-keyshortcuts="ArrowLeft" title="Pass (←)" class="swipe-button pass" aria-label="Pass on this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-close"/></svg></span><small>Pass</small></button>
@@ -203,6 +203,7 @@
       <label for="filter-region">Continent</label><select id="filter-region"></select>
       <div id="filter-country-group"><label for="filter-country">European country</label><select id="filter-country"></select></div>
       <label class="checkbox-label"><input type="checkbox" id="filter-broad-remote" /> Also include broad regional and worldwide remote listings</label><p id="location-help">By default, results must explicitly list a location in your selection. Broad remote listings may still require country or timezone checks. US-only roles remain excluded.</p>
+      <label class="checkbox-label"><input type="checkbox" id="filter-hide-senior" /> Hide senior and leadership roles</label><p>Excludes Senior, Lead, Principal, Staff, Head, Director and executive leadership titles. Project Manager and similar titles are not excluded just for saying “Manager”.</p>
       <label for="filter-experience">Maximum required experience</label><select id="filter-experience" aria-describedby="experience-filter-help">
         <option value="0">No experience required</option><option value="1">Up to 1 year</option><option value="2">Up to 2 years</option><option value="3">Up to 3 years</option><option value="4">Up to 4 years — hide 5+ year requirements</option><option value="5">Up to 5 years</option><option value="10">Up to 10 years</option><option value="any">Any experience level</option>
       </select><p id="experience-filter-help">Uses the minimum required years: 3–5 counts as 3. Preferred experience and roles with no clear minimum remain visible. This filters adverts, not your actual qualifications. Saved applications are kept.</p>
@@ -211,6 +212,6 @@
     </div>
     <div class="sheet-actions"><button id="reset-locations" type="button" class="secondary-button">All locations</button><button id="apply-locations" type="button" class="primary-button">Show matching roles</button></div>
   </div></dialog>
-  <script type="module" src="app.js?v=57"></script>
+  <script type="module" src="app.js?v=58"></script>
 </body>
 </html>

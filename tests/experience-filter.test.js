@@ -27,3 +27,10 @@ test('limits are adjustable and validated, with five-year roles hidden by defaul
  for(const experienceLimit of experienceLimits)assert.equal(validateProfile({experienceLimit}).experienceLimit,experienceLimit);
  for(const experienceLimit of ['bad','-1',2])assert.throws(()=>validateProfile({experienceLimit}));
 });
+
+test('seniority filters titles independently of experience without excluding every manager or assistant',async()=>{
+ const {isSeniorRole}=await import('../lib/experience-filter.js');
+ for(const title of ['Senior Business Analyst','Sr. Implementation Consultant','Team Lead, Customer Success','Lead Consultant','Principal Analyst','Staff Solutions Engineer','Head of Operations','Associate Director','VP Customer Success','Chief Technology Officer'])assert.equal(isSeniorRole({title}),true,title);
+ for(const title of ['Business Analyst','Project Manager','Customer Success Manager','Account Executive','Executive Assistant','Assistant to the Director','Lead Generation Specialist','Junior and Senior Business Analysts'])assert.equal(isSeniorRole({title}),false,title);
+ assert.equal(defaultProfile.hideSeniorRoles,true);assert.equal(validateProfile({hideSeniorRoles:false}).hideSeniorRoles,false);assert.throws(()=>validateProfile({hideSeniorRoles:'false'}));
+});

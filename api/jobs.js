@@ -1,3 +1,4 @@
+import {additionalSources} from '../server/additional-sources.js';
 import {listingDate} from '../lib/listing-freshness.js';
 import {searchJobs,validSearchCursor} from '../server/job-search.js';
 import {regions,europeanCountries,sourceGeography} from '../lib/geography.js';
@@ -65,11 +66,11 @@ export default async function handler(req,res){
  try{
   if(!old||Date.now()-old.time>(old.data.partial?60000:TTL)){
    if(!pending.has(key))pending.set(key,(async()=>{
-    const results=await Promise.allSettled([useMain?fetchJobs(fetch,page):Promise.resolve({jobs:[],nextPage:null,partial:false,fetchedAt:new Date().toISOString()}),page===1&&!searchOnly?remoteJobs():Promise.resolve([]),page===1&&!searchOnly?internationalJobs():Promise.resolve([]),page===1&&!searchOnly?internationalJobs(sourceGeography(region,country)):Promise.resolve([]),searchJobs({region,country,cursor:searchCursor,broad})]);
-    const search=results[4];
+    const results=await Promise.allSettled([useMain?fetchJobs(fetch,page):Promise.resolve({jobs:[],nextPage:null,partial:false,fetchedAt:new Date().toISOString()}),page===1&&!searchOnly?remoteJobs():Promise.resolve([]),page===1&&!searchOnly?internationalJobs():Promise.resolve([]),page===1&&!searchOnly?internationalJobs(sourceGeography(region,country)):Promise.resolve([]),searchJobs({region,country,cursor:searchCursor,broad}),page===1&&!searchOnly?additionalSources():Promise.resolve({jobs:[],sourceErrors:[],refreshedEmployerBoards:[]})]);
+    const search=results[4],additional=results[5];
     const [main,...extras]=results.slice(0,4);
     if(results.every(r=>r.status==='rejected')&&search.status==='rejected')throw new Error('Sources unavailable');
-    if(main.status==='rejected'&&!extras.some(r=>r.status==='fulfilled'&&r.value.length)&&!(search.status==='fulfilled'&&search.value.jobs.length))throw new Error('Sources unavailable');
+    if(main.status==='rejected'&&!(additional.status==='fulfilled'&&additional.value.jobs.length)&&!extras.some(r=>r.status==='fulfilled'&&r.value.length)&&!(search.status==='fulfilled'&&search.value.jobs.length))throw new Error('Sources unavailable');
     const data=main.status==='fulfilled'?main.value:{jobs:[],nextPage:page,retryPage:page,partial:true,fetchedAt:new Date().toISOString()};
     data.sourceErrors=[];
     if(main.status==='rejected'||data.retryPage)data.sourceErrors.push('Arbeitnow');
@@ -82,8 +83,14 @@ export default async function handler(req,res){
      if(search.value.partial){data.sourceErrors.push('Himalayas');data.partial=true;}
      for(const job of search.value.jobs)if(!data.jobs.some(existing=>sameJob(existing,job)))data.jobs.push(job);
     }else{data.nextSearch=searchCursor==='done'?null:searchCursor;data.sourceErrors.push('Himalayas');data.partial=true;}
+    if(additional.status==='fulfilled'){
+     data.refreshedEmployerBoards=additional.value.refreshedEmployerBoards;
+     data.sourceErrors.push(...additional.value.sourceErrors);
+     for(const job of additional.value.jobs)if(!data.jobs.some(existing=>sameJob(existing,job)))data.jobs.push(job);
+    }else data.sourceErrors.push('Additional job sources');
+    if(data.sourceErrors.length)data.partial=true;
     data.sourceErrors=[...new Set(data.sourceErrors)];
-    data.source=page===1?'Arbeitnow + Remotive + Jobicy + Himalayas':'Arbeitnow + Himalayas';
+    data.source=page===1&&!searchOnly?'Arbeitnow + Remotive + Jobicy + Himalayas + Remote OK + selected employer careers':'Arbeitnow + Himalayas';
     cache.set(key,{time:Date.now(),data});if(cache.size>100)cache.delete(cache.keys().next().value);
    })().finally(()=>pending.delete(key)));
    await pending.get(key);

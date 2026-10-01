@@ -33,7 +33,7 @@ test('Germany and the UK cannot alternate ahead of other relevant European marke
 });
 test('country-specific retrieval uses separate caches and requests a validated upstream geography',async()=>{
  const old=globalThis.fetch,requested=[];
- globalThis.fetch=async url=>{requested.push(url);if(url.includes('himalayas'))return {ok:true,json:async()=>({jobs:[],totalCount:0,offset:0,limit:20})};if(url.includes('remotive'))return {ok:true,json:async()=>({jobs:[]})};
+ globalThis.fetch=async url=>{requested.push(url);if(url.includes('remoteok'))return {ok:true,json:async()=>[]};if(url.includes('ashbyhq'))return {ok:true,json:async()=>({jobs:[]})};if(url.includes('himalayas'))return {ok:true,json:async()=>({jobs:[],totalCount:0,offset:0,limit:20})};if(url.includes('remotive'))return {ok:true,json:async()=>({jobs:[]})};
   const geo=new URL(url).searchParams.get('geo')||'global';return {ok:true,json:async()=>({jobs:[{id:geo,jobTitle:'Implementation Consultant',companyName:geo,url:'https://jobicy.com/jobs/'+geo,jobGeo:geo}]})};};
  try{
   const {default:handler}=await import('../api/jobs.js?country-cache-test');

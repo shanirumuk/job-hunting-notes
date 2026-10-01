@@ -474,9 +474,9 @@ test('saved continuation resumes after reload and a bounded scan never claims fa
  const requested=[];
  await page.route('**/api/jobs*',route=>{const n=Number(new URL(route.request().url()).searchParams.get('page')||1);requested.push(n);return route.fulfill({json:{jobs:[],nextPage:n+3}});});
  await page.goto('/');await expect(page.locator('#empty-refresh')).toHaveText('Keep searching');
- await expect.poll(()=>requested.length).toBe(3);expect(requested).toEqual([10,13,16]);
+ await expect.poll(()=>requested.length).toBe(12);expect(requested).toEqual(Array.from({length:12},(_,i)=>10+i*3));
  await expect(page.locator('.deck-empty')).not.toContainText('No more matching roles');
- await page.reload();await expect.poll(()=>requested.length).toBe(6);expect(requested.slice(3)).toEqual([19,22,25]);
+ await page.reload();await expect.poll(()=>requested.length).toBe(24);expect(requested.slice(12)).toEqual(Array.from({length:12},(_,i)=>46+i*3));
 });
 
 test('international migration expands an existing profile once and preserves later choices',async({page})=>{
@@ -563,7 +563,7 @@ test('more search results remain available after the original feeds end, and loa
 });
 test('bounded country searching offers continuation instead of claiming all jobs are exhausted',async({page})=>{
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[],nextPage:null,nextSearch:'more-country-searches'}}));await page.goto('/');
- await expect(page.locator('#empty-refresh')).toHaveText('Keep searching');await expect(page.locator('.deck-empty')).toContainText('more source searches or pages');await expect(page.locator('.deck-empty')).not.toContainText('caught up');await expect(page.locator('[data-change-locations]')).toBeVisible();
+ await expect(page.locator('#empty-refresh')).toHaveText('Keep searching');await expect(page.locator('.deck-empty')).toContainText('More source searches or pages');await expect(page.locator('.deck-empty')).not.toContainText('caught up');await expect(page.locator('#job-deck [data-change-locations]')).toBeVisible();
 });
 
 for(const [region,location,wrong,broad] of [

@@ -17,3 +17,16 @@ test('experience limit filters cached and fetched roles, persists and preserves 
  await page.locator('#experience-filter').click();await page.locator('#filter-experience').selectOption('any');await page.locator('#apply-locations').click();await expect(page.locator('#deck-count')).toHaveText('4 roles to explore');
  await page.locator('[data-view="notebook"]').first().click();await expect(page.locator('#applications')).toContainText('Saved senior application');
 });
+
+test('senior titles are hidden even without years; the toggle persists independently of the years limit',async({page})=>{
+ const titles=['Senior Business Analyst','Lead Implementation Consultant','Project Manager','Business Analyst'];
+ const roles=titles.map((title,i)=>({...jobs[3],id:'level-'+i,company:'Level '+i,title,description:'Responsibilities:\nLead customer workshops, business requirements and API implementation projects.\nRequirements:\nStakeholder communication skills.',link:'https://example.org/level-'+i}));
+ await page.addInitScript(()=>{localStorage.setItem('job-notebook-v1','[]');localStorage.setItem('job-notebook-international-v23','1');localStorage.setItem('job-notebook-discovery-v26','1');});
+ await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:roles,nextPage:null,nextSearch:null,fetchedAt:new Date().toISOString()}}));
+ await page.goto('/');await expect(page.locator('#deck-count')).toHaveText('2 roles to explore');
+ await page.locator('#experience-filter').click();await expect(page.locator('#filter-hide-senior')).toBeChecked();
+ await page.locator('#filter-experience').selectOption('any');await page.locator('#apply-locations').click();await expect(page.locator('#deck-count')).toHaveText('2 roles to explore');
+ await page.locator('#experience-filter').click();await page.locator('#filter-hide-senior').uncheck();await page.locator('#apply-locations').click();await expect(page.locator('#deck-count')).toHaveText('4 roles to explore');
+ await page.reload();await expect(page.locator('#deck-count')).toHaveText('4 roles to explore');
+ await page.locator('#experience-filter').click();await expect(page.locator('#filter-hide-senior')).not.toBeChecked();
+});

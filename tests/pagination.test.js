@@ -34,6 +34,8 @@ test('Jobicy preserves country restrictions, description paragraphs, attribution
 test('one unavailable remote source does not discard other sources or claim complete results',async()=>{
  const original=globalThis.fetch;
  globalThis.fetch=async url=>{
+  if(url.includes('remoteok'))return {ok:true,json:async()=>[]};
+  if(url.includes('ashbyhq'))return {ok:true,json:async()=>({jobs:[]})};
   if(url.includes('himalayas'))return {ok:true,json:async()=>({jobs:[],totalCount:0,offset:0,limit:20})};
   if(url.includes('remotive'))throw Error('Unavailable');
   if(url.includes('jobicy'))return {ok:true,json:async()=>({jobs:[{id:1,jobTitle:'Implementation Consultant',companyName:'Canada Co',url:'https://jobicy.com/jobs/1',jobGeo:'Canada'}]})};

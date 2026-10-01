@@ -1,4 +1,4 @@
-import {experienceRequirement,experienceWithinLimit} from './lib/experience-filter.js';
+import {experienceRequirement,experienceWithinLimit,isSeniorRole} from './lib/experience-filter.js';
 import {listingFreshness} from './lib/listing-freshness.js';
 import {mountListingHighlights,validHighlights} from './lib/listing-highlights.js';
 import {applyProfileCorrections} from './lib/profile-corrections.js';
@@ -9,7 +9,7 @@ import {recoverImport,getItem as deviceItem,setItem as deviceSetItem} from './li
 import {startDeviceSync} from './lib/device-sync.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=57';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=58';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -29,7 +29,7 @@ let discovery = read(DISCOVERY_KEY, {jobs: [], decisions: {}, fetchedAt: ''});
 if (!discovery || !Array.isArray(discovery.jobs) || !discovery.decisions || typeof discovery.decisions !== 'object') {discovery = {jobs: [], decisions: {}, fetchedAt: ''}; storageError = true;}
 let listingHighlights=null;
 let activeFilter = 'all', activeView = 'discover', undoAction = null, preparationId = null, loading = false, toastTimer, selectedRole = null, decisionPending = false;
-let pinnedJobId=null, feedError=false, autoBudget=3,feedController=null,feedRequestId=0;
+let pinnedJobId=null, feedError=false, autoBudget=12,feedController=null,feedRequestId=0;
 if(!Object.hasOwn(discovery,'nextPage'))discovery.nextPage=discovery.fetchedAt?4:1;
 feedError=!!discovery.sourceErrors?.length&&discovery.nextPage===null;
 let matchCache = new WeakMap(), cachedProfile = profile;
@@ -88,7 +88,7 @@ function render() {
   $('compass-location').textContent = '◎ '+scopeLabel();
   $('location-filter').textContent=(profile.country?scopeLabel():profile.geography==='international'?'All locations':regions[profile.geography].replace(' (excluding US)',''))+' ▾';
   $('location-filter').title='Filter locations and experience · '+scopeLabel();
-  $('experience-filter').textContent=profile.experienceLimit==='any'?'Experience: any level ▾':`Required experience: up to ${profile.experienceLimit} years ▾`;
+  $('experience-filter').textContent=(profile.experienceLimit==='any'?'Experience: any years':`Experience: up to ${profile.experienceLimit} years`)+(profile.hideSeniorRoles?' · Senior hidden':'')+' ▾';
   const q = $('search-input').value.trim().toLowerCase();
   const filtered = entries.filter(e => (activeFilter === 'all' || (activeFilter === 'follow-up' ? followUpDue(e) : e.status.toLowerCase() === activeFilter)) && (!q || [e.company,e.title,e.location,e.notes,e.requirements].join(' ').toLowerCase().includes(q)));
   if(activeFilter==='follow-up')filtered.sort((a,b)=>a.followUpDate.localeCompare(b.followUpDate));
@@ -102,7 +102,7 @@ function render() {
 function scopeLabel(){return profile.country?europeanCountries.find(c=>c.value===profile.country)?.label:profile.geography==='international'?'International · excluding the US':profile.geography==='europe'?'Across Europe':regions[profile.geography];}
 function restartDiscovery(){
  feedController?.abort();feedRequestId++;loading=false;
- pinnedJobId=null;autoBudget=3;feedError=false;discovery.nextPage=1;discovery.nextSearch=null;discovery.sourceErrors=[];discovery.fetchedAt='';
+ pinnedJobId=null;autoBudget=12;feedError=false;discovery.nextPage=1;discovery.nextSearch=null;discovery.sourceErrors=[];discovery.fetchedAt='';
  saveDiscovery();render();refreshJobs();
 }
 function openLocations(){
@@ -111,12 +111,13 @@ function openLocations(){
  $('filter-broad-remote').checked=profile.includeBroadRemote;
  $('filter-older-listings').checked=profile.includeOlderListings;
  $('filter-experience').value=profile.experienceLimit;
+ $('filter-hide-senior').checked=profile.hideSeniorRoles;
  $('filter-region').value=profile.geography;$('filter-country').value=profile.country;
  $('filter-country-group').hidden=profile.geography!=='europe';
  $('location-dialog').showModal();
 }
 function applyLocations(reset=false){
- profile=validateProfile({...profile,experienceLimit:reset?profile.experienceLimit:$('filter-experience').value,includeOlderListings:reset?false:$('filter-older-listings').checked,includeBroadRemote:reset?false:$('filter-broad-remote').checked,geography:reset?'international':$('filter-region').value,country:reset?'':$('filter-country').value});
+ profile=validateProfile({...profile,hideSeniorRoles:reset?profile.hideSeniorRoles:$('filter-hide-senior').checked,experienceLimit:reset?profile.experienceLimit:$('filter-experience').value,includeOlderListings:reset?false:$('filter-older-listings').checked,includeBroadRemote:reset?false:$('filter-broad-remote').checked,geography:reset?'international':$('filter-region').value,country:reset?'':$('filter-country').value});
  persist(PROFILE_KEY,profile);$('location-dialog').close();restartDiscovery();
 }
 function hasMoreJobs(){return !!(discovery.nextPage||discovery.nextSearch);}
@@ -128,6 +129,7 @@ function deckJobs() {
   const reviewed=Object.values(discovery.reviewed||{}).filter(j=>discovery.decisions[j.id]);
   for (const job of all) {
     if(!listingFreshness(job,{includeOlder:profile.includeOlderListings}).visible)continue;
+    if(profile.hideSeniorRoles&&isSeniorRole(job))continue;
     if (discovery.decisions[job.id] || reviewed.some(j=>sameJob(j,job)) || result.some(j => sameJob(j,job))) continue;
     if (entries.some(e => sameJob(e,job) && (e.status !== 'To apply' || e.preparation))) continue;
     let match = matchCache.get(job);
@@ -305,7 +307,7 @@ function renderDeck() {
   $('swipe-actions').hidden = !job;
   if (!job) {
   listingHighlights?.destroy();listingHighlights=null;
-  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${loading ? 'Finding your next possibility…' : feedError ? 'The search paused.' : hasMoreJobs() ? 'More results to search.' : discovery.fetchedAt ? 'No unreviewed matches in this search.' : 'Let’s find your kind of work.'}</h2><p>${loading ? 'Looking for consulting, implementation and business analysis roles.' : feedError ? 'A source could not be reached. Retry to keep searching; your saved roles are safe.' : hasMoreJobs() ? 'There are more source searches or pages to check. Continue searching with your current filters.' : 'No more matching roles in the listings retrieved so far for '+esc(scopeLabel())+'. This is a limited set of public sources, not every vacancy. Change Locations, check for new postings later, or revisit roles you passed.'}</p><button class="primary-button" id="empty-refresh" ${loading ? 'disabled' : ''}>${loading ? 'Finding roles…' : feedError?'Retry search':hasMoreJobs()?'Keep searching':'Check for new jobs'}</button>${Object.keys(discovery.decisions).length ? '<button class="text-button" id="revisit-passed">Revisit passed roles</button>' : ''}<button class="text-button" data-change-locations>Change location filters</button><p class="source-note">Listings from <a href="https://www.arbeitnow.com" target="_blank" rel="noopener noreferrer">Arbeitnow</a> <a href="https://remotive.com" target="_blank" rel="noopener noreferrer">Remotive</a> and <a href="https://jobicy.com" target="_blank" rel="noopener noreferrer">Jobicy</a> and <a href="https://himalayas.app" target="_blank" rel="noopener noreferrer">Himalayas</a>. Your location, experience, role and listing-age filters still apply.</p></div>`;
+  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${loading ? 'Finding your next possibility…' : feedError ? 'The search paused.' : hasMoreJobs() ? 'More results to search.' : discovery.fetchedAt ? 'No unreviewed matches in this search.' : 'Let’s find your kind of work.'}</h2><p>${loading ? 'Looking for consulting, implementation and business analysis roles.' : feedError ? 'A source could not be reached. Retry to keep searching; your saved roles are safe.' : hasMoreJobs() ? 'No matches in the batches checked so far. More source searches or pages remain; keep searching or adjust your filters.' : 'No more matching roles in the listings retrieved so far for '+esc(scopeLabel())+'. This is a limited set of public sources, not every vacancy. Change Locations, check for new postings later, or revisit roles you passed.'}</p><button class="primary-button" id="empty-refresh" ${loading ? 'disabled' : ''}>${loading ? 'Finding roles…' : feedError?'Retry search':hasMoreJobs()?'Keep searching':'Check for new jobs'}</button>${Object.keys(discovery.decisions).length ? '<button class="text-button" id="revisit-passed">Revisit passed roles</button>' : ''}<button class="text-button" data-change-locations>Change search filters</button><p class="source-note">Listings from <a href="https://www.arbeitnow.com" target="_blank" rel="noopener noreferrer">Arbeitnow</a>, <a href="https://remotive.com" target="_blank" rel="noopener noreferrer">Remotive</a>, <a href="https://jobicy.com" target="_blank" rel="noopener noreferrer">Jobicy</a>, <a href="https://himalayas.app" target="_blank" rel="noopener noreferrer">Himalayas</a>, <a href="https://remoteok.com" target="_blank" rel="noopener noreferrer">Remote OK</a> and selected employers’ Ashby career pages. Your location, experience, role and listing-age filters still apply.</p></div>`;
     return;
   }
   const previousCard=$('active-card');
@@ -381,7 +383,7 @@ function maybeLoadMore(count){
 async function refreshJobs(more=false) {
  more=more===true;
  if (loading) return;
- if(!more)autoBudget=3;
+ if(!more)autoBudget=12;
  if(more&&!hasMoreJobs())return;
  const page=more?(discovery.nextPage||1):1,searchOnly=more&&!discovery.nextPage;
  const previousPage=discovery.nextPage,previousSearch=discovery.nextSearch;
@@ -397,12 +399,15 @@ async function refreshJobs(more=false) {
   const incoming=data.jobs.filter(j=>j&&typeof j.id==='string'&&typeof j.company==='string'&&typeof j.title==='string'&&safeURL(j.link));
   discovery.reviewed ||= {};
   for(const job of discovery.jobs)if(discovery.decisions[job.id])discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link};
-  const merged=new Map(discovery.jobs.map(j=>[j.id,j]));for(const job of incoming)merged.set(job.id,job);
+  const refreshedBoards=new Set(data.stale?[]:data.refreshedEmployerBoards||[]),incomingIds=new Set(incoming.map(j=>j.id));
+  const retained=discovery.jobs.filter(j=>!j.employerBoard||!refreshedBoards.has(j.employerBoard)||incomingIds.has(j.id)||discovery.decisions[j.id]);
+  const merged=new Map(retained.map(j=>[j.id,j]));for(const job of incoming)merged.set(job.id,job);
   // Keep full descriptions for relevant roles, plus recent reviewed cards for undo/revisit.
   const all=[...merged.values()];
   discovery.jobs=[...all.filter(j=>!discovery.decisions[j.id]&&matchJob(j,{...profile,geography:'international',country:''}).eligible),...all.filter(j=>discovery.decisions[j.id]).slice(-50)];
   discovery.nextSearch=typeof data.nextSearch==='string'?data.nextSearch:null;
   discovery.nextPage=Number.isInteger(data.nextPage)&&data.nextPage>0?data.nextPage:null;
+  if(more&&discovery.nextPage===previousPage&&discovery.nextSearch===previousSearch)autoBudget=0;
   if(data.stale){discovery.nextPage=previousPage;discovery.nextSearch=previousSearch;feedError=true;}
   if(data.retryPage)feedError=true;
   discovery.sourceErrors=more?[...new Set([...(discovery.sourceErrors||[]).filter(source=>!['Arbeitnow','Himalayas'].includes(source)),...(data.sourceErrors||[])])]:data.sourceErrors||[];
@@ -432,7 +437,7 @@ async function decide(action, job = deckJobs()[0]) {
   undoAction = {jobId: job.id, previousDecision: discovery.decisions[job.id], entry: existing ? structuredClone(existing) : null, newId: null};
   discovery.decisions[job.id] = action;
   discovery.reviewed ||= {};discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link};
-  autoBudget=3;
+  autoBudget=12;
   if (action !== 'pass') {
     const recommendedCV=fullReview(job)?.cv||job.match.cv;
     const entry = existing || {id: job.id, company: job.company, title: job.title, location: job.location, link: job.link, requirements: job.description || job.requirements || '', status: 'To apply', materials: recommendedCV, notes: '', applicationDate: '', interviewDate: '', source: job.source};
@@ -636,7 +641,7 @@ async function importData(file) {
     if (!Array.isArray(nextDiscovery.jobs) || !nextDiscovery.decisions || typeof nextDiscovery.decisions !== 'object' || Array.isArray(nextDiscovery.decisions)) throw new Error('Invalid discovery');
     if (nextDiscovery.jobs.some(j => !j || typeof j.id !== 'string' || typeof j.company !== 'string' || typeof j.title !== 'string' || !safeURL(j.link))) throw new Error('Invalid job');
     if (!confirm(`Restore ${nextEntries.length} applications? This replaces the current notebook, profile and swipe history. Download a backup first if you want to keep them.`)) return;
-    entries = nextEntries; profile = nextProfile; discovery = nextDiscovery; undoAction = null;pinnedJobId=null;feedError=false;autoBudget=3;if(!Object.hasOwn(discovery,'nextPage'))discovery.nextPage=discovery.fetchedAt?4:1;
+    entries = nextEntries; profile = nextProfile; discovery = nextDiscovery; undoAction = null;pinnedJobId=null;feedError=false;autoBudget=12;if(!Object.hasOwn(discovery,'nextPage'))discovery.nextPage=discovery.fetchedAt?4:1;
     const saved = saveEntries() & persist(PROFILE_KEY,profile) & saveDiscovery();
     render(); populateProfile(); $('backup-message').textContent = saved ? 'Backup restored. CV files already on this device are unchanged.' : 'Restored in memory, but device storage failed. Download a backup before closing.';
   } catch {$('backup-message').textContent = 'That file is not a valid Job notebook backup. Your notebook has not been replaced.';}
@@ -808,9 +813,9 @@ $('close-locations').addEventListener('click',()=>$('location-dialog').close());
 $('filter-region').addEventListener('change',()=>{$('filter-country-group').hidden=$('filter-region').value!=='europe';$('filter-country').value='';});
 $('apply-locations').addEventListener('click',()=>applyLocations());
 $('reset-locations').addEventListener('click',()=>applyLocations(true));
-$('load-more-jobs').addEventListener('click',()=>{autoBudget=3;refreshJobs(true);});
-$('retry-jobs').addEventListener('click',()=>{autoBudget=3;refreshJobs(feedError&&hasMoreJobs());});
-$('job-deck').addEventListener('click',e => {if(e.target.closest('[data-change-locations]'))openLocations();if (e.target.closest('[data-read-role]')) {const text=document.querySelector('.source-description');if(text){text.open=true;text.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}} if (e.target.closest('[data-role-details]')) openRoleDetails(); if (e.target.closest('#empty-refresh')) {autoBudget=3;refreshJobs(hasMoreJobs());} if (e.target.closest('#revisit-passed')) {Object.keys(discovery.decisions).forEach(id => {if (discovery.decisions[id] === 'pass') delete discovery.decisions[id];}); discovery.nextPage=1;autoBudget=3;feedError=false;saveDiscovery();renderDeck();refreshJobs();}});
+$('load-more-jobs').addEventListener('click',()=>{autoBudget=12;refreshJobs(true);});
+$('retry-jobs').addEventListener('click',()=>{autoBudget=12;refreshJobs(feedError&&hasMoreJobs());});
+$('job-deck').addEventListener('click',e => {if(e.target.closest('[data-change-locations]'))openLocations();if (e.target.closest('[data-read-role]')) {const text=document.querySelector('.source-description');if(text){text.open=true;text.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}} if (e.target.closest('[data-role-details]')) openRoleDetails(); if (e.target.closest('#empty-refresh')) {autoBudget=12;refreshJobs(hasMoreJobs());} if (e.target.closest('#revisit-passed')) {Object.keys(discovery.decisions).forEach(id => {if (discovery.decisions[id] === 'pass') delete discovery.decisions[id];}); discovery.nextPage=1;autoBudget=12;feedError=false;saveDiscovery();renderDeck();refreshJobs();}});
 $('applications').addEventListener('click',e => {const edit=e.target.closest('[data-edit]');if(edit)openEditor(entries.find(item=>item.id===edit.dataset.edit));});
 $('applications').addEventListener('change',e=>{
  const control=e.target.closest('[data-status-id]');if(!control)return;

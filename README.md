@@ -251,3 +251,11 @@ The local checker recognises written/verbal communication wording from confirmed
 Discover defaults to a maximum advertised minimum of four years, hiding explicit requirements of five years or more. The shortcut above the card opens the existing search filters, where the limit can be changed or disabled. The filter applies to cached and incoming roles across all regions; changing locations preserves the chosen experience limit. Saved applications remain in the notebook.
 
 Experience ranges use their lower bound; preferred-only experience, company age, contract lengths, upper bounds and roles without a clear minimum do not impose a gate. The parser supports numeric and written English year counts and common experience wording. This is an advert filter, not a certification that total CV tenure meets a role's domain-specific experience. The preference is validated and included in profile backups and device transfers.
+
+### More sources, continuation and seniority (release 58)
+
+Discovery adds the [Remote OK public feed](https://remoteok.com/faq) and eight selected employer boards via the [Ashby public postings API](https://developers.ashbyhq.com/docs/public-job-posting-api): Ashby, Linear, Supabase, n8n, Lightspeed Commerce, GT, Neara and Choco. This is a maintained employer list, not a search of every Ashby customer. No new API key or model credit is required. Original listing links and source labels are retained. Unlisted jobs are excluded; source dates, location restrictions and employer compensation text are preserved. Each feed is cached for an hour, with independent failure reporting. A successful employer-board refresh removes withdrawn discovery records while preserving saved applications and records from failed boards.
+
+Automatic continuation now checks up to twelve further batches before pausing and stops if a source cursor does not advance. It retains the distinction between unfinished searches and exhausted results.
+
+Senior and leadership titles are hidden by default independently of the experience-years limit. The search dialog provides a separate toggle. Plain manager titles, lead-generation roles and assistants to leaders are not automatically treated as senior roles. These preferences apply to every source and persist with the profile.
