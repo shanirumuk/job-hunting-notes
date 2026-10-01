@@ -6,7 +6,7 @@ import {recoverImport,getItem as deviceItem,setItem as deviceSetItem} from './li
 import {startDeviceSync} from './lib/device-sync.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=48';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=49';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -160,7 +160,7 @@ async function requestSummary(job){
   if(crypto.subtle&&!summaryHashes.has(source)){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source));summaryHashes.set(source,Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join(''));}
   if(savedSummary(job)||summaryErrors.has(job.id)||!browserConnection)return;
   const response=await fetch('/api/summary',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({title:job.title,location:job.location,description:job.description||''}),signal:AbortSignal.timeout(115000)});
-  const data=await response.json();if(data.code==='REVIEW_QUOTA_EXHAUSTED')reviewServiceIssue=data.error;if(!response.ok)throw new Error(data.error||'Summary unavailable.');
+  const data=await response.json();if(['REVIEW_QUOTA_EXHAUSTED','REVIEW_SETUP_REQUIRED','REVIEW_MODEL_UNAVAILABLE'].includes(data.code))reviewServiceIssue=data.error;if(!response.ok)throw new Error(data.error||'Summary unavailable.');
   if(!data.summary||!['overview','essentials','benefits'].every(key=>typeof data.summary[key]==='string'))throw new Error('Summary unavailable.');
   summaryCache[job.id]={source:summarySource(job),summary:data.summary};
   const keys=Object.keys(summaryCache);while(keys.length>80)delete summaryCache[keys.shift()];
@@ -217,7 +217,7 @@ async function requestFitReview(job){
     const seconds=Math.max(1,Math.min(60,Number(response.headers.get('Retry-After'))||15));
     fitReviewRetries.set(key,{attempts,retryAt:Date.now()+seconds*1000});return;
    }
-   const data=await response.json();if(data.code==='REVIEW_QUOTA_EXHAUSTED'){reviewServiceIssue=data.error;$('browser-connection-status').textContent='Private connection verified. Full reviews are paused: provider allowance exhausted.';const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(job);}
+   const data=await response.json();if(['REVIEW_QUOTA_EXHAUSTED','REVIEW_SETUP_REQUIRED','REVIEW_MODEL_UNAVAILABLE'].includes(data.code)){reviewServiceIssue=data.error;$('browser-connection-status').textContent='Private connection verified. '+reviewServiceIssue;const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(job);}
    if(!response.ok)throw Error(data.error||'Review unavailable.');
    review=data.review;
    if(review?.version!==REVIEW_VERSION||!Array.isArray(review.points)||!Array.isArray(review.factors))throw Error('Review response was incomplete. Retry it.');
@@ -256,7 +256,7 @@ function openFullReview(job,review){
  <section class="fit-section fit-cv"><h3>CV to use</h3><p class="fit-cv-name">${esc(review.cv)}</p><p>${esc(review.cvReason)}</p><p id="fit-cv-status" role="status"></p><button class="secondary-button" id="fit-download-cv" hidden>Download recommended CV</button></section>
  <section class="fit-section"><h3>What affects the rating</h3><div class="review-factor-list">${review.factors.map(f=>`<article data-factor="${esc(f.key)}"><h4><span aria-hidden="true">${factorStatus[f.status]}</span> ${factorLabels[f.key]}</h4><p>${esc(f.note)}</p></article>`).join('')}</div></section>
  ${review.issues.length?`<section class="fit-section"><h3>Still uncertain</h3>${fitList(review.issues,'')}</section>`:''}
- <details class="fit-section"><summary>How the rating is calculated</summary><p>Core requirements 4 points, secondary requirements 2, experience level 2, and work style &amp; career 2. Each requirement earns full credit for direct evidence, half for transferable evidence, and none for missing evidence. Years and role seniority are scored under experience, without counting them again as core skills. Mandatory tools stay core. Work style and career contribute one point each; contract length and balance inform work style. Pay remains a separate practical consideration. A category with no advertised requirements is marked not stated and excluded; the applicable subtotal is scaled to 10. Unknowns remain provisional. Confirmed eligibility conflicts cap the score at 3; unclear eligibility and willingness to relocate do not. ${esc(review.cap)} Results are rounded to half a point and are not hiring odds.</p><p>The review accounts for ${review.audit.length} supplied advert paragraphs and validates supporting quotes against your saved details. It cannot verify that the source feed contains the entire current employer advert.</p></details>
+ <details class="fit-section"><summary>How the rating is calculated</summary><p>Core requirements 4 points, secondary requirements 2, experience level 2, and work style &amp; career 2. Each requirement earns full credit for direct evidence, half for transferable evidence, and none for missing evidence. Years and role seniority are scored under experience, without counting them again as core skills. Mandatory tools stay core. Work style and career contribute one point each; contract length and balance inform work style. Pay remains a separate practical consideration. A category with no advertised requirements is marked not stated and excluded; the applicable subtotal is scaled to 10. Unknowns remain provisional. Confirmed eligibility conflicts cap the score at 3; unclear eligibility and willingness to relocate do not. ${esc(review.cap)} Results are rounded to half a point and are not hiring odds.</p><p>${review.model?'Review model: '+esc(review.model)+'. ':''}The review accounts for ${review.audit.length} supplied advert paragraphs and validates supporting quotes against your saved details. It cannot verify that the source feed contains the entire current employer advert.</p></details>
  <button class="secondary-button" id="fit-show-checks">See qualification checklist</button><button class="text-button" data-view="profile" id="full-fit-profile">Update my profile</button>`;
  $('role-source').href=safeURL(job.link);if(!$('role-dialog').open)$('role-dialog').showModal();
  $('fit-show-checks').onclick=()=>{$('role-dialog').close();const section=document.querySelector('.qualification-details');if(section){section.open=true;section.scrollIntoView({block:'start'});}};
@@ -675,8 +675,12 @@ async function loadBrowserConnection(restore=true) {
    const response=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({action:'profile-corrections'}),signal:AbortSignal.timeout(15000)});
    if(!response.ok)throw Error(response.status===401?'The private setup was not accepted. Import your connection file again.':'The server could not verify your connection. Try Check connection again.');
    browserConnectionVerified=true;fitReviewErrors.clear();fitReviewRetries.clear();
-   $('browser-connection-status').textContent=reviewServiceIssue?'Private connection verified. Full reviews are paused: provider allowance exhausted.':'Private connection verified. Full CV reviews are enabled.';
-   const {correction}=await response.json();
+   $('browser-connection-status').textContent=reviewServiceIssue?'Private connection verified. '+reviewServiceIssue:'Private connection verified. Full CV reviews are enabled.';
+   const {correction,reviewProvider}=await response.json();
+   if(reviewProvider?.provider==='openai'){
+    reviewServiceIssue=reviewProvider.configured?null:'OpenAI setup is needed: add OPENAI_API_KEY in Vercel’s production environment settings and redeploy. Your saved CVs are ready.';
+    $('browser-connection-status').textContent='Private connection verified. '+(reviewServiceIssue||'GPT-6 Luna is configured; open a job to check its review.');
+   }
    const corrected=applyProfileCorrections(profile,correction);
    if(corrected!==profile){profile=validateProfile(corrected);persist(PROFILE_KEY,profile);populateProfile();renderDeck();}
   }catch(error){$('browser-connection-status').textContent=error.name==='TimeoutError'?'Connection check timed out. Try Check connection again.':error.message;}

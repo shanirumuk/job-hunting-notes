@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 const job={id:'full-review-fixture',company:'Example',title:'Business Analyst',location:'Berlin, Germany',link:'https://example.org/job',description:'Requirements:\nEnglish proficiency is essential.\nSQL experience required.'};
-const review={version:2,overall:6.5,skills:8,coverage:70,requirementCoverage:100,provisional:true,cap:'',summary:'Your SQL and English align. Check the contract duration.',cv:'Business Analyst CV',cvReason:'Lead with SQL reporting.',points:[{text:'English proficiency',sourceQuote:'English proficiency is essential.',category:'required',importance:'essential',status:'match',note:'Native English recorded.',cvQuote:'English native (C1)'},{text:'SQL experience',sourceQuote:'SQL experience required.',category:'required',importance:'standard',status:'partial',note:'Reporting is supported; the required depth is unclear.',cvQuote:'SQL reporting.'}],factors:['eligibility','location','pay','career','workStyle','contract'].map(key=>({key,status:'unknown',note:'Confirm this detail.',sourceQuote:'',cvQuote:''})),audit:[{paragraph:0,kind:'background'}],issues:[]};
+const review={version:3,overall:6.5,skills:8,coverage:70,requirementCoverage:100,provisional:true,cap:'',summary:'Your SQL and English align. Check the contract duration.',cv:'Business Analyst CV',cvReason:'Lead with SQL reporting.',points:[{text:'English proficiency',sourceQuote:'English proficiency is essential.',category:'required',importance:'essential',status:'match',note:'Native English recorded.',cvQuote:'English native (C1)'},{text:'SQL experience',sourceQuote:'SQL experience required.',category:'required',importance:'standard',status:'partial',note:'Reporting is supported; the required depth is unclear.',cvQuote:'SQL reporting.'}],factors:['eligibility','location','pay','career','workStyle','contract'].map(key=>({key,status:'unknown',note:'Confirm this detail.',sourceQuote:'',cvQuote:''})),audit:[{paragraph:0,kind:'background'}],issues:[]};
 async function connect(page,jobs=[job]){
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs,nextPage:null}}));
  await page.route('**/api/summary',r=>r.fulfill({status:503,json:{error:'Summary unavailable'}}));
@@ -92,4 +92,14 @@ test('confirmed analytical and requirements evidence is added without replacing 
  await expect(page.locator('.card-fit-summary')).toContainText('CV evidence score');
  const evidence=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence);expect(evidence).toContain('SQL reporting.');
  await page.reload();expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence)).toBe(evidence);
+});
+
+test('missing OpenAI setup is visible without launching repeated failed reviews',async({page})=>{
+ await connect(page);
+ let calls=0;await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({json:{review}});});
+ await page.route('**/api/setup',r=>r.fulfill({json:{correction:null,reviewProvider:{provider:'openai',model:'gpt-6-luna',configured:false}}}));
+ await page.reload();await expect(page.locator('#browser-connection-status')).toContainText('OpenAI setup is needed');await expect(page.locator('#full-review-status')).toContainText('OPENAI_API_KEY');
+ await page.locator('.listing-info').click();await expect(page.locator('#fit-dialog-review-status')).toContainText('OpenAI setup is needed');expect(calls).toBe(0);
+ await page.keyboard.press('Escape');await page.route('**/api/setup',r=>r.fulfill({json:{correction:null,reviewProvider:{provider:'openai',model:'gpt-6-luna',configured:true}}}));
+ await page.reload();await expect(page.locator('#browser-connection-status')).toContainText('GPT-6 Luna is configured');await expect(page.locator('.card-fit-summary')).toContainText('Application fit: 6.5/10');
 });

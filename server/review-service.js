@@ -2,6 +2,7 @@ import {browserbase} from '@browserbasehq/stagehand';
 import Browserbase from '@browserbasehq/sdk';
 
 export function reviewServiceError(error){
+ if(error.serviceCode)return {status:error.status||503,code:error.serviceCode,error:error.message};
  if(error.status===402)return {status:402,code:'REVIEW_QUOTA_EXHAUSTED',error:'Full reviews are paused because the Browserbase allowance is exhausted. Restore the provider allowance or configure another review provider. Your saved CVs are unchanged.'};
  return null;
 }
