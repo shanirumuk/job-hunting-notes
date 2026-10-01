@@ -891,3 +891,5 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 .review-factor-list article { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .review-factor-list h4, .review-factor-list p { margin: 0 0 5px; }
 #full-review-status { padding-top: 10px; border-top: 1px solid var(--line); }
+
+.experience-filter { display: block; margin: 0 auto 6px; padding: 2px 8px; min-height: 28px; font-size: 12px; }

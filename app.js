@@ -1,3 +1,4 @@
+import {experienceRequirement,experienceWithinLimit} from './lib/experience-filter.js';
 import {listingFreshness} from './lib/listing-freshness.js';
 import {mountListingHighlights,validHighlights} from './lib/listing-highlights.js';
 import {applyProfileCorrections} from './lib/profile-corrections.js';
@@ -8,7 +9,7 @@ import {recoverImport,getItem as deviceItem,setItem as deviceSetItem} from './li
 import {startDeviceSync} from './lib/device-sync.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=56';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=57';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -86,7 +87,8 @@ function render() {
   $('summary-text').textContent = `${entries.length} roles · ${applied} submitted`;
   $('compass-location').textContent = '◎ '+scopeLabel();
   $('location-filter').textContent=(profile.country?scopeLabel():profile.geography==='international'?'All locations':regions[profile.geography].replace(' (excluding US)',''))+' ▾';
-  $('location-filter').title='Filter locations · '+scopeLabel();
+  $('location-filter').title='Filter locations and experience · '+scopeLabel();
+  $('experience-filter').textContent=profile.experienceLimit==='any'?'Experience: any level ▾':`Required experience: up to ${profile.experienceLimit} years ▾`;
   const q = $('search-input').value.trim().toLowerCase();
   const filtered = entries.filter(e => (activeFilter === 'all' || (activeFilter === 'follow-up' ? followUpDue(e) : e.status.toLowerCase() === activeFilter)) && (!q || [e.company,e.title,e.location,e.notes,e.requirements].join(' ').toLowerCase().includes(q)));
   if(activeFilter==='follow-up')filtered.sort((a,b)=>a.followUpDate.localeCompare(b.followUpDate));
@@ -108,12 +110,13 @@ function openLocations(){
  $('filter-country').innerHTML='<option value="">All European countries</option>'+europeanCountries.map(c=>`<option value="${c.value}">${esc(c.label)}</option>`).join('');
  $('filter-broad-remote').checked=profile.includeBroadRemote;
  $('filter-older-listings').checked=profile.includeOlderListings;
+ $('filter-experience').value=profile.experienceLimit;
  $('filter-region').value=profile.geography;$('filter-country').value=profile.country;
  $('filter-country-group').hidden=profile.geography!=='europe';
  $('location-dialog').showModal();
 }
 function applyLocations(reset=false){
- profile=validateProfile({...profile,includeOlderListings:reset?false:$('filter-older-listings').checked,includeBroadRemote:reset?false:$('filter-broad-remote').checked,geography:reset?'international':$('filter-region').value,country:reset?'':$('filter-country').value});
+ profile=validateProfile({...profile,experienceLimit:reset?profile.experienceLimit:$('filter-experience').value,includeOlderListings:reset?false:$('filter-older-listings').checked,includeBroadRemote:reset?false:$('filter-broad-remote').checked,geography:reset?'international':$('filter-region').value,country:reset?'':$('filter-country').value});
  persist(PROFILE_KEY,profile);$('location-dialog').close();restartDiscovery();
 }
 function hasMoreJobs(){return !!(discovery.nextPage||discovery.nextSearch);}
@@ -128,7 +131,8 @@ function deckJobs() {
     if (discovery.decisions[job.id] || reviewed.some(j=>sameJob(j,job)) || result.some(j => sameJob(j,job))) continue;
     if (entries.some(e => sameJob(e,job) && (e.status !== 'To apply' || e.preparation))) continue;
     let match = matchCache.get(job);
-    if (!match) {match = matchJob(job,profile); matchCache.set(job,match);}
+    if (!match) {match = {...matchJob(job,profile),experience:experienceRequirement(job)}; matchCache.set(job,match);}
+    if(!experienceWithinLimit(match.experience,profile.experienceLimit))continue;
     // Previously saved roles remain accessible in the notebook even outside current search preferences.
     if (match.eligible) result.push({...job, match});
   }
@@ -301,7 +305,7 @@ function renderDeck() {
   $('swipe-actions').hidden = !job;
   if (!job) {
   listingHighlights?.destroy();listingHighlights=null;
-  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${loading ? 'Finding your next possibility…' : feedError ? 'The search paused.' : hasMoreJobs() ? 'More results to search.' : discovery.fetchedAt ? 'No unreviewed matches in this search.' : 'Let’s find your kind of work.'}</h2><p>${loading ? 'Looking for consulting, implementation and business analysis roles.' : feedError ? 'A source could not be reached. Retry to keep searching; your saved roles are safe.' : hasMoreJobs() ? 'There are more source searches or pages to check. Continue searching with your current filters.' : 'No more matching roles in the listings retrieved so far for '+esc(scopeLabel())+'. This is a limited set of public sources, not every vacancy. Change Locations, check for new postings later, or revisit roles you passed.'}</p><button class="primary-button" id="empty-refresh" ${loading ? 'disabled' : ''}>${loading ? 'Finding roles…' : feedError?'Retry search':hasMoreJobs()?'Keep searching':'Check for new jobs'}</button>${Object.keys(discovery.decisions).length ? '<button class="text-button" id="revisit-passed">Revisit passed roles</button>' : ''}<button class="text-button" data-change-locations>Change location filters</button><p class="source-note">Listings from <a href="https://www.arbeitnow.com" target="_blank" rel="noopener noreferrer">Arbeitnow</a> <a href="https://remotive.com" target="_blank" rel="noopener noreferrer">Remotive</a> and <a href="https://jobicy.com" target="_blank" rel="noopener noreferrer">Jobicy</a> and <a href="https://himalayas.app" target="_blank" rel="noopener noreferrer">Himalayas</a>. Your location, role and listing-age filters still apply.</p></div>`;
+  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${loading ? 'Finding your next possibility…' : feedError ? 'The search paused.' : hasMoreJobs() ? 'More results to search.' : discovery.fetchedAt ? 'No unreviewed matches in this search.' : 'Let’s find your kind of work.'}</h2><p>${loading ? 'Looking for consulting, implementation and business analysis roles.' : feedError ? 'A source could not be reached. Retry to keep searching; your saved roles are safe.' : hasMoreJobs() ? 'There are more source searches or pages to check. Continue searching with your current filters.' : 'No more matching roles in the listings retrieved so far for '+esc(scopeLabel())+'. This is a limited set of public sources, not every vacancy. Change Locations, check for new postings later, or revisit roles you passed.'}</p><button class="primary-button" id="empty-refresh" ${loading ? 'disabled' : ''}>${loading ? 'Finding roles…' : feedError?'Retry search':hasMoreJobs()?'Keep searching':'Check for new jobs'}</button>${Object.keys(discovery.decisions).length ? '<button class="text-button" id="revisit-passed">Revisit passed roles</button>' : ''}<button class="text-button" data-change-locations>Change location filters</button><p class="source-note">Listings from <a href="https://www.arbeitnow.com" target="_blank" rel="noopener noreferrer">Arbeitnow</a> <a href="https://remotive.com" target="_blank" rel="noopener noreferrer">Remotive</a> and <a href="https://jobicy.com" target="_blank" rel="noopener noreferrer">Jobicy</a> and <a href="https://himalayas.app" target="_blank" rel="noopener noreferrer">Himalayas</a>. Your location, experience, role and listing-age filters still apply.</p></div>`;
     return;
   }
   const previousCard=$('active-card');
@@ -799,6 +803,7 @@ $('save-job').addEventListener('click',() => decide('save'));
 $('prepare-job').addEventListener('click',() => decide('prepare'));
 $('undo-swipe').addEventListener('click',undoSwipe);
 $('location-filter').addEventListener('click',openLocations);
+$('experience-filter').addEventListener('click',openLocations);
 $('close-locations').addEventListener('click',()=>$('location-dialog').close());
 $('filter-region').addEventListener('change',()=>{$('filter-country-group').hidden=$('filter-region').value!=='europe';$('filter-country').value='';});
 $('apply-locations').addEventListener('click',()=>applyLocations());

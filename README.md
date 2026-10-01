@@ -245,3 +245,9 @@ Simple alternatives such as “Jira, Confluence or similar technologies” accep
 Job/candidate qualifications and required/relevant/professional experience labels now start requirements sections rather than becoming scored points. Implementation, platform support, launch QA, client support and operational-excellence sections retain their duties in both HTML and flattened feed text.
 
 The local checker recognises written/verbal communication wording from confirmed communication skills, concrete cross-team work for a generic collaboration requirement, and analytical troubleshooting only when both analytical and technical-resolution evidence exist. Multiple-project management, testing/validation and platform work provide partial evidence with specific remaining conditions; they do not certify prioritisation under pressure, every quality expectation or product-operations ownership. These changes require no paid model calls.
+
+### Experience filter (release 57)
+
+Discover defaults to a maximum advertised minimum of four years, hiding explicit requirements of five years or more. The shortcut above the card opens the existing search filters, where the limit can be changed or disabled. The filter applies to cached and incoming roles across all regions; changing locations preserves the chosen experience limit. Saved applications remain in the notebook.
+
+Experience ranges use their lower bound; preferred-only experience, company age, contract lengths, upper bounds and roles without a clear minimum do not impose a gate. The parser supports numeric and written English year counts and common experience wording. This is an advert filter, not a certification that total CV tenure meets a role's domain-specific experience. The preference is validated and included in profile backups and device transfers.
