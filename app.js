@@ -5,7 +5,7 @@ import {recoverImport,getItem as deviceItem,setItem as deviceSetItem} from './li
 import {startDeviceSync} from './lib/device-sync.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=46';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=47';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -146,18 +146,20 @@ function summaryMarkup(job){
  if(job.historical)return '<p>Only your saved notes are available for this role. Open the listing for current details.</p>';
  const summary=savedSummary(job);
  if(summary)return `<p class="job-overview">${esc(summary.overview)}</p><div class="summary-essential"><strong>Before you apply</strong><p>${esc(summary.essentials)}</p></div><div class="summary-benefits"><strong>Pay & benefits</strong><p>${esc(summary.benefits)}</p></div>`;
+ if(reviewServiceIssue)return `<p role="status">${esc(reviewServiceIssue)}</p>`;
+ if(browserConnection&&profile.evidence.trim())return '<p role="status">Your full CV review will include a summary.</p>';
  const message=summaryErrors.get(job.id);
  return `<p role="status">${esc(message|| (browserConnection?'Writing a short summary…':'Connect your saved setup in My profile to generate a short summary.'))}</p>${message?'<button class="text-button" data-retry-summary>Retry summary</button>':''}`;
 }
 async function requestSummary(job){
- if(job.historical||fullReview(job)||savedSummary(job)||summaryBusy)return;
+ if(job.historical||fullReview(job)||savedSummary(job)||summaryBusy||reviewServiceIssue||browserConnection&&profile.evidence.trim())return;
  summaryBusy=true;
  try{
   const source=summarySource(job);
   if(crypto.subtle&&!summaryHashes.has(source)){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source));summaryHashes.set(source,Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join(''));}
   if(savedSummary(job)||summaryErrors.has(job.id)||!browserConnection)return;
   const response=await fetch('/api/summary',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({title:job.title,location:job.location,description:job.description||''}),signal:AbortSignal.timeout(115000)});
-  const data=await response.json();if(!response.ok)throw new Error(data.error||'Summary unavailable.');
+  const data=await response.json();if(data.code==='REVIEW_QUOTA_EXHAUSTED')reviewServiceIssue=data.error;if(!response.ok)throw new Error(data.error||'Summary unavailable.');
   if(!data.summary||!['overview','essentials','benefits'].every(key=>typeof data.summary[key]==='string'))throw new Error('Summary unavailable.');
   summaryCache[job.id]={source:summarySource(job),summary:data.summary};
   const keys=Object.keys(summaryCache);while(keys.length>80)delete summaryCache[keys.shift()];
@@ -170,12 +172,13 @@ async function requestSummary(job){
   else if(current)requestSummary(current);
  }
 }
-const fitReviewCache=new Map(),fitReviewErrors=new Map(),fitReviewRetries=new Map();let fitReviewBusy=false,fitReviewTimer,activeReviewKey=null;
+const fitReviewCache=new Map(),fitReviewErrors=new Map(),fitReviewRetries=new Map();let fitReviewBusy=false,fitReviewTimer,activeReviewKey=null,reviewServiceIssue=null;
 function reviewInputFor(job){return {job:{title:job.title,location:job.location||'',remote:!!job.remote,description:job.description||job.requirements||''},profile:Object.fromEntries(['evidence','languages','workRights','salaryTarget','motivation','startDate','relocation'].map(key=>[key,profile[key]||'']))};}
 const fitReviewKey=job=>JSON.stringify([REVIEW_VERSION,new Date().toISOString().slice(0,10),reviewInputFor(job)]);
 function fullReview(job){return fitReviewCache.get(fitReviewKey(job));}
 function reviewStatusMarkup(job){
  if(fullReview(job))return '<span>CV review of supplied advert</span>';
+ if(reviewServiceIssue)return `${esc(reviewServiceIssue)} <button class="text-button" data-retry-fit>Check availability</button>`;
  if(!profile.evidence.trim())return 'Import and save CV details (JSON) in My profile to enable a full review. PDFs alone do not provide comparison details.';
  const error=fitReviewErrors.get(fitReviewKey(job));
  if(error)return `${esc(error)} <button class="text-button" data-retry-fit>Retry review</button>`;
@@ -198,7 +201,7 @@ function scheduleFitReview(job){
 }
 async function requestFitReview(job){
  const key=fitReviewKey(job),input=reviewInputFor(job);
- if(fitReviewBusy||fullReview(job)||fitReviewErrors.has(key)||!profile.evidence.trim()||!browserConnectionVerified||!browserConnection||!job.description)return;
+ if(fitReviewBusy||reviewServiceIssue||fullReview(job)||fitReviewErrors.has(key)||!profile.evidence.trim()||!browserConnectionVerified||!browserConnection||!job.description)return;
  if(fitReviewRetries.get(key)?.retryAt>Date.now()){scheduleFitReview(job);return;}
  fitReviewBusy=true;activeReviewKey=key;updateReviewStatus();
  try{
@@ -213,7 +216,8 @@ async function requestFitReview(job){
     const seconds=Math.max(1,Math.min(60,Number(response.headers.get('Retry-After'))||15));
     fitReviewRetries.set(key,{attempts,retryAt:Date.now()+seconds*1000});return;
    }
-   const data=await response.json();if(!response.ok)throw Error(data.error||'Review unavailable.');
+   const data=await response.json();if(data.code==='REVIEW_QUOTA_EXHAUSTED'){reviewServiceIssue=data.error;$('browser-connection-status').textContent='Private connection verified. Full reviews are paused: provider allowance exhausted.';const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(job);}
+   if(!response.ok)throw Error(data.error||'Review unavailable.');
    review=data.review;
    if(review?.version!==REVIEW_VERSION||!Array.isArray(review.points)||!Array.isArray(review.factors))throw Error('Review response was incomplete. Retry it.');
    stored[hash]=review;const hashes=Object.keys(stored);while(hashes.length>20)delete stored[hashes.shift()];
@@ -256,7 +260,7 @@ function openFullReview(job,review){
  $('fit-show-checks').onclick=()=>{$('role-dialog').close();const section=document.querySelector('.qualification-details');if(section){section.open=true;section.scrollIntoView({block:'start'});}};
  $('full-fit-profile').onclick=()=>$('role-dialog').close();updateFitCV(job,review.cv);
 }
-document.addEventListener('click',event=>{if(event.target.closest('[data-retry-fit]')){const job=deckJobs()[0];if(job){fitReviewErrors.delete(fitReviewKey(job));fitReviewRetries.delete(fitReviewKey(job));requestFitReview(job);if($('full-review-status'))$('full-review-status').innerHTML=reviewStatusMarkup(job);}}});
+document.addEventListener('click',event=>{if(event.target.closest('[data-retry-fit]')){const job=deckJobs()[0];if(job){reviewServiceIssue=null;fitReviewErrors.delete(fitReviewKey(job));fitReviewRetries.delete(fitReviewKey(job));requestFitReview(job);if($('full-review-status'))$('full-review-status').innerHTML=reviewStatusMarkup(job);}}});
 
 const qualificationStates={match:['✓','Supported'],partial:['?','Partly supported'],gap:['×','Gap'],unknown:['?','Unclear']};
 function qualificationMarkup(insights){
@@ -669,7 +673,7 @@ async function loadBrowserConnection(restore=true) {
    const response=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({action:'profile-corrections'}),signal:AbortSignal.timeout(15000)});
    if(!response.ok)throw Error(response.status===401?'The private setup was not accepted. Import your connection file again.':'The server could not verify your connection. Try Check connection again.');
    browserConnectionVerified=true;fitReviewErrors.clear();fitReviewRetries.clear();
-   $('browser-connection-status').textContent='Private connection verified. Full CV reviews are enabled.';
+   $('browser-connection-status').textContent=reviewServiceIssue?'Private connection verified. Full reviews are paused: provider allowance exhausted.':'Private connection verified. Full CV reviews are enabled.';
    const {correction}=await response.json();
    if(response.ok&&typeof correction?.id==='string'&&correction.id!==profile.profileCorrectionVersion){
     const next={...profile,profileCorrectionVersion:correction.id};

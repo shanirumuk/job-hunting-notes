@@ -1,4 +1,5 @@
-import {Stagehand,browserbase} from '@browserbasehq/stagehand';
+import {Stagehand} from '@browserbasehq/stagehand';
+import {launchReviewBrowser} from './review-service.js';
 import {z} from 'zod';
 import {descriptionText,roleInsights,matchJob,defaultProfile} from '../lib/model.js';
 import {recordedEmploymentMonths} from '../lib/insights.js';
@@ -82,7 +83,7 @@ export async function generateReview(input,{onAttempt}={}){
  if(!process.env.BROWSERBASE_API_KEY)throw Error('Review service is not configured');
  let browser,stagehand;
  try{
-  browser=await browserbase.launch({apiKey:process.env.BROWSERBASE_API_KEY,timeout:300,proxies:false,browserSettings:{recordSession:false,logSession:false,solveCaptchas:false,verified:false}});
+  browser=await launchReviewBrowser({apiKey:process.env.BROWSERBASE_API_KEY,timeout:300,proxies:false,browserSettings:{recordSession:false,logSession:false,solveCaptchas:false,verified:false}});
   stagehand=await Stagehand.create({browser,cache:{threshold:1},logging:{level:'off'},model:{modelName:'anthropic/claude-sonnet-4-6'}});
   const [page]=await browser.context.pages();
   const cvLines=Object.entries(input.profile).flatMap(([field,value])=>value.split(/\n+/).map(text=>({field,text:text.trim()})).filter(row=>row.text));

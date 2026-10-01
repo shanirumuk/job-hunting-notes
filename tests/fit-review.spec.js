@@ -65,3 +65,16 @@ test('saved connection is verified with the server and can be rechecked after re
  await page.route('**/api/setup',r=>r.fulfill({json:{correction:null}}));await page.locator('#check-private-connection').click();
  await expect(page.locator('#browser-connection-status')).toContainText('Private connection verified');
 });
+
+test('exhausted provider allowance is explained and stops automatic calls across jobs',async({page})=>{
+ let calls=0,summaries=0;
+ await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({status:402,json:{code:'REVIEW_QUOTA_EXHAUSTED',error:'Full reviews are paused because the Browserbase allowance is exhausted.'}});});
+ await connect(page,[job,{...job,id:'quota-second',title:'Implementation Consultant',company:'Other',link:'https://example.org/other'}]);
+ await page.route('**/api/summary',r=>{summaries++;return r.fulfill({status:503,json:{error:'Summary unavailable'}});});
+ await expect(page.locator('#full-review-status')).toContainText('allowance is exhausted');
+ await page.locator('#pass-job').click();await expect(page.locator('#full-review-status')).toContainText('allowance is exhausted');
+ await page.locator('.listing-info').click();await expect(page.locator('#fit-dialog-review-status')).toContainText('allowance is exhausted');
+ expect(calls).toBe(1);expect(summaries).toBe(0);
+ await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({json:{review}});});
+ await page.locator('#fit-dialog-review-status [data-retry-fit]').click();await expect(page.locator('#role-content')).toContainText('OVERALL APPLICATION FIT');expect(calls).toBe(2);
+});

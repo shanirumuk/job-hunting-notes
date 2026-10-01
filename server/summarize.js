@@ -1,4 +1,5 @@
-import {Stagehand,browserbase} from '@browserbasehq/stagehand';
+import {Stagehand} from '@browserbasehq/stagehand';
+import {launchReviewBrowser} from './review-service.js';
 import {z} from 'zod';
 export const summarySchema=z.object({
  overview:z.string().describe('A rewritten 2-sentence English overview, at most 25 words: purpose and actual day-to-day work. Not a list of extracted sentences.'),
@@ -21,7 +22,7 @@ export function validateSummary(value,job){
 export async function summarizeJobs(jobs){
  let browser,stagehand;
  try{
-  browser=await browserbase.launch({apiKey:process.env.BROWSERBASE_API_KEY,timeout:120,proxies:false,browserSettings:{recordSession:false,logSession:false,solveCaptchas:false,verified:false}});
+  browser=await launchReviewBrowser({apiKey:process.env.BROWSERBASE_API_KEY,timeout:120,proxies:false,browserSettings:{recordSession:false,logSession:false,solveCaptchas:false,verified:false}});
   stagehand=await Stagehand.create({browser,cache:{threshold:1},logging:{level:'off'},model:{modelName:'google/gemini-2.5-flash'}});
   const [page]=await browser.context.pages();
   const results=[];

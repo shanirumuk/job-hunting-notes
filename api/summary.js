@@ -1,3 +1,4 @@
+import {reviewServiceError} from '../server/review-service.js';
 import {authorized} from '../server/access.js';
 import {summarizeJobs} from '../server/summarize.js';
 import {createHash} from 'node:crypto';
@@ -15,6 +16,6 @@ export default async function handler(req,res){
  if(pending)return res.status(429).json({error:'Another summary is being prepared. Try again shortly.'});
  pending=true;
  try{const [summary]=await summarizeJobs([job]);cache.set(key,summary);if(cache.size>200)cache.delete(cache.keys().next().value);return res.status(200).json({summary});}
- catch(error){console.error('Summary unavailable',{name:error.name,status:error.status});return res.status(503).json({error:'Summary temporarily unavailable. Try again or open the original listing.'});}
+ catch(error){const serviceError=reviewServiceError(error);if(serviceError)return res.status(serviceError.status).json(serviceError);console.error('Summary unavailable',{name:error.name,status:error.status});return res.status(503).json({error:'Summary temporarily unavailable. Try again or open the original listing.'});}
  finally{pending=false;}
 }

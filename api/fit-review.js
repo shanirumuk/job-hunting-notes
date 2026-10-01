@@ -1,3 +1,4 @@
+import {reviewServiceError} from '../server/review-service.js';
 import {authorized} from '../server/access.js';
 import {reviewInput,generateReview} from '../server/fit-review.js';
 export const config={maxDuration:300};
@@ -14,7 +15,7 @@ export function createFitReviewHandler(generate=generateReview,now=Date.now){
   if(pending.size>=2){res.setHeader('Retry-After','15');return res.status(429).json({error:'The review service is busy. Your review will retry shortly.'});}
   const id=Symbol();pending.set(id,now());
   try{return res.status(200).json({review:await generate(input)});}
-  catch(error){console.error('Fit review unavailable',{name:error.name,status:error.status});return res.status(503).json({error:'The full review could not be completed. The quick check is still available; retry the review.'});}
+  catch(error){const serviceError=reviewServiceError(error);if(serviceError)return res.status(serviceError.status).json(serviceError);console.error('Fit review unavailable',{name:error.name,status:error.status});return res.status(503).json({error:'The full review could not be completed. The quick check is still available; retry the review.'});}
   finally{pending.delete(id);}
  };
 }
