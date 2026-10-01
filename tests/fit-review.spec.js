@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 const job={id:'full-review-fixture',company:'Example',title:'Business Analyst',location:'Berlin, Germany',link:'https://example.org/job',description:'Requirements:\nEnglish proficiency is essential.\nSQL experience required.'};
-const review={version:1,overall:6.5,skills:8,coverage:70,requirementCoverage:100,provisional:true,cap:'',summary:'Your SQL and English align. Check the contract duration.',cv:'Business Analyst CV',cvReason:'Lead with SQL reporting.',points:[{text:'English proficiency',sourceQuote:'English proficiency is essential.',category:'required',importance:'essential',status:'match',note:'Native English recorded.',cvQuote:'English native (C1)'},{text:'SQL experience',sourceQuote:'SQL experience required.',category:'required',importance:'standard',status:'partial',note:'Reporting is supported; the required depth is unclear.',cvQuote:'SQL reporting.'}],factors:['eligibility','location','pay','career','workStyle','contract'].map(key=>({key,status:'unknown',note:'Confirm this detail.',sourceQuote:'',cvQuote:''})),audit:[{paragraph:0,kind:'background'}],issues:[]};
+const review={version:2,overall:6.5,skills:8,coverage:70,requirementCoverage:100,provisional:true,cap:'',summary:'Your SQL and English align. Check the contract duration.',cv:'Business Analyst CV',cvReason:'Lead with SQL reporting.',points:[{text:'English proficiency',sourceQuote:'English proficiency is essential.',category:'required',importance:'essential',status:'match',note:'Native English recorded.',cvQuote:'English native (C1)'},{text:'SQL experience',sourceQuote:'SQL experience required.',category:'required',importance:'standard',status:'partial',note:'Reporting is supported; the required depth is unclear.',cvQuote:'SQL reporting.'}],factors:['eligibility','location','pay','career','workStyle','contract'].map(key=>({key,status:'unknown',note:'Confirm this detail.',sourceQuote:'',cvQuote:''})),audit:[{paragraph:0,kind:'background'}],issues:[]};
 async function connect(page,jobs=[job]){
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs,nextPage:null}}));
  await page.route('**/api/summary',r=>r.fulfill({status:503,json:{error:'Summary unavailable'}}));
@@ -77,4 +77,19 @@ test('exhausted provider allowance is explained and stops automatic calls across
  expect(calls).toBe(1);expect(summaries).toBe(0);
  await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({json:{review}});});
  await page.locator('#fit-dialog-review-status [data-retry-fit]').click();await expect(page.locator('#role-content')).toContainText('OVERALL APPLICATION FIT');expect(calls).toBe(2);
+});
+
+test('confirmed analytical and requirements evidence is added without replacing imported CVs',async({page})=>{
+ const {productBusinessAnalyst}=await import('./fixtures/product-business-analyst.js');
+ await page.route('**/api/fit-review',r=>r.fulfill({status:402,json:{code:'REVIEW_QUOTA_EXHAUSTED',error:'Provider allowance exhausted.'}}));
+ await connect(page,[{...job,...productBusinessAnalyst}]);
+ await page.route('**/api/setup',r=>r.fulfill({json:{correction:{id:'confirmed-ba',evidenceUpdate:{id:'confirmed-ba-evidence',lines:['Confirmed by you: I have an analytical mindset.','Confirmed by you: I have built system requirements after discussions with business teams.']}}}}));
+ await page.reload();await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidenceCorrectionVersion)).toBe('confirmed-ba-evidence');
+ await page.locator('.qualification-details > summary').click();
+ await expect(page.locator('.qualification.match').filter({hasText:'analytical approach'})).toHaveCount(1);
+ await expect(page.locator('.qualification.match').filter({hasText:'Translating business needs'})).toHaveCount(1);
+ await expect(page.locator('.qualification-details')).not.toContainText('Additional Requirements');
+ await expect(page.locator('.card-fit-summary')).toContainText('CV evidence score');
+ const evidence=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence);expect(evidence).toContain('SQL reporting.');
+ await page.reload();expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence)).toBe(evidence);
 });

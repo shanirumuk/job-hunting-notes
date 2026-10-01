@@ -73,7 +73,8 @@ test('specific evidence supports each skill, alternatives work, and missing skil
  assert.equal(roleInsights({description:'Requirements:\nAPI experience.'},{evidence:'XML file transfer.'}).requirements[0].status,'unknown');
 });
 test('negated skills and aspirations do not certify experience, and duration stays scoped to the requested work',()=>{
- for(const evidence of ['No Salesforce experience.','Currently learning Salesforce.','I want to use Salesforce.'])assert.equal(roleInsights({description:'Requirements:\nSalesforce experience.'},{evidence}).requirements[0].status,'unknown');
+ assert.equal(roleInsights({description:'Requirements:\nSalesforce experience.'},{evidence:'No Salesforce experience.'}).requirements[0].status,'gap');
+ for(const evidence of ['Currently learning Salesforce.','I want to use Salesforce.'])assert.equal(roleInsights({description:'Requirements:\nSalesforce experience.'},{evidence}).requirements[0].status,'unknown');
  const info=roleInsights({description:'Requirements:\n5 years of SQL experience.\nExpert SQL for healthcare reporting.\nBachelor degree in computing.'},{evidence:'10 years of customer service. SQL reporting.'});
  assert.equal(info.requirements[0].status,'partial');assert.equal(info.requirements[0].checks.find(c=>c.label==='Experience duration').status,'unknown');
  assert.equal(info.requirements[1].status,'partial');assert.equal(info.requirements[2].status,'unknown');
