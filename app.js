@@ -1,3 +1,4 @@
+import {mountListingHighlights,validHighlights} from './lib/listing-highlights.js';
 import {applyProfileCorrections} from './lib/profile-corrections.js';
 import {REVIEW_VERSION,reviewInsights,factorLabels} from './lib/fit-review.js';
 import {parseCVJSON,mergeCVImports} from './lib/cv-json.js';
@@ -6,7 +7,7 @@ import {recoverImport,getItem as deviceItem,setItem as deviceSetItem} from './li
 import {startDeviceSync} from './lib/device-sync.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=50';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=51';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -24,6 +25,7 @@ let profile;
 try {profile = validateProfile(read(PROFILE_KEY, defaultProfile));} catch {profile = {...defaultProfile}; storageError = true;}
 let discovery = read(DISCOVERY_KEY, {jobs: [], decisions: {}, fetchedAt: ''});
 if (!discovery || !Array.isArray(discovery.jobs) || !discovery.decisions || typeof discovery.decisions !== 'object') {discovery = {jobs: [], decisions: {}, fetchedAt: ''}; storageError = true;}
+let listingHighlights=null;
 let activeFilter = 'all', activeView = 'discover', undoAction = null, preparationId = null, loading = false, toastTimer, selectedRole = null, decisionPending = false;
 let pinnedJobId=null, feedError=false, autoBudget=3,feedController=null,feedRequestId=0;
 if(!Object.hasOwn(discovery,'nextPage'))discovery.nextPage=discovery.fetchedAt?4:1;
@@ -238,7 +240,7 @@ function applyFitReview(job){
  const review=fullReview(job);if(!review)return;
  if($('active-card')?.dataset.jobId===job.id){
   const old=document.querySelector('.qualification-details'),wasOpen=old?.open,scroll=$('active-card').scrollTop;
-  if(old){old.outerHTML=qualificationMarkup(reviewInsights(review));document.querySelector('.qualification-details').open=!!wasOpen;}
+  if(old){old.outerHTML=qualificationMarkup(reviewInsights(review));document.querySelector('.qualification-details').open=!!wasOpen;listingHighlights?.refresh();}
   document.querySelector('.card-fit-summary').textContent=review.overall===null?'Overall rating needs more evidence':`Application fit: ${review.overall}/10${review.provisional?' · Provisional':''} · ${review.coverage}% evidence coverage`;
   document.querySelector('.listing-info small').textContent=review.overall===null?'Fit':review.overall+'/10';
   $('role-summary').innerHTML=`<p class="job-overview">${esc(review.summary)}</p>`;
@@ -271,7 +273,7 @@ function qualificationMarkup(insights){
  const count=symbol=>required.filter(r=>mark(r)[0]===symbol).length;
  const group=(title,rows,key)=>rows.length?`<section class="qualification-group" data-qualification-group="${key}"><h3>${title}</h3><ul class="qualification-list">${rows.map(r=>{
   const [symbol,label]=mark(r),note=r.note||r.detail;
-  return `<li class="qualification ${r.status}${r.missing?' missing':''}"><span class="qualification-icon" role="img" aria-label="${esc(label)}" title="${esc(symbol==='✓'?r.checks.filter(c=>c.evidence).map(c=>c.evidence).join(' · '):note)}">${symbol}</span><div class="qualification-comparison"><p class="requirement-text">${esc(r.label)}</p>${symbol==='?'?`<p class="qualification-note">${esc(note)}</p>`:''}${symbol==='×'?`<span class="sr-only">${esc(note)}</span>`:''}</div></li>`;
+  return `<li class="qualification ${r.status}${r.missing?' missing':''}"><span class="qualification-icon" role="img" aria-label="${esc(label)}" title="${esc(symbol==='✓'?r.checks.filter(c=>c.evidence).map(c=>c.evidence).join(' · '):note)}">${symbol}</span><div class="qualification-comparison"><p class="requirement-text" data-highlight-kind="requirement">${esc(r.label)}</p>${symbol==='?'?`<p class="qualification-note">${esc(note)}</p>`:''}${symbol==='×'?`<span class="sr-only">${esc(note)}</span>`:''}</div></li>`;
  }).join('')}</ul></section>`:'';
  return `<details class="qualification-details"><summary>Your qualification match${insights.requirements.length?' ('+insights.requirements.length+')':''}</summary>
  <p class="qualification-overview">✓ ${count('✓')} · × ${count('×')} · ? ${count('?')} <span>required points</span></p>
@@ -295,16 +297,19 @@ function renderDeck() {
   $('undo-swipe').disabled = !undoAction;
   $('swipe-actions').hidden = !job;
   if (!job) {
+  listingHighlights?.destroy();listingHighlights=null;
   $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${loading ? 'Finding your next possibility…' : feedError ? 'The search paused.' : hasMoreJobs() ? 'More results to search.' : discovery.fetchedAt ? 'No unreviewed matches in this search.' : 'Let’s find your kind of work.'}</h2><p>${loading ? 'Looking for consulting, implementation and business analysis roles.' : feedError ? 'A source could not be reached. Retry to keep searching; your saved roles are safe.' : hasMoreJobs() ? 'There are more source searches or pages to check. Continue searching with your current filters.' : 'No more matching roles in the listings retrieved so far for '+esc(scopeLabel())+'. This is a limited set of public sources, not every vacancy. Change Locations, check for new postings later, or revisit roles you passed.'}</p><button class="primary-button" id="empty-refresh" ${loading ? 'disabled' : ''}>${loading ? 'Finding roles…' : feedError?'Retry search':hasMoreJobs()?'Keep searching':'Check for new jobs'}</button>${Object.keys(discovery.decisions).length ? '<button class="text-button" id="revisit-passed">Revisit passed roles</button>' : ''}<button class="text-button" data-change-locations>Change location filters</button><p class="source-note">Listings from <a href="https://www.arbeitnow.com" target="_blank" rel="noopener noreferrer">Arbeitnow</a> <a href="https://remotive.com" target="_blank" rel="noopener noreferrer">Remotive</a> and <a href="https://jobicy.com" target="_blank" rel="noopener noreferrer">Jobicy</a> and <a href="https://himalayas.app" target="_blank" rel="noopener noreferrer">Himalayas</a>. Your location and role preferences still apply.</p></div>`;
     return;
   }
   const previousCard=$('active-card');
   const signature=JSON.stringify([job.id,job.company,job.title,job.location,job.link,job.description,job.requirements,job.source,job.remote,job.match,profile]);
-  if(previousCard?.listingSignature===signature){requestSummary(job);scheduleFitReview(job);return;}
+  if(previousCard?.listingSignature===signature){if(!previousCard.classList.contains('highlighting'))listingHighlights?.refresh();requestSummary(job);scheduleFitReview(job);return;}
   const reading=previousCard?.dataset.jobId===job.id?{scroll:previousCard.scrollTop,open:Object.fromEntries([...previousCard.querySelectorAll('details')].map(el=>[el.className,el.open]))}:null;
   const {match}=job,insights=roleInsights(job,profile),fit=jobFitReport(job,profile);
-  $('job-deck').innerHTML=`<article class="job-card" id="active-card" data-job-id="${esc(job.id)}" aria-label="${esc(job.title)} at ${esc(job.company)}"><span class="swipe-label" aria-hidden="true"></span><div class="card-top"><div class="company-line"><span class="company-monogram" aria-hidden="true">${esc(job.company.slice(0,1))}</span><div class="company-info"><strong>${esc(job.company)}</strong><small>${job.historical?'Saved role · check availability':'From the employer’s listing'}</small></div><button class="listing-info" data-role-details type="button" aria-label="Job fit, rating and recommended CV" title="Job fit, rating and recommended CV"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg><small>${fit.score===null?'Fit':fit.score+'/10'}</small></button></div><h2>${esc(job.title)}</h2><p class="job-location">◎ ${esc(scopedLocation(job,profile))}${job.remote?' · Remote option':''}</p>${profile.geography!=='international'?`<p class="location-evidence">${esc(geographicMatch(job,profile).label)}</p>`:''}</div><div class="card-body"><section class="inline-role" aria-label="Role details"><p class="card-fit-summary">${fit.score!==null?`CV evidence score: ${fit.score}/10${fit.provisional?' · Provisional':''} · ${fit.coverage}% assessed`:{'missing-profile':'Add CV details to rate this job','missing-requirements':'CV ready · Advert needs more detail',unassessed:'CV ready · Requirements need review'}[fit.ratingState]}</p><h3>In brief</h3>${scopedLocation(job,profile)!==job.location?`<details class="source-locations"><summary>All advertised locations</summary><p>${esc(job.location)}</p></details>`:''}<div id="role-summary">${summaryMarkup(job)}</div>${insights.commercial?'<p class="fit-caution">Commercial / sales focus — lower priority for your consulting direction.</p>':''}${qualificationMarkup(insights)}<p id="full-review-status" class="source-note" role="status">${reviewStatusMarkup(job)}</p><details class="source-description"><summary>Full employer advert</summary><p class="source-note">The complete source text, including responsibilities, requirements and benefits.</p><p>${esc(descriptionText(job.description||job.requirements||'No description supplied.'))}</p></details></section></div><div class="card-footer"><span class="cv-tag">${esc(match.cv)}<br><a href="${esc(safeURL(job.link))}" target="_blank" rel="noopener noreferrer">${esc(job.source||'Original listing')} ↗</a></span><button class="text-button" data-read-role type="button">Read role ↓</button></div></article>`;
+  $('job-deck').innerHTML=`<article class="job-card" id="active-card" data-job-id="${esc(job.id)}" aria-label="${esc(job.title)} at ${esc(job.company)}"><span class="swipe-label" aria-hidden="true"></span><div class="card-top"><div class="company-line"><span class="company-monogram" aria-hidden="true">${esc(job.company.slice(0,1))}</span><div class="company-info"><strong>${esc(job.company)}</strong><small>${job.historical?'Saved role · check availability':'From the employer’s listing'}</small></div><button class="listing-info" data-role-details type="button" aria-label="Job fit, rating and recommended CV" title="Job fit, rating and recommended CV"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg><small>${fit.score===null?'Fit':fit.score+'/10'}</small></button></div><h2>${esc(job.title)}</h2><p class="job-location">◎ ${esc(scopedLocation(job,profile))}${job.remote?' · Remote option':''}</p>${profile.geography!=='international'?`<p class="location-evidence">${esc(geographicMatch(job,profile).label)}</p>`:''}</div><div class="card-body"><section class="inline-role" aria-label="Role details"><p class="card-fit-summary">${fit.score!==null?`CV evidence score: ${fit.score}/10${fit.provisional?' · Provisional':''} · ${fit.coverage}% assessed`:{'missing-profile':'Add CV details to rate this job','missing-requirements':'CV ready · Advert needs more detail',unassessed:'CV ready · Requirements need review'}[fit.ratingState]}</p><h3>In brief</h3>${scopedLocation(job,profile)!==job.location?`<details class="source-locations"><summary>All advertised locations</summary><p>${esc(job.location)}</p></details>`:''}<div id="role-summary">${summaryMarkup(job)}</div>${insights.commercial?'<p class="fit-caution">Commercial / sales focus — lower priority for your consulting direction.</p>':''}${qualificationMarkup(insights)}<p id="full-review-status" class="source-note" role="status">${reviewStatusMarkup(job)}</p><details class="source-description"><summary>Full employer advert</summary><p class="source-note">The complete source text, including responsibilities, requirements and benefits.</p><p class="source-advert-text" data-highlight-kind="advert">${esc(descriptionText(job.description||job.requirements||'No description supplied.'))}</p></details></section></div><div class="card-footer"><span class="cv-tag">${esc(match.cv)}<br><a href="${esc(safeURL(job.link))}" target="_blank" rel="noopener noreferrer">${esc(job.source||'Original listing')} ↗</a></span><button class="text-button" data-read-role type="button">Read role ↓</button></div></article>`;
   const card=$('active-card');card.listingSignature=signature;
+  listingHighlights?.destroy();
+  listingHighlights=mountListingHighlights(card,{read:()=>discovery.highlights?.[job.id],write:highlights=>{const next={...discovery,highlights:{...discovery.highlights,[job.id]:highlights}};if(!persist(DISCOVERY_KEY,next))return false;discovery=next;return true;},notify:toast});
   if(reading){card.querySelectorAll('details').forEach(el=>el.open=!!reading.open[el.className]);card.scrollTop=reading.scroll;}
   wireSwipe();
   requestSummary(job);scheduleFitReview(job);
@@ -471,7 +476,7 @@ function wireSwipe() {
   const threshold = () => Math.max(64, Math.min(125, card.clientWidth * .23));
   const interactive = 'a,button,summary,input,textarea,select,label,[contenteditable="true"]';
   card.addEventListener('pointerdown', e => {
-    if (decisionPending || e.button !== 0 || !e.isPrimary || e.target.closest(interactive)) return;
+    if (card.classList.contains('highlighting') || decisionPending || e.button !== 0 || !e.isPrimary || e.target.closest(interactive)) return;
     start = {x:e.clientX,y:e.clientY,id:e.pointerId,time:e.timeStamp,dragging:false}; dx = 0;
     // Prevent mouse text selection while keeping native vertical touch scrolling.
     if(e.pointerType==='mouse')e.preventDefault();
@@ -515,7 +520,7 @@ function wireSwipe() {
 
 function wireTrackpadAndKeys() {
   let gesture=null, idleTimer;
-  const blocked=()=>activeView!=='discover'||document.querySelector('dialog[open]');
+  const blocked=()=>activeView!=='discover'||document.querySelector('dialog[open]')||$('active-card')?.classList.contains('highlighting')||!window.getSelection()?.isCollapsed;
   function finishGesture(){
     if(gesture && !gesture.committed && gesture.card.isConnected){
       gesture.card.classList.remove('dragging');gesture.card.style.transform='';
@@ -555,10 +560,17 @@ function wireTrackpadAndKeys() {
   });
 }
 
+function showEntryHighlights(id) {
+ const target=$('entry-highlights'),highlights=validHighlights(discovery.highlights?.[id]);
+ target.hidden=!highlights.length;
+ target.innerHTML=`<summary>Saved highlights (${highlights.length})</summary><ul>${highlights.map(h=>`<li><blockquote>${esc(h.quote)}</blockquote><button type="button" class="text-button" data-remove-highlight="${esc(h.id)}" aria-label="Remove highlight: ${esc(h.quote.slice(0,70))}">Remove</button></li>`).join('')}</ul>`;
+ target.onclick=event=>{const remove=event.target.closest('[data-remove-highlight]');if(!remove)return;const next={...discovery,highlights:{...discovery.highlights,[id]:highlights.filter(h=>h.id!==remove.dataset.removeHighlight)}};if(persist(DISCOVERY_KEY,next)){discovery=next;showEntryHighlights(id);listingHighlights?.refresh();target.querySelector('summary').focus();}};
+}
 function openEditor(entry) {
   form.reset(); $('save-status').textContent = ''; $('delete-button').hidden = !entry; $('edit-materials').hidden = !entry || !['To apply','Preparing','Not applied'].includes(entry.status); $('editor-title').textContent = entry ? 'Edit application' : 'Add application';
   const map = {id:'entry-id',company:'company',title:'title',location:'location',status:'status',applicationDate:'application-date',interviewDate:'interview-date',followUpDate:'follow-up-date',link:'link',materials:'materials',requirements:'requirements',notes:'notes'};
   if (entry) Object.entries(map).forEach(([key,id]) => $(id).value = entry[key] || '');
+  showEntryHighlights(entry?.id);
   editor.showModal();
 }
 function upsert(event) {

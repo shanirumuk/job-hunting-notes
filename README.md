@@ -211,3 +211,9 @@ Set `JOB_NOTEBOOK_REVIEW_PROVIDER=openai` and `OPENAI_API_KEY` as server-side pr
 Reviews and summaries try the selected provider first, then the other configured provider (OpenAI or Browserbase) on exhausted allowance, rate limits, network timeouts or server outages. Both review paths use the same rubric and evidence validation. The completed review records its actual model and explains any fallback in the rating details. Each provider needs its own funded allowance; adding an OpenAI key does not replenish Browserbase. Invalid keys, model-access errors, refusals, invalid requests and incomplete/unverifiable output do not trigger a provider switch.
 
 A worker skips an exhausted provider for five minutes and a temporarily busy provider for 30 seconds. These cooldowns are per serverless worker, not a durable global quota tracker. Calls have a shared time budget and try each provider at most once; evidence validation may retry once within that provider’s remaining budget. When no provider succeeds, the app keeps the local CV evidence score clearly separate from a full review.
+
+### Listing highlights (release 51)
+
+Choose **Highlight text** on a job card, select a passage in the qualification checklist or **Full employer advert**, then choose **Highlight selection**. **Done** restores swipe gestures and keyboard job shortcuts. Text selection stays native, including touch selection handles. **Saved highlights** lets you review and remove passages; saved jobs also show these under **Applications → Edit notes**. This feature runs locally and needs no AI credit.
+
+Highlights are stored per job in discovery data and travel with notebook backups and device transfers. Quotes use text offsets plus surrounding context, so a changed advert will not silently highlight an unrelated passage. If a passage no longer matches, its saved quote remains in the highlights list. Saving failures are reported without replacing existing highlights.

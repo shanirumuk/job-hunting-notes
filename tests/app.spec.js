@@ -267,11 +267,12 @@ test('touch tablet keeps the whole deck usable without desktop-width magnificati
   await page.locator('[data-read-role]').click();await expect(page.locator('.inline-role')).toContainText(jobs[0].description);await context.close();
 });
 test('connected swipe keeps opening the employer separately without sending a preparation request',async({page})=>{
+ await page.route('**/api/setup',route=>route.fulfill({json:{correction:null}}));
  await setup(page);await page.locator('[data-view="profile"]').first().click();
  const token='test-connection-token-'.padEnd(43,'x');
  const bundle={automationToken:token,profile:{name:'Test Applicant',email:'test@example.org'},cvs:{analyst:{name:'BA.pdf',base64:Buffer.from('%PDF-1.4\\n%%EOF').toString('base64')}}};
  await page.locator('#profile-import').setInputFiles({name:'setup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(bundle))});
- await expect(page.locator('#browser-connection-status')).toContainText('connected on this device');
+ await expect(page.locator('#browser-connection-status')).toContainText('Private connection verified');
  let sent=false;await page.route('**/api/prepare',route=>{sent=true;return route.abort();});
  await page.locator('[data-view="discover"]').first().click();await page.locator('#prepare-job').click();
  await expect(page.locator('#browser-dialog')).not.toBeVisible();expect(sent).toBe(false);

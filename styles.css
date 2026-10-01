@@ -78,6 +78,17 @@ body[data-view="discover"] main { height: calc(100dvh - var(--top-height) - var(
 .job-card { position: relative; height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #d9cdd4 transparent; background: var(--surface); border: 1px solid #e3dbdf; border-radius: 24px; box-shadow: 0 6px 20px #4a2d3d07; touch-action: pan-y; transition: transform .18s ease; display: flex; flex-direction: column; }
 .job-card { cursor: grab; }
 .job-card.dragging { transition: none; user-select: none; cursor: grabbing; }
+.highlight-tools { position: sticky; top: -1px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 0; background: var(--surface); border-bottom: 1px solid #e3dbdf; margin-bottom: 14px; }
+.highlight-tools button { min-height: 44px; font-size: 13px; padding: 8px 12px; border-radius: 10px; }
+.inline-role .highlight-tools .highlight-help { flex-basis: 100%; font-size: 13px; line-height: 1.4; margin: 0 0 4px; color: var(--muted); }
+.highlight-tools [aria-pressed="true"] { background: #fff1ad; border-radius: 10px; }
+.highlighting [data-highlight-kind] { cursor: text; user-select: text; -webkit-user-select: text; }
+.listing-highlight { background: #ffed9a; color: #302b31; border-radius: 3px; padding: 1px 0; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.saved-highlights { margin-bottom: 16px; font-size: .9rem; }
+.saved-highlights summary { cursor: pointer; min-height: 44px; padding: 10px 0; font-weight: 600; }
+.saved-highlights ul { padding: 0; list-style: none; }
+.saved-highlights li { border-top: 1px solid #e3dbdf; padding: 10px 0; }
+.saved-highlights blockquote { margin: 0; border-left: 3px solid #ead478; padding-left: 10px; overflow-wrap: anywhere; white-space: pre-line; }
 .job-card :is(a,button,summary) { cursor: pointer; }
 .card-top { padding: 20px 20px 17px; background: linear-gradient(120deg, #f1e9ed, #fbf7f3); flex-shrink: 0; }
 .company-line { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
