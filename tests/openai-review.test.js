@@ -14,7 +14,7 @@ test('direct OpenAI requests use structured output, no stored response, and serv
 });
 test('setup, quota, permission and incomplete errors never leak provider details',async()=>{
  let calls=0;await assert.rejects(extractStructured({schema},{apiKey:'',fetcher:async()=>{calls++;}}),e=>e.serviceCode==='REVIEW_SETUP_REQUIRED');assert.equal(calls,0);
- for(const [status,code,expected] of [[401,'invalid_api_key','REVIEW_SETUP_REQUIRED'],[429,'insufficient_quota','REVIEW_QUOTA_EXHAUSTED'],[429,'rate_limit','REVIEW_BUSY'],[403,'permission_denied','REVIEW_MODEL_UNAVAILABLE']]){
+ for(const [status,code,expected] of [[400,'invalid_request','REVIEW_REQUEST_INVALID'],[500,'server_error','REVIEW_PROVIDER_UNAVAILABLE'],[401,'invalid_api_key','REVIEW_SETUP_REQUIRED'],[429,'insufficient_quota','REVIEW_QUOTA_EXHAUSTED'],[429,'credit_balance_exhausted','REVIEW_QUOTA_EXHAUSTED'],[429,'billing_hard_limit_reached','REVIEW_QUOTA_EXHAUSTED'],[429,'rate_limit','REVIEW_BUSY'],[403,'permission_denied','REVIEW_MODEL_UNAVAILABLE']]){
   await assert.rejects(extractStructured({schema},{apiKey:'test',fetcher:async()=>response({error:{code,message:'SECRET key fragment'}},status)}),e=>{assert.equal(e.serviceCode,expected);assert(!JSON.stringify(reviewServiceError(e)).includes('SECRET'));return true;});
  }
  for(const data of [{status:'incomplete',output:[]},{status:'completed',output:[{type:'message',content:[{type:'refusal',refusal:'No'}]}]}])await assert.rejects(extractStructured({schema},{apiKey:'test',fetcher:async()=>response(data)}));

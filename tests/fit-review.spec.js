@@ -103,3 +103,11 @@ test('missing OpenAI setup is visible without launching repeated failed reviews'
  await page.keyboard.press('Escape');await page.route('**/api/setup',r=>r.fulfill({json:{correction:null,reviewProvider:{provider:'openai',model:'gpt-6-luna',configured:true}}}));
  await page.reload();await expect(page.locator('#browser-connection-status')).toContainText('GPT-6 Luna is configured');await expect(page.locator('.card-fit-summary')).toContainText('Application fit: 6.5/10');
 });
+
+test('fallback reviews show the actual model and reason in rating details',async({page})=>{
+ await page.route('**/api/fit-review',r=>r.fulfill({json:{review:{...review,model:'anthropic/claude-sonnet-4-6',provider:'browserbase',fallback:{from:'openai',reason:'allowance exhausted'}}}}));
+ await connect(page);await expect(page.locator('.card-fit-summary')).toContainText('Application fit: 6.5/10');
+ await page.locator('.listing-info').click();await page.getByText('How the rating is calculated',{exact:true}).click();
+ await expect(page.locator('#role-dialog')).toContainText('Review model: anthropic/claude-sonnet-4-6');
+ await expect(page.locator('#role-dialog')).toContainText('Backup provider used (openai: allowance exhausted)');
+});

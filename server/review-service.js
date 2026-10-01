@@ -16,7 +16,7 @@ export async function launchReviewBrowser(options,{launch=browserbase.launch,cli
   if(error.name!=='BrowserbaseSessionError')throw error;
   let session;
   try{session=await client.sessions.create({timeout:60,browserSettings:{recordSession:false,logSession:false}});}
-  catch(cause){if(cause.status===402)throw Object.assign(new Error('Review provider allowance exhausted'),{status:402});}
+  catch(cause){if(cause.status===402||cause.status===429||cause.status>=500)throw Object.assign(new Error('Review provider unavailable'),{status:cause.status});}
   finally{if(session)await client.sessions.update(session.id,{projectId:session.projectId,status:'REQUEST_RELEASE'}).catch(()=>{});}
   throw error;
  }
