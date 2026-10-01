@@ -111,3 +111,22 @@ test('fallback reviews show the actual model and reason in rating details',async
  await expect(page.locator('#role-dialog')).toContainText('Review model: anthropic/claude-sonnet-4-6');
  await expect(page.locator('#role-dialog')).toContainText('Backup provider used (openai: allowance exhausted)');
 });
+
+test('CRM and degree confirmations improve the local checklist while AI reviews are paused',async({page})=>{
+ const {telesalesOperations}=await import('./fixtures/telesales-operations.js');
+ await page.route('**/api/fit-review',r=>r.fulfill({status:402,json:{code:'REVIEW_QUOTA_EXHAUSTED',error:'Provider allowance exhausted.'}}));
+ await connect(page,[{...job,...telesalesOperations}]);
+ await page.route('**/api/setup',r=>r.fulfill({json:{correction:{id:'confirmed-crm',evidenceUpdate:{id:'crm-degree',previous:{id:'earlier',lines:['I have an analytical mindset.']},lines:["I have a bachelor's degree in Digital Business and Data Science.",'I have added Frappe CRM to a project before.']}}}}));
+ await page.reload();await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidenceCorrectionVersion)).toBe('crm-degree');
+ await page.locator('.qualification-details > summary').click();
+ const required=page.locator('[data-qualification-group="required"]');
+ await expect(required.locator('.qualification.match').filter({hasText:"Bachelor's degree"})).toHaveCount(1);
+ await expect(required.locator('.qualification.partial').filter({hasText:'Strong CRM experience'})).toContainText('Frappe CRM');
+ await expect(required).not.toContainText('added advantage');
+ await expect(page.locator('[data-qualification-group="optional"]')).toContainText('added advantage');
+ await expect(page.locator('.qualification-details')).not.toContainText('Important Notice');
+ await expect(page.locator('.qualification-details')).not.toContainText('recruitment fees');
+ await page.locator('.source-description > summary').click();await expect(page.locator('.source-description')).toContainText('recruitment fees');
+ const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence);expect(saved).toContain('SQL reporting.');
+ await page.reload();expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence)).toBe(saved);
+});

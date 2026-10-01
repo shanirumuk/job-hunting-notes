@@ -217,3 +217,9 @@ A worker skips an exhausted provider for five minutes and a temporarily busy pro
 Choose **Highlight text** on a job card, select a passage in the qualification checklist or **Full employer advert**, then choose **Highlight selection**. **Done** restores swipe gestures and keyboard job shortcuts. Text selection stays native, including touch selection handles. **Saved highlights** lets you review and remove passages; saved jobs also show these under **Applications → Edit notes**. This feature runs locally and needs no AI credit.
 
 Highlights are stored per job in discovery data and travel with notebook backups and device transfers. Quotes use text offsets plus surrounding context, so a changed advert will not silently highlight an unrelated passage. If a passage no longer matches, its saved quote remains in the highlights list. Saving failures are reported without replacing existing highlights.
+
+### Qualification cleanup (release 52)
+
+The local checker recognises standalone degree requirements by level and subject, including a related business field when the advert explicitly permits one. It keeps unrelated disciplines, higher degrees, certifications and additional conditions unresolved. CRM project integration supplies transferable evidence without claiming named vendor experience or day-to-day sales operations expertise. “An added advantage” is optional; compound CRM and work-style conditions are shown separately. Company-promotion and recruitment-notice sections stop requirement extraction, while location and background-check information remain practical terms and the original advert is unchanged.
+
+Private profile confirmations can extend earlier correction batches. A previously applied batch is not reapplied over later user edits, while a new device receives the complete chain.
