@@ -45,3 +45,23 @@ test('connection-only import preserves existing CV details and applies confirmed
  const after=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')));
  expect(after.evidence).toBe(before.evidence);expect(after.languages).toBe('English native (C1), German B1');expect(after.profileCorrectionVersion).toBe('connection-only-native');await expect(page.locator('#analyst-file-status')).toContainText('CV.pdf');
 });
+
+test('busy reviews retry automatically and show progress in the Fit dialog',async({page})=>{
+ let calls=0,release;const gate=new Promise(resolve=>release=resolve);
+ await page.route('**/api/fit-review',async r=>{calls++;if(calls===1)await r.fulfill({status:429,headers:{'Retry-After':'2'},json:{error:'Busy'}});else{await gate;await r.fulfill({json:{review}});}});
+ await connect(page);
+ await expect(page.locator('#full-review-status')).toContainText('Retrying automatically');
+ await page.locator('.listing-info').click();await expect(page.locator('#fit-dialog-review-status')).toContainText('Retrying automatically');
+ await expect.poll(()=>calls).toBe(2);await expect(page.locator('#fit-dialog-review-status')).toContainText('1–4 minutes');
+ release();await expect(page.locator('#role-content')).toContainText('OVERALL APPLICATION FIT');await expect(page.locator('.fit-score')).toContainText('6.5');
+});
+
+test('saved connection is verified with the server and can be rechecked after rejection',async({page})=>{
+ await page.route('**/api/fit-review',r=>r.fulfill({json:{review}}));await connect(page);
+ await expect(page.locator('#browser-connection-status')).toContainText('Private connection verified');
+ await page.route('**/api/setup',r=>r.fulfill({status:401,json:{error:'Not authorized'}}));
+ await page.locator('.main-nav [data-view="profile"]').click();await page.locator('#check-private-connection').click();
+ await expect(page.locator('#browser-connection-status')).toContainText('not accepted');
+ await page.route('**/api/setup',r=>r.fulfill({json:{correction:null}}));await page.locator('#check-private-connection').click();
+ await expect(page.locator('#browser-connection-status')).toContainText('Private connection verified');
+});

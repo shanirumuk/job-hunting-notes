@@ -1,5 +1,5 @@
-const CACHE = 'job-notebook-v45';
-const ASSETS = ['/', '/index.html', '/styles.css?v=45', '/app.js?v=45', '/lib/model.js?v=45', '/lib/geography.js', '/lib/insights.js', '/lib/fit-review.js', '/lib/summaries.js', '/lib/model.js', '/lib/cv-json.js', '/lib/device-crypto.js', '/lib/device-store.js', '/lib/device-sync.js', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'job-notebook-v46';
+const ASSETS = ['/', '/index.html', '/styles.css?v=46', '/app.js?v=46', '/lib/model.js?v=46', '/lib/geography.js', '/lib/insights.js', '/lib/fit-review.js', '/lib/summaries.js', '/lib/model.js', '/lib/cv-json.js', '/lib/device-crypto.js', '/lib/device-store.js', '/lib/device-sync.js', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => /^job-notebook-v\d+$/.test(key) && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', event => {

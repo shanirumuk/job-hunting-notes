@@ -5,7 +5,7 @@ import {recoverImport,getItem as deviceItem,setItem as deviceSetItem} from './li
 import {startDeviceSync} from './lib/device-sync.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=45';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs} from './lib/model.js?v=46';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -170,46 +170,63 @@ async function requestSummary(job){
   else if(current)requestSummary(current);
  }
 }
-const fitReviewCache=new Map(),fitReviewErrors=new Map();let fitReviewBusy=false,fitReviewTimer;
+const fitReviewCache=new Map(),fitReviewErrors=new Map(),fitReviewRetries=new Map();let fitReviewBusy=false,fitReviewTimer,activeReviewKey=null;
 function reviewInputFor(job){return {job:{title:job.title,location:job.location||'',remote:!!job.remote,description:job.description||job.requirements||''},profile:Object.fromEntries(['evidence','languages','workRights','salaryTarget','motivation','startDate','relocation'].map(key=>[key,profile[key]||'']))};}
 const fitReviewKey=job=>JSON.stringify([REVIEW_VERSION,new Date().toISOString().slice(0,10),reviewInputFor(job)]);
 function fullReview(job){return fitReviewCache.get(fitReviewKey(job));}
 function reviewStatusMarkup(job){
  if(fullReview(job))return '<span>CV review of supplied advert</span>';
- if(!profile.evidence.trim())return '';
+ if(!profile.evidence.trim())return 'Import and save CV details (JSON) in My profile to enable a full review. PDFs alone do not provide comparison details.';
  const error=fitReviewErrors.get(fitReviewKey(job));
  if(error)return `${esc(error)} <button class="text-button" data-retry-fit>Retry review</button>`;
- return browserConnection?'Full CV review in progress. You can keep browsing.':'Quick qualification check. <button class="text-button" data-view="profile">Connect private setup for a full review</button>';
+ if(!browserConnection)return 'Quick qualification check. <button class="text-button" data-view="profile">Connect private setup for a full review</button>';
+ if(!browserConnectionVerified)return 'Private connection not verified yet. Check the connection status in My profile.';
+ if(!job.description)return 'Full review needs listing text. Open the original listing for details.';
+ if(fitReviewRetries.get(fitReviewKey(job))?.retryAt>Date.now())return 'Review service busy. Retrying automatically shortly; you can keep browsing.';
+ if(fitReviewBusy&&activeReviewKey!==fitReviewKey(job))return 'Waiting for the previous review to finish. This job will be reviewed next.';
+ return 'Full CV review in progress. This can take 1–4 minutes. You can keep browsing.';
+}
+function updateReviewStatus(){
+ const current=deckJobs()[0];if(current&&$('full-review-status'))$('full-review-status').innerHTML=reviewStatusMarkup(current);
+ if(selectedRole&&$('fit-dialog-review-status'))$('fit-dialog-review-status').innerHTML=reviewStatusMarkup(selectedRole);
 }
 function scheduleFitReview(job){
  clearTimeout(fitReviewTimer);
  if(fullReview(job)){applyFitReview(job);return;}
- fitReviewTimer=setTimeout(()=>requestFitReview(job),1400);
+ const retryAt=fitReviewRetries.get(fitReviewKey(job))?.retryAt||0;
+ fitReviewTimer=setTimeout(()=>requestFitReview(job),Math.max(1400,retryAt-Date.now()));
 }
 async function requestFitReview(job){
  const key=fitReviewKey(job),input=reviewInputFor(job);
- if(fitReviewBusy||fullReview(job)||fitReviewErrors.has(key)||!profile.evidence.trim()||!browserConnection||!job.description)return;
- fitReviewBusy=true;
+ if(fitReviewBusy||fullReview(job)||fitReviewErrors.has(key)||!profile.evidence.trim()||!browserConnectionVerified||!browserConnection||!job.description)return;
+ if(fitReviewRetries.get(key)?.retryAt>Date.now()){scheduleFitReview(job);return;}
+ fitReviewBusy=true;activeReviewKey=key;updateReviewStatus();
  try{
   const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(key))),b=>b.toString(16).padStart(2,'0')).join('');
   const stored=await deviceItem('fit-reviews')||{};
   let review=stored[hash];
   if(!review){
    const response=await fetch('/api/fit-review',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify(input),signal:AbortSignal.timeout(295000)});
+   if(response.status===429){
+    const attempts=(fitReviewRetries.get(key)?.attempts||0)+1;
+    if(attempts>6)throw Error('The review service is still busy. Please retry in a few minutes.');
+    const seconds=Math.max(1,Math.min(60,Number(response.headers.get('Retry-After'))||15));
+    fitReviewRetries.set(key,{attempts,retryAt:Date.now()+seconds*1000});return;
+   }
    const data=await response.json();if(!response.ok)throw Error(data.error||'Review unavailable.');
    review=data.review;
    if(review?.version!==REVIEW_VERSION||!Array.isArray(review.points)||!Array.isArray(review.factors))throw Error('Review response was incomplete. Retry it.');
    stored[hash]=review;const hashes=Object.keys(stored);while(hashes.length>20)delete stored[hashes.shift()];
    await deviceSetItem('fit-reviews',stored);
   }
-  fitReviewCache.set(key,review);if(fitReviewCache.size>30)fitReviewCache.delete(fitReviewCache.keys().next().value);
+  fitReviewRetries.delete(key);fitReviewCache.set(key,review);if(fitReviewCache.size>30)fitReviewCache.delete(fitReviewCache.keys().next().value);
   if(key===fitReviewKey(job))applyFitReview(job);
  }catch(error){fitReviewErrors.set(key,error.name==='TimeoutError'?'The full review took too long. Retry it.':error.message);}
  finally{
-  fitReviewBusy=false;
+  fitReviewBusy=false;activeReviewKey=null;
   const current=deckJobs()[0];
-  if(current&&$('full-review-status'))$('full-review-status').innerHTML=reviewStatusMarkup(current);
-  if(current&&fitReviewKey(current)!==key)scheduleFitReview(current);
+  updateReviewStatus();
+  if(current&&(fitReviewKey(current)!==key||fitReviewRetries.has(key)&&!fitReviewErrors.has(key)))scheduleFitReview(current);
  }
 }
 function applyFitReview(job){
@@ -239,7 +256,7 @@ function openFullReview(job,review){
  $('fit-show-checks').onclick=()=>{$('role-dialog').close();const section=document.querySelector('.qualification-details');if(section){section.open=true;section.scrollIntoView({block:'start'});}};
  $('full-fit-profile').onclick=()=>$('role-dialog').close();updateFitCV(job,review.cv);
 }
-document.addEventListener('click',event=>{if(event.target.closest('[data-retry-fit]')){const job=deckJobs()[0];if(job){fitReviewErrors.delete(fitReviewKey(job));requestFitReview(job);if($('full-review-status'))$('full-review-status').innerHTML=reviewStatusMarkup(job);}}});
+document.addEventListener('click',event=>{if(event.target.closest('[data-retry-fit]')){const job=deckJobs()[0];if(job){fitReviewErrors.delete(fitReviewKey(job));fitReviewRetries.delete(fitReviewKey(job));requestFitReview(job);if($('full-review-status'))$('full-review-status').innerHTML=reviewStatusMarkup(job);}}});
 
 const qualificationStates={match:['✓','Supported'],partial:['?','Partly supported'],gap:['×','Gap'],unknown:['?','Unclear']};
 function qualificationMarkup(insights){
@@ -308,7 +325,7 @@ function openRoleDetails(jobToShow=deckJobs()[0]) {
  scheduleFitReview(job);
  $('role-title').textContent=job.company;
  $('role-content').innerHTML=`<h3 class="role-heading">${esc(job.title)}</h3><p class="prep-meta">${esc(job.location)}</p>
- <section class="fit-rating" aria-label="Qualification fit rating"><p class="eyebrow">QUICK QUALIFICATION FIT</p><div class="fit-score">${report.score===null?(report.ratingState==='missing-profile'?'Add CV details':'Advert details needed'):report.score+'<span> / 10</span>'}${report.provisional?'<small class="fit-provisional">Provisional</small>':''}</div><p class="fit-verdict">${esc(report.priority)}</p><details class="fit-score-explanation"><summary>What this score means</summary><p>${esc(report.ratingReason)} This is not your probability of getting the job.</p></details><p class="fit-coverage">${report.assessed} of ${report.total} required points assessed (${report.coverage}% coverage).</p></section>
+ <p id="fit-dialog-review-status" role="status">${reviewStatusMarkup(job)}</p><section class="fit-rating" aria-label="Qualification fit rating"><p class="eyebrow">QUICK QUALIFICATION FIT</p><div class="fit-score">${report.score===null?(report.ratingState==='missing-profile'?'Add CV details':'Advert details needed'):report.score+'<span> / 10</span>'}${report.provisional?'<small class="fit-provisional">Provisional</small>':''}</div><p class="fit-verdict">${esc(report.priority)}</p><details class="fit-score-explanation"><summary>What this score means</summary><p>${esc(report.ratingReason)} This is not your probability of getting the job.</p></details><p class="fit-coverage">${report.assessed} of ${report.total} required points assessed (${report.coverage}% coverage).</p></section>
  <section class="fit-review fit-section" aria-label="Application assessment"><p class="eyebrow">APPLICATION ASSESSMENT</p><h4>${esc(report.review.verdict)}</h4><p>${esc(report.review.summary)}</p><p class="source-note">${report.review.requiredCount} core requirements · ${report.review.optionalCount} optional advantages. The score measures skills evidence; practical trade-offs are assessed separately.</p></section><p class="fit-cv-detection" role="status">${esc(cvDetectionMessage())}</p><p class="fit-priorities">Your priorities: skills & eligibility · pay & career growth</p>
  <div class="fit-stats" aria-label="Required qualification breakdown">${[['Supported',report.counts.match],['Partial',report.counts.partial],['Gaps',report.counts.gap],['Not evidenced',report.counts.unknown]].map(([label,n])=>`<div><strong>${n}</strong><span>${label}</span></div>`).join('')}</div>
  ${report.bonus.total?`<p class="source-note">${report.bonus.supported} of ${report.bonus.total} optional bonuses supported. Bonuses are excluded from the score.</p>`:''}
@@ -640,14 +657,19 @@ async function downloadCV() {
   try {const stored = await cvStore('get',cvKey(entry.preparation.cv)); if (stored) download(stored.blob,stored.name,'application/pdf');}
   catch {toast('Could not read the CV. Attach your original file.');}
 }
-let browserConnection=null, browserController=null, browserEntryId=null, browserSessionId=null, browserRun=0;
+let browserConnection=null,browserConnectionVerified=false, browserController=null, browserEntryId=null, browserSessionId=null, browserRun=0;
 async function loadBrowserConnection(restore=true) {
   try {browserConnection=(await cvStore('get','connection'))?.token||null;}catch{browserConnection=null;}
-  $('browser-connection-status').textContent=browserConnection?'Private reviews and application tools connected on this device.':'Import your private connection or CV setup file to enable full reviews.';
+  browserConnectionVerified=false;
+  $('browser-connection-status').textContent=browserConnection?'Checking your private connection…':'Import your private connection or CV setup file to enable full reviews.';
+  $('check-private-connection').disabled=true;
   $('load-saved-cvs').disabled=!browserConnection;
   if(restore&&browserConnection&&!await deviceItem('device-sync')){const files=await Promise.all(['consulting','analyst','developer'].map(key=>cvStore('get',key)));if(files.some(file=>!file))await loadSavedCVs({missingOnly:true});}
   if(browserConnection)try{
-   const response=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({action:'profile-corrections'})});
+   const response=await fetch('/api/setup',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({action:'profile-corrections'}),signal:AbortSignal.timeout(15000)});
+   if(!response.ok)throw Error(response.status===401?'The private setup was not accepted. Import your connection file again.':'The server could not verify your connection. Try Check connection again.');
+   browserConnectionVerified=true;fitReviewErrors.clear();fitReviewRetries.clear();
+   $('browser-connection-status').textContent='Private connection verified. Full CV reviews are enabled.';
    const {correction}=await response.json();
    if(response.ok&&typeof correction?.id==='string'&&correction.id!==profile.profileCorrectionVersion){
     const next={...profile,profileCorrectionVersion:correction.id};
@@ -660,7 +682,9 @@ async function loadBrowserConnection(restore=true) {
     }
     profile=validateProfile(next);persist(PROFILE_KEY,profile);populateProfile();renderDeck();
    }
-  }catch{/* A connection failure must not prevent using locally saved CVs. */}
+  }catch(error){$('browser-connection-status').textContent=error.name==='TimeoutError'?'Connection check timed out. Try Check connection again.':error.message;}
+  $('check-private-connection').disabled=!browserConnection;
+  updateReviewStatus();
   const job=deckJobs()[0];if(job){const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(job);requestSummary(job);scheduleFitReview(job);}
   $('test-browser').disabled=!browserConnection;$('disconnect-browser').hidden=!browserConnection;
 }
@@ -718,6 +742,7 @@ $('close-browser').addEventListener('click',endApplicationBrowser);$('browser-en
 $('browser-dialog').addEventListener('cancel',e=>{e.preventDefault();endApplicationBrowser();});
 $('browser-submitted').addEventListener('click',()=>{const entry=entries.find(e=>e.id===browserEntryId);if(entry){entry.status='Applied';entry.applicationDate=today();saveEntries();undoAction=null;render();}endApplicationBrowser();toast('Recorded as submitted by you.');});
 $('test-browser').addEventListener('click',()=>startApplicationBrowser({company:'Job Notebook Practice',title:'Implementation Consultant',link:'https://job-hunting-notes.vercel.app/practice-application.html'},null,{demo:true}));
+$('check-private-connection').addEventListener('click',()=>loadBrowserConnection(false));
 $('disconnect-browser').addEventListener('click',async()=>{await cvStore('delete','connection');await loadBrowserConnection();toast('Private browser disconnected from this device.');});
 loadBrowserConnection();
 // Event bindings
@@ -840,7 +865,7 @@ async function importSetup(parsed) {
     profile = next;
     if (persist(PROFILE_KEY,profile)) {populateProfile(); render(); $('profile-message').textContent = `Profile imported${cvs.length ? ' with '+cvs.length+' CV PDFs' : ''}. New drafts will use these details.`;}
     await loadBrowserConnection(false);
-    if(connectionOnly)$('profile-message').textContent='Private reviews connected. Your existing CVs and profile are preserved.';
+    if(connectionOnly)$('profile-message').textContent=(browserConnectionVerified?'Private connection verified.':'Connection file saved; check the connection status below.')+' Your existing CVs and profile are preserved.';
 }
 async function loadSavedCVs({missingOnly=false}={}) {
   if(!browserConnection)return;
