@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {validateReview,reviewParagraphs,reviewInput} from '../server/fit-review.js';
-import {scoreReview,factorWeights,reviewInsights} from '../lib/fit-review.js';
+import {scoreReview,factorWeights,reviewInsights,reviewClearsDiscovery} from '../lib/fit-review.js';
 import {createFitReviewHandler} from '../api/fit-review.js';
 export const input={job:{title:'Analyst',location:'Germany',description:'Requirements:\nEnglish proficiency is essential.\nSQL experience required.\nBenefits:\n30 days of holiday.'},profile:{evidence:'SQL reporting.',languages:'English native (C1)',workRights:'',salaryTarget:'',motivation:'',startDate:'',relocation:''}};
 export const output={summary:'English and SQL align with your evidence. Confirm the working arrangements.',cv:'Business Analyst CV',cvReason:'Lead with SQL reporting.',points:[{text:'English proficiency',paragraph:3,sourceQuote:'English proficiency is essential.',category:'required',importance:'essential',status:'match',note:'Native English is recorded.',cvQuote:'English native (C1)'},{text:'SQL experience',paragraph:4,sourceQuote:'SQL experience required.',category:'required',importance:'standard',status:'match',note:'SQL reporting is recorded.',cvQuote:'SQL reporting.'}],factors:Object.keys(factorWeights).map(key=>({key,status:'unknown',note:'Not established in the advert and profile.',sourceQuote:'',cvQuote:''})),audit:reviewParagraphs(input).map((_,paragraph)=>({paragraph,kind:paragraph===3||paragraph===4?'required':paragraph===2||paragraph===5?'heading':paragraph===6?'benefit':'background'})),issues:[]};
@@ -83,4 +83,20 @@ test('4/2/2/2 categories reproduce the same arithmetic regardless of model or po
  assert.equal(scoreReview({...review,factors:review.factors.map(f=>f.key==='location'?{...f,status:'gap'}:f)}).overall,3);
  assert.equal(scoreReview({...review,points:[...review.points,point('German fluency','gap')]}).overall,3);
  assert.equal(scoreReview({...review,points:review.points.map(p=>p.text==='Figma'?{...p,importance:'essential'}:p)}).cap,'');
+});
+
+
+test('required skills do not lose points for optional extras and uncertainty has explicit bounds',()=>{
+ const base=scoreReview(output),optional=scoreReview({...output,points:[...output.points,{...output.points[0],category:'optional',status:'missing',cvQuote:''}]});
+ assert.equal(base.skills,10);assert.equal(optional.skills,10);assert.equal(base.overallUpper,10);assert(base.overall<base.overallUpper);
+ const partial=scoreReview({...output,points:output.points.map(p=>({...p,status:'partial'}))});assert.equal(partial.requirementCoverage,50);
+ const missing=scoreReview({...output,points:output.points.map(p=>({...p,status:'missing',cvQuote:''}))});assert.equal(missing.coverage,0);assert.equal(missing.requirementCoverage,0);assert.equal(missing.overallUpper,10);
+});
+
+
+test('discovery never uses a high skills score to override missing relevant years or work-right conflicts',()=>{
+ const base={...output,skills:8};assert.equal(reviewClearsDiscovery(base),true);
+ for(const status of ['unknown','missing','partial','gap'])assert.equal(reviewClearsDiscovery({...base,points:[...base.points,{text:'2+ years of implementation experience',category:'required',status}]}),false);
+ assert.equal(reviewClearsDiscovery({...base,points:[...base.points,{text:'2+ years of implementation experience',category:'required',status:'match'}]}),true);
+ assert.equal(reviewClearsDiscovery({...base,factors:base.factors.map(f=>f.key==='eligibility'?{...f,status:'gap'}:f)}),false);
 });

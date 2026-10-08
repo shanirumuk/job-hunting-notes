@@ -31,21 +31,14 @@ test('Germany and the UK cannot alternate ahead of other relevant European marke
  const rows=[['de1','Berlin',90],['de2','Munich',89],['uk1','London',88],['uk2','Manchester',87],['nl','Amsterdam',72],['pt','Lisbon',65],['weak','Paris',30]].map(([id,location,score])=>({id,location,match:{score}}));
  assert.deepEqual(rankJobs(rows).map(j=>j.id),['de1','uk1','nl','pt','de2','uk2','weak']);
 });
-test('country-specific retrieval uses separate caches and requests a validated upstream geography',async()=>{
- const old=globalThis.fetch,requested=[];
- globalThis.fetch=async url=>{requested.push(url);if(url.includes('remoteok'))return {ok:true,json:async()=>[]};if(url.includes('ashbyhq'))return {ok:true,json:async()=>({jobs:[]})};if(url.includes('himalayas'))return {ok:true,json:async()=>({jobs:[],totalCount:0,offset:0,limit:20})};if(url.includes('remotive'))return {ok:true,json:async()=>({jobs:[]})};
-  const geo=new URL(url).searchParams.get('geo')||'global';return {ok:true,json:async()=>({jobs:[{id:geo,jobTitle:'Implementation Consultant',companyName:geo,url:'https://jobicy.com/jobs/'+geo,jobGeo:geo}]})};};
- try{
-  const {default:handler}=await import('../api/jobs.js?country-cache-test');
-  async function request(query){const res={setHeader(){},status(n){this.code=n;return this;},json(d){this.data=d;}};await handler({method:'GET',url:'/api/jobs?'+query},res);return res;}
-  const pt=await request('region=europe&country=portugal');const nl=await request('region=europe&country=netherlands');
-  assert.equal(pt.code,200);assert.equal(nl.code,200);assert.equal(pt.data.nextPage,null);
-  assert.ok(pt.data.jobs.some(j=>j.location==='portugal'));assert.ok(nl.data.jobs.some(j=>j.location==='netherlands'));
-  assert.equal(requested.filter(url=>url.includes('arbeitnow')).length,0);
-  const count=requested.length;await request('region=europe&country=portugal');assert.equal(requested.length,count);
-  assert.equal((await request('region=africa&country=germany')).code,400);
-  assert.equal((await request('region=bad')).code,400);
- }finally{globalThis.fetch=old;}
+test('country-specific Firecrawl searches use separate caches and validated geography',async()=>{
+ const {createJobsHandler}=await import('../api/jobs.js');const requested=[];
+ const handler=createJobsHandler({fetcher:async(url,options)=>{const body=JSON.parse(options.body);requested.push(body.query);return {ok:true,status:200,json:async()=>({success:true,data:{web:[]}})};}});
+ async function request(query){const res={setHeader(){},status(n){this.code=n;return this;},json(d){this.data=d;}};await handler({method:'GET',url:'/api/jobs?'+query,headers:{}},res);return res;}
+ const pt=await request('region=europe&country=portugal');const nl=await request('region=europe&country=netherlands');assert.equal(pt.code,200);assert.equal(nl.code,200);assert.equal(pt.data.nextPage,null);
+ assert(requested.some(q=>q.includes('Portugal')));assert(requested.some(q=>q.includes('Netherlands')));
+ const count=requested.length;await request('region=europe&country=portugal');assert.equal(requested.length,count);
+ assert.equal((await request('region=africa&country=germany')).code,400);assert.equal((await request('region=bad')).code,400);
 });
 
 test('Africa excludes Canada and broad EMEA adverts by default, with an explicit broad-remote opt-in',()=>{

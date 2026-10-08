@@ -1,0 +1,6 @@
+export const cvLines=['Test Applicant','test@example.org','+49 123 456 7890','PROFILE','Seeking Salesforce work.','PROFESSIONAL EXPERIENCE','Developer - Example','September 2024 - Present','Built API integrations.','Built SQL reporting.','SKILLS','SQL, API integrations','EDUCATION','BSc Digital Business and Data Science','LANGUAGES','English C1','German B1'];
+export function cvPDF(lines=cvLines){
+ const stream='BT /F1 11 Tf 50 790 Td 15 TL '+lines.map((s,i)=>(i?'T* ':'')+'('+s.replace(/[\\()]/g,'\\$&')+') Tj').join('\n')+' ET';
+ const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>','<< /Length '+stream.length+' >>\nstream\n'+stream+'\nendstream'];
+ let text='%PDF-1.4\n',offsets=[0];for(const [i,obj] of objects.entries()){offsets.push(text.length);text+=(i+1)+' 0 obj\n'+obj+'\nendobj\n';}const xref=text.length;text+='xref\n0 6\n0000000000 65535 f \n'+offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF';return new TextEncoder().encode(text);
+}

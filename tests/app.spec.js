@@ -1,20 +1,22 @@
 import {sellerIntern} from './fixtures/seller-intern.js';
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
+import {cvPDF} from './fixtures/cv-pdf.js';
+async function uploadPDF(page,name){await page.locator('#cv-json-upload').setInputFiles({name,mimeType:'application/pdf',buffer:Buffer.from(cvPDF())});await page.locator('[data-pdf-index="0"]').selectOption('analyst');await page.getByRole('button',{name:'Save reviewed CV details'}).click();await expect(page.locator('#cv-import-dialog')).not.toBeVisible();}
 // Existing interaction fixtures intentionally use the Europe-only preference.
 test.beforeEach(async({page},testInfo)=>{
  if(testInfo.title.startsWith('international migration'))return;
  await page.addInitScript(()=>{
   localStorage.setItem('job-notebook-international-v23','1');localStorage.setItem('job-notebook-discovery-v26','1');
-  if(!localStorage.getItem('job-notebook-profile-v1'))localStorage.setItem('job-notebook-profile-v1',JSON.stringify({geography:'europe'}));
+  if(!localStorage.getItem('job-notebook-profile-v1'))localStorage.setItem('job-notebook-profile-v1',JSON.stringify({geography:'europe',evidence:'Experience: Analyst · Example · September 2024 - Present.\nBuilt API integrations. Built SQL reporting. Ran stakeholder workshops, documented requirements and coordinated rollout testing.',languages:'English C1'}));
  });
 });
 const jobs = [
-  {id:'fixture-ba',company:'Workflow Ltd',title:'Technical Business Analyst',location:'Berlin, Germany',description:'English. Workflow requirements, stakeholder workshops, API integrations.',link:'https://example.org/ba',source:'Arbeitnow',publishedAt:'2026-09-17T09:00:00Z'},
-  {id:'fixture-consulting',company:'Systems Ltd',title:'Implementation Consultant',location:'Dublin, Ireland',description:'English. Customer workshops, configuration and testing.',link:'https://example.org/consulting',source:'Arbeitnow'},
+  {id:'fixture-ba',company:'Workflow Ltd',title:'Technical Business Analyst',location:'Berlin, Germany',description:'Responsibilities:\nWorkflow requirements, stakeholder workshops, API integrations.\nRequirements:\nAPI experience.\nEnglish proficiency.',link:'https://example.org/ba',source:'Arbeitnow',publishedAt:'2026-09-17T09:00:00Z'},
+  {id:'fixture-consulting',company:'Systems Ltd',title:'Implementation Consultant',location:'Dublin, Ireland',description:'Responsibilities:\nCustomer workshops, configuration and testing.\nRequirements:\nSQL experience.\nEnglish proficiency.',link:'https://example.org/consulting',source:'Arbeitnow'},
   {id:'fixture-us',company:'USA Ltd',title:'Implementation Consultant',location:'United States',description:'Customer implementation',link:'https://example.org/us',source:'Arbeitnow'}
 ];
-async function setup(page) {await page.addInitScript(()=>{localStorage.setItem('job-notebook-international-v23','1');localStorage.setItem('job-notebook-discovery-v26','1');if(!localStorage.getItem('job-notebook-profile-v1'))localStorage.setItem('job-notebook-profile-v1',JSON.stringify({geography:'europe'}));});await mockListingTab(page);await page.route('**/api/jobs*',route => route.fulfill({json:{jobs,fetchedAt:new Date().toISOString()}}));await page.goto('/');await expect(page.locator('#active-card')).toBeVisible();}
+async function setup(page) {await page.addInitScript(()=>{localStorage.setItem('job-notebook-international-v23','1');localStorage.setItem('job-notebook-discovery-v26','1');if(!localStorage.getItem('job-notebook-profile-v1'))localStorage.setItem('job-notebook-profile-v1',JSON.stringify({geography:'europe',evidence:'Experience: Analyst · Example · September 2024 - Present.\nBuilt API integrations. Built SQL reporting. Ran stakeholder workshops, documented requirements and coordinated rollout testing.',languages:'English C1'}));});await mockListingTab(page);await page.route('**/api/jobs*',route => route.fulfill({json:{jobs,fetchedAt:new Date().toISOString()}}));await page.goto('/');await expect(page.locator('#active-card')).toBeVisible();}
 async function mockListingTab(page) {await page.addInitScript(() => {window.openedListings=[];window.open=(url)=>{window.openedListings.push(url);return {opener:null};};});}
 async function reviewSaved(page) {
   await expect(page.locator('#preparation-dialog')).not.toBeVisible();
@@ -158,7 +160,7 @@ for (const [width,height] of [[320,568],[360,640],[375,667],[390,844],[430,932],
     const footer=await page.locator('#role-prepare').boundingBox();expect(footer.y+footer.height).toBeLessThanOrEqual(height);
     await page.locator('#close-role').click();await page.locator('.main-nav [data-view="profile"]').click();
     await expect(page.locator('#profile-view')).toBeVisible();
-    await page.locator('#profile-email').scrollIntoViewIfNeeded();expect(await page.locator('#profile-email').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+    await page.locator('#cv-profile-details').evaluate(el=>el.open=true);await page.locator('#profile-email').scrollIntoViewIfNeeded();expect(await page.locator('#profile-email').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
     await page.locator('#profile-phone').fill('+49 123');await page.getByRole('button',{name:'Save my profile',exact:true}).click();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
@@ -232,7 +234,7 @@ test('reduced motion still saves and prepares applications',async ({page})=>{
 test('app refresh reloads the latest shell and preserves saved records and PDFs',async ({browser})=>{
   const context=await browser.newContext({viewport:{width:384,height:832},serviceWorkers:'allow'});const page=await context.newPage();await setup(page);
   await page.locator('[data-view="profile"]').first().click();
-  await page.locator('#analyst-upload').setInputFiles({name:'Keep.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\n%%EOF')});await expect(page.locator('#analyst-file-status')).toContainText('Keep.pdf');
+  await uploadPDF(page,'Keep.pdf');await expect(page.locator('#analyst-file-status')).toContainText('Keep.pdf');
   const before=await records(page);await page.locator('#refresh-app').click();await page.waitForURL(/app-refresh=/);
   await expect(page.locator('#analyst-file-status')).toContainText('Keep.pdf');expect(await records(page)).toEqual(before);
   await context.setOffline(true);await page.locator('#refresh-app').click();await expect(page.locator('#toast')).toContainText('Couldn’t update');await expect(page.locator('#refresh-app')).toBeEnabled();expect(await records(page)).toEqual(before);
@@ -480,7 +482,7 @@ test('saved continuation resumes after reload and a bounded scan never claims fa
 });
 
 test('international migration expands an existing profile once and preserves later choices',async({page})=>{
- await page.addInitScript(()=>{if(!localStorage.getItem('migration-test-started')){localStorage.setItem('job-notebook-profile-v1',JSON.stringify({geography:'europe'}));localStorage.setItem('job-notebook-v1','[]');localStorage.removeItem('job-notebook-international-v23');localStorage.setItem('migration-test-started','1');}});
+ await page.addInitScript(()=>{if(!localStorage.getItem('migration-test-started')){localStorage.setItem('job-notebook-profile-v1',JSON.stringify({geography:'europe',evidence:'Experience: Analyst · Example · September 2024 - Present.\nBuilt API integrations. Built SQL reporting. Ran stakeholder workshops, documented requirements and coordinated rollout testing.',languages:'English C1'}));localStorage.setItem('job-notebook-v1','[]');localStorage.removeItem('job-notebook-international-v23');localStorage.setItem('migration-test-started','1');}});
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...jobs[0],location:'Cape Town, South Africa'}],nextPage:null}}));
  await page.goto('/');await expect(page.locator('#compass-location')).toContainText('International');
  await expect(page.locator('#active-card')).toContainText('South Africa');
@@ -549,7 +551,7 @@ test('Africa hides Canada and broad remote listings until explicitly included',a
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:listings,nextPage:null,nextSearch:null}}));await page.goto('/');
  await page.locator('#location-filter').click();await page.locator('#filter-region').selectOption('africa');await page.locator('#apply-locations').click();
  await expect(page.locator('#deck-count')).toHaveText('1 role to explore');await expect(page.locator('.job-location')).toContainText('South Africa');await expect(page.locator('#active-card')).not.toContainText('Canada');
- await page.locator('#location-filter').click();await page.locator('#filter-broad-remote').check();await page.locator('#apply-locations').click();await expect(page.locator('#deck-count')).toHaveText('3 roles to explore');
+ await page.locator('#location-filter').click();await page.locator('#filter-more summary').click();await page.locator('#filter-broad-remote').check();await page.locator('#apply-locations').click();await expect(page.locator('#deck-count')).toHaveText('3 roles to explore');
  await page.reload();await page.locator('#location-filter').click();await expect(page.locator('#filter-broad-remote')).toBeChecked();
 });
 test('more search results remain available after the original feeds end, and load without moving the current card',async({page})=>{
@@ -581,7 +583,7 @@ for(const [region,location,wrong,broad] of [
  await page.locator('#load-more-jobs').click();await expect(page.locator('#load-more-jobs')).toBeHidden();
  await expect(page.locator('#deck-count')).toHaveText('6 roles to explore');
  expect(requested.at(-1).searchParams.get('region')).toBe(region);expect(requested.at(-1).searchParams.get('searchOnly')).toBe('1');
- await page.locator('#location-filter').click();await expect(page.locator('#filter-broad-remote')).not.toBeChecked();await page.locator('#filter-broad-remote').check();await page.locator('#apply-locations').click();
+ await page.locator('#location-filter').click();await expect(page.locator('#filter-broad-remote')).not.toBeChecked();await page.locator('#filter-more summary').click();await page.locator('#filter-broad-remote').check();await page.locator('#apply-locations').click();
  await expect(page.locator('#deck-count')).toHaveText('8 roles to explore');
  await page.reload();await expect(page.locator('#location-filter')).toContainText(region==='north-america'?'North America':region==='south-america'?'South America':region[0].toUpperCase()+region.slice(1));
  await page.locator('#location-filter').click();await expect(page.locator('#filter-broad-remote')).toBeChecked();
@@ -656,7 +658,7 @@ test('keyboard decisions work once per press and leave dialogs, fields and other
  await page.keyboard.press('s');await expect.poll(async()=> (await records(page)).find(e=>e.id==='fixture-consulting')?.status).toBe('To apply');
  await expect(page.locator('#undo-swipe')).toBeEnabled();await page.locator('#undo-swipe').click();await page.evaluate(()=>document.activeElement.blur());
  await page.locator('.listing-info').click();const before=await records(page);await page.keyboard.press('ArrowRight');await expect(page.locator('#role-dialog')).toBeVisible();expect(await records(page)).toEqual(before);
- await page.keyboard.press('Escape');await page.locator('.main-nav [data-view="profile"]').click();await page.locator('#profile-name').fill('My name');await page.keyboard.press('ArrowLeft');await page.keyboard.press('s');expect(await records(page)).toEqual(before);
+ await page.keyboard.press('Escape');await page.locator('.main-nav [data-view="profile"]').click();await page.locator('#cv-profile-details').evaluate(el=>el.open=true);await page.locator('#profile-name').fill('My name');await page.keyboard.press('ArrowLeft');await page.keyboard.press('s');expect(await records(page)).toEqual(before);
  await page.locator('.main-nav [data-view="discover"]').click();await page.evaluate(()=>document.activeElement.blur());
  await page.keyboard.press('ArrowRight');await expect.poll(async()=> (await records(page)).find(e=>e.id==='fixture-consulting')?.status).toBe('Preparing');
  expect(await page.evaluate(()=>window.openedListings)).toEqual(['https://example.org/consulting']);
@@ -666,7 +668,7 @@ test('CV JSON review imports multiple versions, preserves profile and PDF data, 
  const {cvJSON}=await import('./fixtures/cv-json.js');
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...jobs[0],description:'Requirements:\nAPI integrations experience.\nSQL experience.'}],nextPage:null}}));await page.goto('/');await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','fixture-ba');
  await page.locator('.main-nav [data-view="profile"]').click();await page.locator('#profile-workRights').evaluate(el=>el.closest('details').open=true);await page.locator('#profile-workRights').fill('Existing permit note');
- await page.locator('#analyst-upload').setInputFiles({name:'Original.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\n%%EOF')});
+ await uploadPDF(page,'Original.pdf');
  await expect(page.locator('#analyst-file-status')).toContainText('Original.pdf');
  const before=await records(page),beforeProfile=await page.evaluate(()=>localStorage.getItem('job-notebook-profile-v1'));
  const files=['Analyst.json','Consulting.json','Developer.json'].map(name=>({name,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(cvJSON))}));
@@ -677,7 +679,7 @@ test('CV JSON review imports multiple versions, preserves profile and PDF data, 
  await page.locator('#cv-json-upload').setInputFiles(files);await page.getByRole('button',{name:'Save reviewed CV details'}).click();await expect(page.locator('#cv-import-dialog')).not.toBeVisible();
  await page.reload();await page.locator('.main-nav [data-view="profile"]').click();
  const profile=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')));
- expect(profile.workRights).toBe('Existing permit note');expect(profile.evidence).toContain('Built API integrations.');expect(profile.evidence.split('Built API integrations.')).toHaveLength(2);expect(profile.cvImportSources.split('\n')).toHaveLength(3);
+ expect(profile.workRights).toBe('Existing permit note');expect(profile.evidence).toContain('Built API integrations.');expect(profile.evidence.split('Built API integrations.')).toHaveLength(2);expect(profile.cvImportSources.split('\n')).toHaveLength(4);
  await expect(page.locator('#analyst-file-status')).toContainText('Original.pdf');expect(await records(page)).toEqual(before);
  await page.locator('.main-nav [data-view="discover"]').click();await page.locator('.qualification-details summary').click();await expect(page.locator('.qualification.match .qualification-icon').first()).toHaveAttribute('title',/Built API integrations/);
 });
@@ -728,12 +730,12 @@ test('CV imports in another tab refresh an open fit report and identify the dete
  const other=await page.context().newPage();await other.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[],nextPage:null}}));await other.goto('/#profile');
  const files=['Analyst.json','Consulting.json','Developer.json'].map(name=>({name,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(cvJSON))}));
  await other.locator('#cv-json-upload').setInputFiles(files);await other.getByRole('button',{name:'Save reviewed CV details'}).click();
- await expect(page.locator('.fit-cv-detection')).toContainText('3 CV JSON files detected');await expect(page.locator('.fit-score')).toHaveText('10 / 10');
+ await expect(page.locator('.fit-cv-detection')).toContainText('3 CV files detected');await expect(page.locator('.fit-score')).toHaveText('10 / 10');
  await expect(page.locator('.fit-cv-detection')).toContainText('being used for this comparison');
  await expect(page.locator('#fit-cv-status')).toContainText('0 PDFs detected');
- await other.locator('#analyst-upload').setInputFiles({name:'Original.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\n%%EOF')});await expect(other.locator('#analyst-file-status')).toContainText('Original.pdf');
+ await uploadPDF(other,'Original.pdf');await expect(other.locator('#analyst-file-status')).toContainText('Original.pdf');
  await expect(page.locator('#fit-cv-status')).toContainText('1 PDF detected');await expect(page.locator('#fit-cv-status')).toContainText('Original.pdf');
- await other.close();await page.keyboard.press('Escape');await page.reload();await page.locator('.listing-info').click();await expect(page.locator('.fit-cv-detection')).toContainText('3 CV JSON files detected');
+ await other.close();await page.keyboard.press('Escape');await page.reload();await page.locator('.listing-info').click();await expect(page.locator('.fit-cv-detection')).toContainText('4 CV files detected');
 });
 
 test('customer success rating works after three CV imports, persists on refresh and shows evidence on mobile',async({page})=>{
@@ -745,7 +747,7 @@ test('customer success rating works after three CV imports, persists on refresh 
  await page.getByRole('button',{name:'Save reviewed CV details'}).click();
  await page.locator('.main-nav [data-view="discover"]').click();
  await expect(page.locator('.card-fit-summary')).toContainText('4/10');await page.locator('.listing-info').click();
- await expect(page.locator('.fit-score')).toContainText('4 / 10');await expect(page.locator('.fit-cv-detection')).toContainText('3 CV JSON files detected');
+ await expect(page.locator('.fit-score')).toContainText('4 / 10');await expect(page.locator('.fit-cv-detection')).toContainText('3 CV files detected');
  await expect(page.locator('.fit-coverage')).toContainText('9 of 13');await expect(page.locator('.fit-evidence-list')).toContainText('resolving technical issues');
  await expect(page.locator('[data-factor="pay"] .factor-status')).toHaveText('unknown');
  expect(await page.locator('#role-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);

@@ -9,11 +9,14 @@
       "includeFiles": "node_modules/@browserbasehq/stagehand/dist/assets/stagehand-extension.zip"
     },
     "api/jobs.js": {
-      "maxDuration": 30
+      "maxDuration": 120
     },
     "api/fit-review.js": {
       "maxDuration": 300,
       "includeFiles": "node_modules/@browserbasehq/stagehand/dist/assets/stagehand-extension.zip"
+    },
+    "api/import-job.js": {
+      "maxDuration": 90
     }
   }
 }

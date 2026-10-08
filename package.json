@@ -19,6 +19,7 @@
     "@browserbasehq/sdk": "^2.20.0",
     "@browserbasehq/stagehand": "^4.1.0",
     "@vercel/blob": "^2.8.0",
+    "pdfjs-dist": "^6.4.299",
     "zod": "^4.4.3"
   }
 }

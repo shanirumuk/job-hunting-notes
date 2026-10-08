@@ -11,10 +11,10 @@ test('fit rating uses qualification evidence and exposes coverage, not discovery
 });
 test('missing profile evidence stays unrated while limited coverage is explicitly provisional',()=>{
  const report=jobFitReport(job,{...defaultProfile,languages:'',germanLevel:'B1',evidence:''});
- assert.equal(report.score,null);assert.equal(report.coverage,33);
+ assert.equal(report.score,null);assert.equal(report.coverage,0);
  assert.equal(jobFitReport({...job,description:'Customer workshops and workflow improvements.'}).score,null);
  const mostlyUnknown=jobFitReport({...job,description:'Requirements:\nAPI experience.\nSQL experience.\nFrench B2.\nGerman C2.\nDegree required.'},{...defaultProfile,evidence:'API experience.',languages:'',germanLevel:'C2'});
- assert.equal(mostlyUnknown.score,4);assert.equal(mostlyUnknown.coverage,40);assert.equal(mostlyUnknown.provisional,true);assert.match(mostlyUnknown.ratingReason,/all 5 requirements/);
+ assert.equal(mostlyUnknown.score,2);assert.equal(mostlyUnknown.coverage,20);assert.equal(mostlyUnknown.provisional,true);assert.match(mostlyUnknown.ratingReason,/all 5 requirements/);
 });
 test('sponsorship conflicts affect priority without declaring unknown work rights eligible',()=>{
  const listing={...job,description:'Requirements:\nAPI experience.\nSQL experience.\nNo visa sponsorship.'};

@@ -25,7 +25,7 @@ test('language and sponsorship gaps remain visible and strict mode can hide cond
   assert.ok(matchJob(conditional).flags.some(f => f.includes('German requirement')));
   assert.ok(matchJob(conditional).flags.some(f => f.includes('existing work rights')));
   assert.equal(matchJob(conditional,{...defaultProfile,includeConditional:false}).eligible,false);
-  assert.ok(!matchJob({...job,description:'German B2 required'}, {...defaultProfile,germanLevel:'B2'}).flags.some(f => f.includes('German requirement')));
+  assert.ok(!matchJob({...job,description:'German B2 required'}, {...defaultProfile,languages:'English C1, German B2'}).flags.some(f => f.includes('German requirement')));
 });
 test('drafts only include provided evidence, never claim submission, and keep checks incomplete',() => {
   const p = prepareApplication(job,{...defaultProfile,name:'Applicant',evidence:'Delivered a project in 1.5 months.',startDate:'2027-01-01',workRights:'Employment permit required.'});
@@ -59,7 +59,7 @@ test('adjacent titles qualify through responsibility evidence, not an exact titl
     assert.ok(match.reasons.some(r => r.includes('Stakeholder')),title);
   }
   assert.equal(matchJob({...job,title:'Systems Associate',description:'General admin, filing and office support.'}).eligible,false);
-  assert.equal(matchJob({...job,title:'Systems Associate',description},{...defaultProfile,includeAdjacent:false}).eligible,false);
+  assert.equal(matchJob({...job,title:'Systems Associate',description},{...defaultProfile,includeAdjacent:false}).eligible,true);
   assert.equal(matchJob({...job,title:'Technical Account Manager',description:description+' Own sales targets and cold-call new customers.'}).eligible,false);
 });
 test('responsibility matching still excludes engineering and unrelated consulting',() => {

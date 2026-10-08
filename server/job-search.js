@@ -3,7 +3,7 @@ import {plainText,descriptionText,safeURL,sameJob} from '../lib/model.js';
 import {europeanCountries,searchCountryCodes} from '../lib/geography.js';
 
 // Query countries explicitly: a continent name is not a supported provider country filter.
-const queries=['implementation','business analyst','customer success','operations','consultant','project manager'];
+const queries=['implementation','business analyst','systems analyst','operations','consultant','project manager'];
 export function searchPlan(region,country,broad=false){
  const places=country?[europeanCountries.find(c=>c.value===country)?.label||country]:region==='international'?['']:region==='europe'?europeanCountries.map(c=>c.label):searchCountryCodes[region];
  return queries.flatMap(q=>places.map(country=>({q,country,broad})));

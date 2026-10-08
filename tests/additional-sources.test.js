@@ -26,20 +26,11 @@ test('an explicit US-only employer address is not expanded to North America',asy
  assert.equal(jobs[0].location,'United States');assert.equal(matchJob(jobs[0],defaultProfile).eligible,false);
 });
 
-test('jobs endpoint includes both new sources and successful-board refresh metadata',async()=>{
- const original=globalThis.fetch;
- globalThis.fetch=async url=>{
-  if(url.includes('remoteok'))return response([{id:'remote',position:'Business Analyst',company:'Remote Source',url:'https://remoteok.com/remote-jobs/remote',location:'Canada',description:'Requirements: SQL experience.'}]);
-  if(url.includes('ashbyhq'))return response({jobs:[row]});
-  if(url.includes('himalayas'))return response({jobs:[],totalCount:0,offset:0,limit:20});
-  if(url.includes('arbeitnow'))return response({data:[],links:{next:null}});
-  return response({jobs:[]});
- };
- try{
-  const {default:handler}=await import('../api/jobs.js?additional-sources-test');
-  const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};
-  await handler({method:'GET',url:'/api/jobs'},res);
-  assert.equal(res.code,200);assert(res.data.jobs.some(j=>j.source==='Remote OK'));assert(res.data.jobs.some(j=>j.source==='Employer careers · Ashby'));
-  assert.equal(res.data.refreshedEmployerBoards.length,employerBoards.length);assert.deepEqual(res.data.sourceErrors,[]);
- }finally{globalThis.fetch=original;}
+test('jobs endpoint uses Firecrawl rather than the previous feeds',async()=>{
+ const {createJobsHandler}=await import('../api/jobs.js');const requested=[];
+ const description='Requirements:\nSQL experience.\nAPI integrations experience.\nEnglish proficiency.';
+ const handler=createJobsHandler({fetcher:async(url,options)=>{requested.push(url);return {ok:true,status:200,json:async()=>({success:true,data:url.endsWith('/search')?{web:[{url:'https://example.org/new-source'}]}:{markdown:'Example Business Analyst\n'+description,json:{isJobPosting:true,isClosed:false,title:'Business Analyst',company:'Example',location:'Canada',remote:true,description,publishedAt:'2026-10-01',expiresAt:''}}})};}});
+ const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};
+ await handler({method:'GET',url:'/api/jobs?region=north-america&skills=sql',headers:{}},res);
+ assert.equal(res.code,200);assert.equal(res.data.source,'Firecrawl');assert.equal(res.data.jobs[0].source,'Firecrawl · example.org');assert(requested.every(url=>url.startsWith('https://api.firecrawl.dev/v2/')));
 });

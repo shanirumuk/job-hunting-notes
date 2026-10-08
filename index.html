@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=58" />
+  <link rel="stylesheet" href="styles.css?v=67" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -33,18 +33,18 @@
     </header>
     <main id="main-content">
       <section id="discover-view" class="view" aria-labelledby="page-title">
-        <div class="intro-row"><div class="intro"><p class="eyebrow">YOUR NEXT CHAPTER</p><h1 id="page-title">Find your next <em>move.</em></h1><p class="subtitle">Swipe right to open the application. Left to pass.</p></div><button class="refresh-button" id="refresh-jobs" aria-label="Find fresh roles" title="Find fresh roles"><svg class="ui-icon" aria-hidden="true"><use href="#icon-refresh"/></svg></button></div>
+        <div class="intro-row"><div class="intro"><p class="eyebrow">YOUR NEXT CHAPTER</p><h1 id="page-title">Find your next <em>move.</em></h1><p class="subtitle">Your CV. Your skills. A better next move.</p></div><button class="refresh-button" id="refresh-jobs" aria-label="Find fresh roles" title="Find fresh roles"><svg class="ui-icon" aria-hidden="true"><use href="#icon-refresh"/></svg></button></div>
         <div class="discover-layout">
           <aside class="search-compass">
             <p class="eyebrow">YOUR DIRECTION</p><h2>Good problems.<br>Meaningful work.</h2><p class="muted">Follow the work you enjoy. Be open to a different title.</p>
-            <div class="preference-group"><span class="mini-label">LOOKING FOR</span><div class="chips"><span>Systems & processes</span><span>Analysis & delivery</span><span>Client collaboration</span><span>Adjacent roles, too</span></div></div>
-            <div class="preference-group"><span class="mini-label">THE PRACTICAL DETAILS</span><p id="compass-location">◎ International · excluding the US</p><p>↗ Consulting & stakeholder work</p><p>⌘ Light coding, real technical depth</p></div>
+            <div class="preference-group"><span class="mini-label">LOOKING FOR</span><div class="chips" id="search-role-areas" aria-label="Role types searched"></div></div>
+            <div class="preference-group"><span class="mini-label">THE PRACTICAL DETAILS</span><p id="compass-location">◎ International · excluding the US</p><p id="compass-cv">CV details needed to personalise matches</p><p>✓ Skills evidence above 6/10</p></div>
             <button class="text-button" data-view="profile">Fine-tune your profile →</button>
             <div class="compass-note"><span aria-hidden="true">✧</span><p>A match is a starting point. Every role includes the things worth checking.</p></div>
           </aside>
           <div class="deck-area">
-            <div class="deck-meta"><span id="deck-count">Your role shortlist</span><button id="location-filter" class="text-button" aria-label="Filter locations" aria-haspopup="dialog">Locations ▾</button><button id="undo-swipe" class="text-button" disabled>↶ Undo</button></div>
-            <button id="experience-filter" class="text-button experience-filter" data-change-locations type="button">Experience: up to 4 years · Senior hidden ▾</button>
+            <div class="deck-meta"><span id="deck-count">Your role shortlist</span><button id="location-filter" class="text-button" aria-label="Search filters" aria-haspopup="dialog">Filters ▾</button><button id="undo-swipe" class="text-button" disabled>↶ Undo</button></div>
+            <button id="experience-filter" class="text-button experience-filter" data-change-locations type="button">CV match > 6/10 · How it works</button>
             <div id="job-deck" aria-live="polite" aria-atomic="true"></div>
             <div class="swipe-actions" id="swipe-actions" hidden>
               <button id="pass-job" aria-keyshortcuts="ArrowLeft" title="Pass (←)" class="swipe-button pass" aria-label="Pass on this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-close"/></svg></span><small>Pass</small></button>
@@ -74,38 +74,38 @@
         <div class="empty-state" id="empty-state" hidden><h2>No applications here yet</h2><p>Save a role from Discover, or add one yourself.</p><button class="text-button" id="empty-add-button">Add your first role</button></div>
       </section>
       <section id="profile-view" class="view" aria-labelledby="profile-title" hidden>
-        <div class="intro"><p class="eyebrow">MAKE IT YOURS</p><h1 id="profile-title">Your <em>profile.</em></h1><p class="subtitle">Your preferences guide suggestions. Your verified experience shapes the drafts.</p></div>
+        <div class="intro"><p class="eyebrow">MAKE IT YOURS</p><h1 id="profile-title">Your <em>profile.</em></h1><p class="subtitle">Your CV supplies the facts. Add your current availability and preferences.</p></div>
         <form id="profile-form" class="profile-card">
-          <div class="cv-library"><h3>Your CVs</h3><div class="cv-json-import"><label class="secondary-button file-button">Import CV details (JSON)<input id="cv-json-upload" type="file" accept="application/json,.json" multiple class="file-input" /></label><p class="small-note">Choose up to three CV versions. Review your combined experience, skills, education and languages before saving. PDFs below are used for applications.</p><p id="cv-json-status" role="status"></p></div><div class="browser-connection"><p id="browser-connection-status" role="status">Checking private connection…</p><button type="button" class="secondary-button" id="check-private-connection" disabled>Check connection</button><button type="button" class="secondary-button" id="load-saved-cvs" disabled>Load my saved CVs</button><p id="saved-cv-status" role="status"></p><button type="button" class="secondary-button" id="test-browser" disabled>Try a practice application</button><button type="button" class="text-button" id="disconnect-browser" hidden>Disconnect this device</button><p class="small-note">Connect once for full CV reviews and saved PDFs. Reviews compare your saved CV details and preferences with the listing. Swiping opens the employer in a separate tab; nothing is submitted automatically.</p></div><p class="small-note">All three versions, ready when you need them. Your original PDF layout stays intact. A private server copy lets your connected device restore these PDFs; keep a separate backup.</p><div class="cv-library-row"><label class="secondary-button file-button">Add Consulting PDF<input id="consulting-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="consulting-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="consulting-download" hidden>Download</button><button type="button" class="text-button" id="consulting-remove" hidden>Remove</button></div></div><div class="cv-library-row"><label class="secondary-button file-button">Add Business Analyst PDF<input id="analyst-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="analyst-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="analyst-download" hidden>Download</button><button type="button" class="text-button" id="analyst-remove" hidden>Remove</button></div></div><div class="cv-library-row"><label class="secondary-button file-button">Add Full Stack Developer PDF<input id="developer-upload" type="file" accept="application/pdf,.pdf" class="file-input" /></label><span id="developer-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="developer-download" hidden>Download</button><button type="button" class="text-button" id="developer-remove" hidden>Remove</button></div></div></div>
-<details class="profile-section" open><summary><span>Your details<small>Contact info & availability</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
-            <label>Full name<input id="profile-name" maxlength="150" autocomplete="name" /></label>
-            <label>Earliest start date<input id="profile-startDate" type="date" /></label>
-            <label>Email for applications<input id="profile-email" type="email" autocomplete="email" /></label>
-            <label>Phone for applications<input id="profile-phone" type="tel" autocomplete="tel" /></label>
-            <label class="wide">LinkedIn URL<input id="profile-linkedin" type="url" placeholder="https://www.linkedin.com/in/…" /></label>
+          <div class="cv-library"><h3>Your CVs</h3><div class="cv-json-import"><label class="secondary-button file-button">Upload CVs<input id="cv-json-upload" type="file" accept="application/pdf,.pdf,application/json,.json" multiple class="file-input" /></label><p class="small-note">Upload up to three CVs as PDFs or JSON. Review the extracted details once; PDFs are also saved for applications. PDF text is read on this device.</p><p id="cv-json-status" role="status"></p></div><div class="browser-connection"><label class="secondary-button file-button">Connect or restore device<input id="profile-import" type="file" accept="application/json" class="file-input" /></label><p id="browser-connection-status" role="status">Checking private connection…</p><button type="button" class="secondary-button" id="check-private-connection" disabled>Check connection</button><button type="button" class="secondary-button" id="load-saved-cvs" disabled>Load my saved CVs</button><p id="saved-cv-status" role="status"></p><button type="button" class="secondary-button" id="test-browser" disabled>Try a practice application</button><button type="button" class="text-button" id="disconnect-browser" hidden>Disconnect this device</button><p class="small-note">Connect once for full CV reviews and saved PDFs. Reviews compare your saved CV details and preferences with the listing. Swiping opens the employer in a separate tab; nothing is submitted automatically.</p></div><p class="small-note">Your saved PDF versions are listed below. Uploading a replacement also updates the details used for matching. Keep your original files as a backup.</p><div class="cv-library-row"><span class="cv-version-label">Consulting CV</span><span id="consulting-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="consulting-download" hidden>Download</button><button type="button" class="text-button" id="consulting-remove" hidden>Remove</button></div></div><div class="cv-library-row"><span class="cv-version-label">Business Analyst CV</span><span id="analyst-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="analyst-download" hidden>Download</button><button type="button" class="text-button" id="analyst-remove" hidden>Remove</button></div></div><div class="cv-library-row"><span class="cv-version-label">Full Stack Developer CV</span><span id="developer-file-status">No PDF stored</span><div class="cv-file-actions"><button type="button" class="text-button" id="developer-download" hidden>Download</button><button type="button" class="text-button" id="developer-remove" hidden>Remove</button></div></div></div>
+<section class="cv-profile" aria-labelledby="cv-profile-title">
+  <div class="cv-profile-overview">
+    <h3 id="cv-profile-title">Your CV profile</h3>
+    <p class="small-note" id="cv-profile-source"></p>
+    <dl id="cv-profile-summary" class="cv-profile-summary"></dl>
+    <p class="small-note" id="cv-profile-experience"></p>
+  </div>
+  <details class="profile-section" id="cv-profile-details"><summary><span>Review or correct CV details<small>Only edit if something is missing or has changed</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
+    <label>Full name<input id="profile-name" maxlength="150" autocomplete="name" /></label>
+    <label>Email for applications<input id="profile-email" type="email" autocomplete="email" /></label>
+    <label>Phone for applications<input id="profile-phone" type="tel" autocomplete="tel" /></label>
+    <label>LinkedIn URL<input id="profile-linkedin" type="url" placeholder="https://www.linkedin.com/in/…" /></label>
+    <label class="wide">Languages &amp; levels<input id="profile-languages" maxlength="300" placeholder="e.g. English native (C1), German B1" /></label>
+    <label class="wide">Experience, skills &amp; qualifications<textarea id="profile-evidence" rows="6" placeholder="Upload your CVs above, then correct any missing or outdated facts here."></textarea></label>
+  </div></details>
+</section>
+<details class="profile-section" open><summary><span>Availability<small>Your current plans</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
+  <label>Earliest start date<input id="profile-startDate" type="date" /></label>
+  <div class="profile-search-link"><span class="mini-label">SEARCH PREFERENCES</span><button class="text-button" id="profile-search-filters" type="button">Edit search filters →</button></div>
 </div></details>
-<details class="profile-section"><summary><span>Search preferences<small>Location & languages</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
-            <label>Search geography<select id="profile-geography"><option value="europe">Across Europe</option><option value="international">All continents, excluding the US</option><option value="africa">Africa</option><option value="asia">Asia</option><option value="oceania">Oceania</option><option value="north-america">North America, excluding the US</option><option value="south-america">South America</option></select></label>
-            <label>German level<select id="profile-germanLevel"><option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option></select></label>
-            <label class="wide">Languages & levels<input id="profile-languages" maxlength="300" placeholder="e.g. English native (C1), German B1" /></label>
-            <label class="wide checkbox-label"><input id="profile-includeAdjacent" type="checkbox" /> Explore adjacent roles when the responsibilities fit my direction</label>
-<label class="wide checkbox-label"><input id="profile-includeConditional" type="checkbox" /> Include conditional matches with language, seniority or eligibility flags</label>
-</div></details>
-<details class="profile-section"><summary><span>Your experience<small>CV details & personal preferences</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
-            <label class="wide">Your work-authorisation position<textarea id="profile-workRights" rows="4" placeholder="Current country, permit restrictions and expiry, and where you need a work-permit route. This is a reference for your review, not an automatic yes/no answer."></textarea></label>
-            <label class="wide">Relocation preferences<input id="profile-relocation" maxlength="500" placeholder="e.g. Open to relocating for a permanent role; prefer Germany" /></label>
-            <label class="wide">Pay target<input id="profile-salaryTarget" maxlength="300" placeholder="e.g. €55,000 gross per year; include country, currency and pay period" /></label>
-            <label class="wide">Preferred work mix &amp; balance<textarea id="profile-workStyle" rows="3" placeholder="For example: time spent in meetings, analysis, planning and technical work; preferred pace and contract terms."></textarea></label>
-            <label class="wide">What you want to do<textarea id="profile-motivation" rows="3"></textarea></label>
-            <label class="wide">Experience, skills & qualifications<textarea id="profile-evidence" rows="6" placeholder="Import your CV JSON above to fill this in, or add your own details. Review and edit these facts for qualification checks and application drafts."></textarea></label>
-</div></details>
-<details class="profile-section"><summary><span>CV file reminders<small>Optional filenames</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
-            <label>Consulting CV filename<input id="profile-consultingCV" placeholder="e.g. Shanise_Consulting.pdf" maxlength="200" /></label>
-            <label>Business Analyst CV filename<input id="profile-analystCV" placeholder="e.g. Shanise_Business_Analyst.pdf" maxlength="200" /></label>
-<label>Full Stack Developer CV filename<input id="profile-developerCV" placeholder="e.g. Shanise_Developer.pdf" maxlength="200" /></label>
+<details class="profile-section"><summary><span>Career preferences<small>Things your CV may not tell us</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
+  <label class="wide">Your work-authorisation position<textarea id="profile-workRights" rows="4" placeholder="Current country, permit restrictions and expiry, and where you need a work-permit route. This is a reference for your review, not an automatic yes/no answer."></textarea></label>
+  <label class="wide">Relocation preferences<input id="profile-relocation" maxlength="500" placeholder="e.g. Open to relocating for a permanent role; prefer Germany" /></label>
+  <label class="wide">Pay target<input id="profile-salaryTarget" maxlength="300" placeholder="e.g. €55,000 gross per year; include country, currency and pay period" /></label>
+  <label class="wide">Preferred work mix &amp; balance<textarea id="profile-workStyle" rows="3" placeholder="For example: time spent in meetings, analysis, planning and technical work; preferred pace and contract terms."></textarea></label>
+  <label class="wide">What you want to do<textarea id="profile-motivation" rows="3"></textarea></label>
 </div></details>
 
-          <div class="profile-actions"><button class="primary-button" type="submit">Save my profile</button><label class="secondary-button file-button">Import CV setup<input id="profile-import" type="file" accept="application/json" class="file-input" /></label><span id="profile-message" role="status"></span></div>
+          <div class="profile-actions"><button class="primary-button" type="submit">Save my profile</button><span id="profile-message" role="status"></span></div>
         </form>
       </section>
       <footer class="privacy-footer"><span>✧ A little momentum, every day.</span><span>Saved on this device · Keep a backup</span></footer>
@@ -122,12 +122,12 @@
   <dialog id="cv-import-dialog" aria-labelledby="cv-import-title">
     <form id="cv-import-form">
       <div class="sheet-header"><h2 id="cv-import-title">Review your CV details</h2><button class="icon-button" id="cv-import-close" type="button" aria-label="Cancel CV import">×</button></div>
-      <div class="sheet-scroll"><p id="cv-import-files"></p><p>Repeated facts are combined. Existing profile text is included. Edit anything below before saving; your PDFs and application records stay as they are.</p>
+      <div class="sheet-scroll"><p id="cv-import-files"></p><p>Review what was read from your CVs. Correct any missing or misplaced details before saving. Uploaded PDFs are saved for applications at the same time; your application records are preserved.</p>
+        <div id="cv-import-pdfs" class="cv-import-pdfs" hidden></div>
         <div class="form-grid">
           <label>Name<input id="cv-import-name" maxlength="200" /></label><label>Email<input id="cv-import-email" type="email" /></label>
           <label>Phone<input id="cv-import-phone" /></label><label>LinkedIn<input id="cv-import-linkedin" type="url" /></label>
           <label class="wide">Languages and levels<input id="cv-import-languages" maxlength="300" /></label>
-          <label>German level<select id="cv-import-germanLevel"><option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option></select></label>
           <label class="wide">Experience, skills and qualifications<textarea id="cv-import-evidence" rows="16" maxlength="50000" required></textarea></label>
         </div><p class="small-note">Work rights, pay targets and career preferences remain as you entered them. A CV does not establish your current work authorisation.</p>
       </div><div class="sheet-actions"><span id="cv-import-error" role="status"></span><button class="primary-button" type="submit">Save reviewed CV details</button></div>
@@ -144,14 +144,21 @@
       </div>
       <div class="sheet-scroll">
         <input id="entry-id" type="hidden" />
-        <div class="form-grid">
+        <section class="link-import" aria-label="Import a job listing">
+          <p class="eyebrow">START WITH A LINK</p><h3>Found something promising?</h3>
+          <p>Paste a LinkedIn or employer job link. We’ll retrieve the details for you to review.</p>
+          <label for="link">Job or application link</label>
+          <div class="link-import-row"><input id="link" type="url" placeholder="https://…" /><button id="retrieve-job" class="primary-button" type="button">Get details</button></div>
+          <p id="import-job-status" role="status"></p>
+          <button id="manual-job" class="text-button" type="button">Paste details instead</button>
+        </section>
+        <div class="form-grid" id="application-details">
           <label>Company<input id="company" required maxlength="90" placeholder="e.g. Deliverect" /></label>
           <label>Role title<input id="title" required maxlength="120" placeholder="e.g. Implementation Consultant" /></label>
           <label>Location<input id="location" maxlength="100" placeholder="e.g. Berlin · Hybrid" /></label>
           <label>Status<select id="status"><option value="To apply">Saved</option><option>Not applied</option><option>Preparing</option><option>Applied</option><option>Interview</option><option>Offer</option><option>Archived</option></select></label>
           <label>Application date<input id="application-date" type="date" /></label>
           <label>Interview date<input id="interview-date" type="date" /></label><label>Follow-up date<input id="follow-up-date" type="date" /><small>Reminder for an applied, interview or offer stage. Clear when done.</small></label>
-          <label class="wide">Application link<input id="link" type="url" placeholder="https://…" /></label>
           <label class="wide">CV / materials used<input id="materials" maxlength="150" placeholder="e.g. Consulting CV PDF · tailored cover letter" /></label>
           <label class="wide">Fit & required knowledge<textarea id="requirements" rows="4" placeholder="Role fit, key requirements, gaps, work-right note…"></textarea></label>
           <label class="wide">Notes<textarea id="notes" rows="5" placeholder="What you submitted, recruiter details, follow-up notes…"></textarea></label>
@@ -161,7 +168,7 @@
       <div class="sheet-actions">
         <button class="text-button" id="edit-materials" type="button" hidden>Application materials</button><button class="danger-button" id="delete-button" type="button" hidden>Delete</button>
         <span class="save-status" id="save-status" aria-live="polite"></span>
-        <button class="primary-button" type="submit">Save application</button>
+        <button class="primary-button" id="save-application" type="submit">Save application</button>
       </div>
     </form>
   </dialog>
@@ -197,21 +204,28 @@
     <div class="sheet-actions"><a id="browser-original" class="secondary-button" target="_blank" rel="noopener noreferrer">Open original ↗</a><button id="browser-submitted" class="primary-button" hidden>I submitted it</button><button id="browser-end" class="secondary-button">End session</button></div></div>
   </dialog>
   <dialog id="device-dialog" aria-labelledby="device-title"><div class="backup-panel"><div class="sheet-header"><h2 id="device-title">Transfer & sync</h2><button class="icon-button" id="device-close" aria-label="Close transfer">×</button></div><p id="device-status" role="status">Private, encrypted device connection.</p><div id="device-content"></div></div></dialog>
-  <dialog id="location-dialog" aria-labelledby="location-title"><div class="backup-panel">
-    <div class="sheet-header"><h2 id="location-title">Filter your job search</h2><button type="button" class="icon-button" id="close-locations" aria-label="Close location filters">×</button></div>
+  <dialog id="location-dialog" aria-labelledby="location-title"><div class="backup-panel filter-panel">
+    <div class="sheet-header"><h2 id="location-title">Search filters</h2><button type="button" class="icon-button" id="close-locations" aria-label="Close search filters">×</button></div>
     <div class="location-controls">
-      <label for="filter-region">Continent</label><select id="filter-region"></select>
-      <div id="filter-country-group"><label for="filter-country">European country</label><select id="filter-country"></select></div>
-      <label class="checkbox-label"><input type="checkbox" id="filter-broad-remote" /> Also include broad regional and worldwide remote listings</label><p id="location-help">By default, results must explicitly list a location in your selection. Broad remote listings may still require country or timezone checks. US-only roles remain excluded.</p>
-      <label class="checkbox-label"><input type="checkbox" id="filter-hide-senior" /> Hide senior and leadership roles</label><p>Excludes Senior, Lead, Principal, Staff, Head, Director and executive leadership titles. Project Manager and similar titles are not excluded just for saying “Manager”.</p>
-      <label for="filter-experience">Maximum required experience</label><select id="filter-experience" aria-describedby="experience-filter-help">
-        <option value="0">No experience required</option><option value="1">Up to 1 year</option><option value="2">Up to 2 years</option><option value="3">Up to 3 years</option><option value="4">Up to 4 years — hide 5+ year requirements</option><option value="5">Up to 5 years</option><option value="10">Up to 10 years</option><option value="any">Any experience level</option>
-      </select><p id="experience-filter-help">Uses the minimum required years: 3–5 counts as 3. Preferred experience and roles with no clear minimum remain visible. This filters adverts, not your actual qualifications. Saved applications are kept.</p>
-      <label class="checkbox-label"><input type="checkbox" id="filter-older-listings" /> Include older or potentially outdated listings</label><p>By default, listings posted over 90 days ago or with a start date over 90 days in the past are hidden. Passed deadlines and source expiry dates are always excluded. Undated listings are labelled; your saved applications stay in your notebook.</p>
-      <p>Country filters request more listings for that country. Availability varies by source; an empty result does not mean there are no jobs there.</p>
+      <section class="filter-section" aria-labelledby="filter-location-heading"><h3 id="filter-location-heading">Location</h3>
+        <label class="sr-only" for="filter-region">Region</label><select id="filter-region"></select>
+        <div id="filter-country-group"><label for="filter-country">Country</label><select id="filter-country"></select></div>
+        <p class="filter-caption">US-only jobs are excluded.</p>
+      </section>
+      <details class="filter-section filter-more" id="filter-more"><summary>More options</summary>
+        <label class="filter-choice"><span><strong>Hide senior titles</strong><small>Senior, Lead and leadership roles.</small></span><input type="checkbox" id="filter-hide-senior" /></label>
+        <label class="filter-choice"><span><strong>Broader remote locations</strong><small>Include regional and worldwide listings.</small></span><input type="checkbox" id="filter-broad-remote" /></label>
+        <label class="filter-choice"><span><strong>Older listings</strong><small>Include listings over 90 days old. Expired jobs stay hidden.</small></span><input type="checkbox" id="filter-older-listings" /></label>
+        <label class="filter-choice"><span><strong>Flagged matches</strong><small>Allow language, seniority or permit requirements to check.</small></span><input type="checkbox" id="filter-conditional" /></label>
+      </details>
+      <details class="filter-section filter-rules" id="filter-rules"><summary>Matched from your CV <span>Automatic</span></summary>
+        <p id="filter-cv-experience"></p>
+        <ul><li>Skills match above 6/10.</li><li>Required years supported by your CV.</li><li>No confirmed required-skill, language or work-rights conflict.</li></ul>
+        <p>Missing specialist experience needs review. Broader filters never lower these checks.</p>
+      </details>
     </div>
-    <div class="sheet-actions"><button id="reset-locations" type="button" class="secondary-button">All locations</button><button id="apply-locations" type="button" class="primary-button">Show matching roles</button></div>
+    <div class="sheet-actions"><button id="reset-locations" type="button" class="secondary-button">Reset filters</button><button id="apply-locations" type="button" class="primary-button">Show matches</button></div>
   </div></dialog>
-  <script type="module" src="app.js?v=58"></script>
+  <script type="module" src="app.js?v=67"></script>
 </body>
 </html>

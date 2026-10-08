@@ -16,7 +16,7 @@ test('cached old and reposted adverts are hidden, optional older filter persists
  await page.goto('/');
  await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','recent');
  await expect(page.locator('.listing-date')).toContainText('Source posting date:');
- await page.locator('#location-filter').click();await page.locator('#filter-older-listings').check();await page.locator('#apply-locations').click();
+ await page.locator('#location-filter').click();await page.locator('#filter-more summary').click();await page.locator('#filter-older-listings').check();await page.locator('#apply-locations').click();
  await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','old');
  await expect(page.locator('.listing-date')).toContainText('Older listing');
  await page.reload();await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','old');

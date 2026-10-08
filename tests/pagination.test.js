@@ -31,20 +31,10 @@ test('Jobicy preserves country restrictions, description paragraphs, attribution
  assert.equal(jobs.length,1);assert.equal(jobs[0].location,'Canada, South Africa');assert.equal(jobs[0].source,'Jobicy');
  assert.match(jobs[0].description,/Configure systems\.\n\nTrain customers\./);assert.match(jobs[0].description,/50000–70000 CAD yearly/);
 });
-test('one unavailable remote source does not discard other sources or claim complete results',async()=>{
- const original=globalThis.fetch;
- globalThis.fetch=async url=>{
-  if(url.includes('remoteok'))return {ok:true,json:async()=>[]};
-  if(url.includes('ashbyhq'))return {ok:true,json:async()=>({jobs:[]})};
-  if(url.includes('himalayas'))return {ok:true,json:async()=>({jobs:[],totalCount:0,offset:0,limit:20})};
-  if(url.includes('remotive'))throw Error('Unavailable');
-  if(url.includes('jobicy'))return {ok:true,json:async()=>({jobs:[{id:1,jobTitle:'Implementation Consultant',companyName:'Canada Co',url:'https://jobicy.com/jobs/1',jobGeo:'Canada'}]})};
-  return {ok:true,json:async()=>({data:[],links:{next:null}})};
- };
- try{
-  const {default:handler}=await import('../api/jobs.js?partial-test');
-  const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};
-  await handler({method:'GET',url:'/api/jobs'},res);
-  assert.equal(res.code,200);assert.equal(res.data.jobs[0].source,'Jobicy');assert.equal(res.data.partial,true);assert.deepEqual(res.data.sourceErrors,['Remotive']);
- }finally{globalThis.fetch=original;}
+test('Firecrawl failures return a retryable message without reverting to old feeds',async()=>{
+ const {createJobsHandler}=await import('../api/jobs.js');
+ const urls=[],handler=createJobsHandler({fetcher:async url=>{urls.push(url);return {ok:false,status:500,json:async()=>({success:false})};}});
+ const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};
+ await handler({method:'GET',url:'/api/jobs?region=asia',headers:{}},res);
+ assert.equal(res.code,503);assert.match(res.data.error,/Firecrawl/);assert(urls.every(url=>url.startsWith('https://api.firecrawl.dev/')));
 });
