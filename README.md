@@ -295,3 +295,9 @@ Removed the separate external LinkedIn search block from Discover. Its Looking f
 ## Automatic role exploration (release 67)
 
 Removed the Related roles switch and its search restriction. Discovery always searches the seven role areas and assesses differently titled jobs through responsibilities, CV skills and required experience. Legacy includeAdjacent profile values and adjacent API parameters no longer suppress those opportunities. Location and other explicit filters still apply, and the skills floor remains strictly above 6/10.
+
+## LILT discovery regression (release 68)
+
+The reported Applied AI project-management advert is excluded by the required-years check (3+ relevant years against 31 dated months) and its low documented skills score. Regression coverage preserves seven actual requirements and five optional points; Essential Skills and Experience is a heading, Our Story/Our Tech ends candidate qualifications, and the four-month contract is treated as a term. Local evidence coverage is independent of model-provider quota; unavailable full reviews never admit a failing candidate. Browser verification uses a synthetic CV and a qualifying control alongside the reported listing.
+
+Pushing main does not automatically deploy this project's public Vercel alias. Verify the deployed app asset version after a release; production had remained on v58 while GitHub contained v67.
