@@ -31,7 +31,7 @@ http.createServer(async (req, res) => {
     res.json = data => {res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(data));};
     return handler(req, res);
   }
-  const allowed = /^\/(?:index\.html|practice-application\.html|styles\.css|app\.js|service-worker\.js|manifest\.json|lib\/(?:experience-filter|listing-freshness|listing-highlights|qualification-capabilities|profile-corrections|fit-review|cv-json|cv-pdf|job-search-profile|model|geography|insights|summaries|device-crypto|device-store|device-sync)\.js|vendor\/pdfjs\/(?:pdf\.min\.mjs|pdf\.worker\.min\.mjs)|icons\/[a-z0-9.-]+)$/;
+  const allowed = /^\/(?:index\.html|practice-application\.html|styles\.css|app\.js|service-worker\.js|manifest\.json|lib\/(?:application-storage|experience-filter|listing-freshness|listing-highlights|qualification-capabilities|profile-corrections|fit-review|cv-json|cv-pdf|job-search-profile|model|geography|insights|summaries|device-crypto|device-store|device-sync)\.js|vendor\/pdfjs\/(?:pdf\.min\.mjs|pdf\.worker\.min\.mjs)|icons\/[a-z0-9.-]+)$/;
   const file = url.pathname === '/' ? '/index.html' : url.pathname;
   if (!allowed.test(file)) {res.writeHead(404); return res.end('Not found');}
   try {const body = await readFile(path.join(root,file)); res.setHeader('Content-Type', types[path.extname(file)] || 'application/octet-stream'); res.setHeader('Cache-Control','no-cache'); res.end(body);}

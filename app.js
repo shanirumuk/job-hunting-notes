@@ -10,9 +10,10 @@ import {recordedEmploymentMonths} from './lib/insights.js';
 import {regions,europeanCountries,geographicMatch,scopedLocation} from './lib/geography.js';
 import {recoverImport,getItem as deviceItem,setItem as deviceSetItem} from './lib/device-store.js';
 import {startDeviceSync} from './lib/device-sync.js';
+import {mergeApplicationEntries,ApplicationConflict} from './lib/application-storage.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=69';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=70';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -26,6 +27,7 @@ let storageError = false;
 function read(key, fallback) {try {const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : structuredClone(fallback);} catch {storageError = true; return structuredClone(fallback);} }
 let entries;
 try {entries = validateEntries(read(KEY, seed));} catch {entries = structuredClone(seed); storageError = true;}
+let entriesBaseline=structuredClone(entries),editorEntry=null;
 let profile;
 try {profile = validateProfile(read(PROFILE_KEY, defaultProfile));} catch {profile = {...defaultProfile}; storageError = true;}
 let discovery = read(DISCOVERY_KEY, {jobs: [], decisions: {}, fetchedAt: ''});
@@ -39,8 +41,14 @@ let matchCache = new WeakMap(), cachedProfile = profile;
 const editor = $('editor-dialog'), backup = $('backup-dialog'), form = $('application-form');
 function toast(message) {$('toast').textContent = message; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').hidden = true, 5500);}
 function persist(key, value) {
-  try {if(localStorage.getItem('job-notebook-importing'))throw Error('Import in progress');localStorage.setItem(key, JSON.stringify(value));document.dispatchEvent(new Event('notebook-change')); return true;}
-  catch {toast('Could not save on this device. Download a backup before closing this page.'); return false;}
+  try {
+    if(localStorage.getItem('job-notebook-importing'))throw Error('Import in progress');
+    if(key===KEY){const raw=localStorage.getItem(KEY);value=validateEntries(mergeApplicationEntries(entriesBaseline,validateEntries(value),raw?validateEntries(JSON.parse(raw)):entriesBaseline));}
+    localStorage.setItem(key, JSON.stringify(value));
+    if(key===KEY){entries=value;entriesBaseline=structuredClone(value);}
+    document.dispatchEvent(new Event('notebook-change')); return true;
+  }
+  catch(error) {toast(error instanceof ApplicationConflict?error.message:'Could not save on this device. Download a backup before closing this page.'); return false;}
 }
 function saveEntries() {return persist(KEY, entries);}
 function saveDiscovery() {return persist(DISCOVERY_KEY, discovery);}
@@ -633,6 +641,7 @@ function showEntryHighlights(id) {
  target.onclick=event=>{const remove=event.target.closest('[data-remove-highlight]');if(!remove)return;const next={...discovery,highlights:{...discovery.highlights,[id]:highlights.filter(h=>h.id!==remove.dataset.removeHighlight)}};if(persist(DISCOVERY_KEY,next)){discovery=next;showEntryHighlights(id);listingHighlights?.refresh();target.querySelector('summary').focus();}};
 }
 function openEditor(entry) {
+  editorEntry=entry?structuredClone(entry):null;
   importController?.abort();importGeneration++;importedJob=null;importedFromURL='';
   form.reset();$('application-details').hidden=!entry;$('save-application').disabled=!entry;$('import-job-status').textContent='';$('retrieve-job').disabled=false;$('manual-job').hidden=!!entry;$('link').required=!entry;
   $('save-status').textContent = ''; $('delete-button').hidden = !entry; $('edit-materials').hidden = !entry || !['To apply','Preparing','Not applied'].includes(entry.status); $('editor-title').textContent = entry ? 'Edit application' : 'Add application';
@@ -666,13 +675,19 @@ editor.addEventListener('close',()=>{importController?.abort();importGeneration+
 function upsert(event) {
   event.preventDefault(); const value = id => $(id).value.trim();
   if (value('link') && !safeURL(value('link'))) { $('save-status').textContent = 'Use an http or https application link.'; return; }
-  const previous = entries.find(e => e.id === value('entry-id'));
+  const previous = editorEntry;
   const data = {...previous,...(importedJob?{description:importedJob.description,sourceDescription:importedJob.description,source:importedJob.source,publishedAt:importedJob.publishedAt,expiresAt:importedJob.expiresAt,remote:importedJob.remote}:{}),id:value('entry-id') || crypto.randomUUID?.() || 'local-'+Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),company:value('company'),title:value('title'),location:value('location'),status:$('status').value,applicationDate:$('application-date').value,interviewDate:$('interview-date').value,followUpDate:$('follow-up-date').value,link:value('link'),materials:value('materials'),requirements:value('requirements'),notes:value('notes')};
   if (!data.company || !data.title) return;
   if(importedJob||previous?.description)data.description=data.requirements;
   if(data.status!==previous?.status)Object.assign(data,changeApplicationStatus(data,data.status,today()));
-  if (previous) entries = entries.map(e => e.id === data.id ? data : e); else entries.unshift(data);
-  if (saveEntries()) {render(); editor.close(); toast('Application saved on this device.');}
+  let saved=data;
+  if(previous){try{saved=mergeApplicationEntries([previous],[data],entries.filter(e=>e.id===data.id))[0];}catch(error){$('save-status').textContent=error.message;return;}}
+  const next=previous?entries.map(e=>e.id===data.id?saved:e):[saved,...entries];
+  if (persist(KEY,next)) {
+    undoAction=null;
+    activeFilter='all';$('search-input').value='';document.querySelectorAll('.filter').forEach(b=>b.classList.toggle('active',b.dataset.filter==='all'));
+    render();editor.close();setView('notebook');toast('Application saved. Shown in All applications.');
+  }
 }
 function openPreparation(id) {
   const entry = entries.find(e => e.id === id); if (!entry) return;
@@ -721,6 +736,13 @@ async function importData(file) {
     if (file.size > 25 * 1024 * 1024) throw new Error('Backup too large');
     const parsed = JSON.parse(await file.text());
     const nextEntries = validateEntries(parsed.entries);
+    if(parsed.kind==='job-notebook-applications'){
+      refreshSavedApplications();
+      const additions=nextEntries.filter(e=>!entries.some(saved=>sameJob(saved,e)));
+      if(!persist(KEY,[...additions,...entries]))return;
+      activeFilter='all';$('search-input').value='';document.querySelectorAll('.filter').forEach(b=>b.classList.toggle('active',b.dataset.filter==='all'));
+      undoAction=null;render();setView('notebook');$('backup-message').textContent=`Recovered ${additions.length} applications. Existing entries, notes, CVs and preferences are kept.`;toast($('backup-message').textContent);return;
+    }
     const nextProfile = parsed.profile ? validateProfile(parsed.profile) : profile;
     const nextDiscovery = parsed.discovery || {jobs:[],decisions:{},fetchedAt:''};
     if (!Array.isArray(nextDiscovery.jobs) || !nextDiscovery.decisions || typeof nextDiscovery.decisions !== 'object' || Array.isArray(nextDiscovery.decisions)) throw new Error('Invalid discovery');
@@ -1061,9 +1083,15 @@ function checkFreshFeed(){if(!document.hidden&&activeView==='discover'&&!loading
 document.addEventListener('visibilitychange',checkFreshFeed);
 setInterval(checkFreshFeed,60000);
 
-startDeviceSync({state:()=>({entries:validateEntries(read(KEY,entries)),profile:validateProfile(read(PROFILE_KEY,profile)),discovery:read(DISCOVERY_KEY,discovery)}),applied:pack=>{entries=pack.entries;profile=pack.profile;discovery=pack.discovery;pinnedJobId=null;undoAction=null;matchCache=new WeakMap();populateProfile();render();loadBrowserConnection(false);},notify:toast});
+startDeviceSync({state:()=>({entries:validateEntries(read(KEY,entries)),profile:validateProfile(read(PROFILE_KEY,profile)),discovery:read(DISCOVERY_KEY,discovery)}),applied:pack=>{entries=pack.entries;entriesBaseline=structuredClone(entries);profile=pack.profile;discovery=pack.discovery;pinnedJobId=null;undoAction=null;matchCache=new WeakMap();populateProfile();render();loadBrowserConnection(false);},notify:toast});
+function refreshSavedApplications(){
+ try{const raw=localStorage.getItem(KEY);if(!raw)return;const saved=validateEntries(JSON.parse(raw));if(JSON.stringify(saved)===JSON.stringify(entriesBaseline))return;entries=saved;entriesBaseline=structuredClone(saved);undoAction=null;render();}
+ catch{toast('Could not read applications saved in another tab. Export a backup before making changes.');}
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshSavedApplications();});
 window.addEventListener('storage',event=>{
  if(event.key==='job-notebook-device-updated'){location.reload();return;}
+ if(event.key===KEY){refreshSavedApplications();return;}
  if(event.key===PROFILE_KEY&&readSavedProfile()){
   const shown=selectedRole;render();
   if($('role-dialog').open&&shown)openRoleDetails(shown);
