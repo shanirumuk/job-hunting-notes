@@ -12,7 +12,7 @@ export function fallbackReason(error){
  }
  return null;
 }
-export async function withProviderFallback(run,{budgetMs=270000,now=Date.now,state=cooldowns,providers}={}){
+export async function withProviderFallback(run,{budgetMs=270000,primaryShare=.5,now=Date.now,state=cooldowns,providers}={}){
  const primary=reviewProvider();
  providers??=[primary,...['openai','browserbase'].filter(name=>name!==primary.provider).map(name=>reviewProvider(name)).filter(p=>p.configured)];
  const deadline=now()+budgetMs,failures=[];
@@ -23,7 +23,9 @@ export async function withProviderFallback(run,{budgetMs=270000,now=Date.now,sta
   if(remaining<5000)break;
   // Reserve time for a backup and cleanup. Extractors use this deadline for
   // each attempt, including a validation retry, rather than resetting it.
-  const attemptDeadline=now()+Math.floor(remaining/(providers.length-i));
+  const slots=providers.length-i;
+  const share=i===0&&slots>1?Math.max(1/slots,Math.min(.85,primaryShare)):1/slots;
+  const attemptDeadline=now()+Math.floor(remaining*share);
   try{
    const value=await run(provider,()=>{
     const left=attemptDeadline-now()-5000;

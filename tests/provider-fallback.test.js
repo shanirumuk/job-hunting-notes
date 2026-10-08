@@ -40,3 +40,12 @@ test('attempt timeouts use remaining budget and preserve time for a backup',asyn
  },{providers,state:new Map(),budgetMs:100000,now:()=>clock});
  assert.deepEqual(times,[45000,25000,75000,55000]);
 });
+test('full reviews can reserve more time for the primary while retaining cleanup and a backup budget',async()=>{
+ let clock=0;const times=[];
+ await withProviderFallback(async(provider,timeLeft)=>{
+  times.push(timeLeft());clock+=75000;
+  if(provider.provider==='openai')throw failure('REVIEW_PROVIDER_UNAVAILABLE');
+  return 'done';
+ },{providers,state:new Map(),budgetMs:100000,primaryShare:.8,now:()=>clock});
+ assert.deepEqual(times,[75000,20000]);
+});

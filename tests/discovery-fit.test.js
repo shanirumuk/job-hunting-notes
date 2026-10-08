@@ -66,8 +66,8 @@ test('a full review with a confirmed conflict removes a quick match',()=>{
  const review={...fullReview(),factors:[{key:'eligibility',status:'gap'}]};
  assert.equal(discoveryDecision(job,profile,{review}).eligible,false);
 });
-test('flagged-match preference controls an unresolved required language without changing the skills floor',()=>{
+test('conditional matches cannot bypass the weighted skills floor for an unresolved required language',()=>{
  const language={...job,description:job.description+'\nFrench C1 required.'};
- assert.equal(discoveryDecision(language,{...profile,includeConditional:true}).eligible,true);
+ assert.equal(discoveryDecision(language,{...profile,includeConditional:true}).eligible,false);
  assert.equal(discoveryDecision(language,{...profile,includeConditional:false},{review:fullReview()}).eligible,false);
 });

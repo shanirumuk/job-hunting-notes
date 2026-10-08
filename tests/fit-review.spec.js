@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 const job={id:'full-review-fixture',company:'Example',title:'Business Analyst',location:'Berlin, Germany',link:'https://example.org/job',description:'Requirements:\nEnglish proficiency is essential.\nSQL experience required.'};
-const review={version:4,overall:6.5,skills:8,coverage:70,requirementCoverage:100,provisional:true,cap:'',summary:'Your SQL and English align. Check the contract duration.',cv:'Business Analyst CV',cvReason:'Lead with SQL reporting.',points:[{text:'English proficiency',sourceQuote:'English proficiency is essential.',category:'required',importance:'essential',status:'match',note:'Native English recorded.',cvQuote:'English native (C1)'},{text:'SQL experience',sourceQuote:'SQL experience required.',category:'required',importance:'standard',status:'partial',note:'Reporting is supported; the required depth is unclear.',cvQuote:'SQL reporting.'}],factors:['eligibility','location','pay','career','workStyle','contract'].map(key=>({key,status:'unknown',note:'Confirm this detail.',sourceQuote:'',cvQuote:''})),audit:[{paragraph:0,kind:'background'}],issues:[]};
+const review={version:6,overall:6.5,skills:8,coverage:70,requirementCoverage:100,provisional:true,cap:'',summary:'Your SQL and English align. Check the contract duration.',cv:'Business Analyst CV',cvReason:'Lead with SQL reporting.',points:[{text:'English proficiency',sourceQuote:'English proficiency is essential.',category:'required',importance:'essential',status:'match',note:'Native English recorded.',cvQuote:'English native (C1)'},{text:'SQL experience',sourceQuote:'SQL experience required.',category:'required',importance:'standard',status:'partial',note:'Reporting is supported; the required depth is unclear.',cvQuote:'SQL reporting.'}],factors:['eligibility','location','pay','career','workStyle','contract'].map(key=>({key,status:'unknown',note:'Confirm this detail.',sourceQuote:'',cvQuote:''})),audit:[{paragraph:0,kind:'background'}],issues:[]};
 async function connect(page,jobs=[job]){
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs,nextPage:null}}));
  await page.route('**/api/summary',r=>r.fulfill({status:503,json:{error:'Summary unavailable'}}));
@@ -11,12 +11,12 @@ async function connect(page,jobs=[job]){
 }
 test('full review updates compact checks, uses local cache and refreshes after profile edits',async({page})=>{
  let calls=0;await page.route('**/api/fit-review',async r=>{calls++;const body=r.request().postDataJSON();expect(body.profile.relocation).toContain('contract length');expect(body.profile.email).toBeUndefined();await r.fulfill({json:{review}});});
- await connect(page);await expect(page.locator('.card-fit-summary')).toContainText('Skills evidence: 8/10');
+ await connect(page);await expect(page.locator('.card-fit-summary')).toContainText('Skills alignment: 8/10');
  await page.locator('.qualification-details > summary').click();await expect(page.locator('.qualification.match .qualification-icon')).toHaveText('✓');await expect(page.locator('.qualification.partial .qualification-icon')).toHaveText('?');await expect(page.locator('.qualification.partial')).toContainText('required depth');
  await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('6.5');await expect(page.locator('.fit-cv-name')).toHaveText('Business Analyst CV');await expect(page.locator('#fit-download-cv')).toBeVisible();
  for(const width of [1440,390]){await page.setViewportSize({width,height:844});expect(await page.locator('#role-dialog').evaluate(e=>e.scrollWidth<=e.clientWidth)).toBe(true);}
  await page.screenshot({path:'private/full-review-phone.png'});
- await page.keyboard.press('Escape');await page.reload();await expect(page.locator('.card-fit-summary')).toContainText('Skills evidence: 8/10');expect(calls).toBe(1);
+ await page.keyboard.press('Escape');await page.reload();await expect(page.locator('.card-fit-summary')).toContainText('Skills alignment: 8/10');expect(calls).toBe(1);
  await page.locator('.main-nav [data-view="profile"]').click();await page.locator('#profile-languages').evaluate(e=>e.closest('details').open=true);await page.locator('#profile-languages').fill('English native (C1), French B2');await page.getByRole('button',{name:'Save my profile',exact:true}).click();await page.locator('.main-nav [data-view="discover"]').click();await expect.poll(()=>calls).toBe(2);
 });
 test('late reviews cannot replace another job and errors offer a retry',async({page})=>{
@@ -104,12 +104,12 @@ test('missing OpenAI setup is visible without launching repeated failed reviews'
  await page.reload();await expect(page.locator('#browser-connection-status')).toContainText('OpenAI setup is needed');await expect(page.locator('#full-review-status')).toContainText('OPENAI_API_KEY');
  await page.locator('.listing-info').click();await expect(page.locator('#fit-dialog-review-status')).toContainText('OpenAI setup is needed');expect(calls).toBe(0);
  await page.keyboard.press('Escape');await page.route('**/api/setup',r=>r.fulfill({json:{correction:null,reviewProvider:{provider:'openai',model:'gpt-6-luna',configured:true}}}));
- await page.reload();await expect(page.locator('#browser-connection-status')).toContainText('GPT-6 Luna is configured');await expect(page.locator('.card-fit-summary')).toContainText('Skills evidence: 8/10');
+ await page.reload();await expect(page.locator('#browser-connection-status')).toContainText('GPT-6 Luna is configured');await expect(page.locator('.card-fit-summary')).toContainText('Skills alignment: 8/10');
 });
 
 test('fallback reviews show the actual model and reason in rating details',async({page})=>{
  await page.route('**/api/fit-review',r=>r.fulfill({json:{review:{...review,model:'anthropic/claude-sonnet-4-6',provider:'browserbase',fallback:{from:'openai',reason:'allowance exhausted'}}}}));
- await connect(page);await expect(page.locator('.card-fit-summary')).toContainText('Skills evidence: 8/10');
+ await connect(page);await expect(page.locator('.card-fit-summary')).toContainText('Skills alignment: 8/10');
  await page.locator('.listing-info').click();await page.getByText('How the rating is calculated',{exact:true}).click();
  await expect(page.locator('#role-dialog')).toContainText('Review model: anthropic/claude-sonnet-4-6');
  await expect(page.locator('#role-dialog')).toContainText('Backup provider used (openai: allowance exhausted)');
@@ -163,7 +163,7 @@ test('new declared skills persist and English gets its own tick in the bundled c
 test('background review can recognise transferable skills before a role enters strict discovery',async({page})=>{
  const candidate={...job,id:'transferable-candidate',title:'Implementation Consultant',description:'Requirements:\nInterpret customer needs and turn them into a technical rollout plan.'};
  await page.route('**/api/fit-review',r=>r.fulfill({json:{review:{...review,skills:8,summary:'Transferable requirements and delivery experience supports this role.'}}}));
- await connect(page,[candidate]);await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','transferable-candidate');await expect(page.locator('.card-fit-summary')).toContainText('Skills evidence: 8/10');
+ await connect(page,[candidate]);await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','transferable-candidate');await expect(page.locator('.card-fit-summary')).toContainText('Skills alignment: 8/10');
 });
 test('a full review below the threshold removes the role without recording a pass or application',async({page})=>{
  await page.route('**/api/fit-review',r=>r.fulfill({json:{review:{...review,skills:5}}}));
