@@ -11,9 +11,10 @@ import {regions,europeanCountries,geographicMatch,scopedLocation} from './lib/ge
 import {recoverImport,getItem as deviceItem,setItem as deviceSetItem} from './lib/device-store.js';
 import {startDeviceSync} from './lib/device-sync.js';
 import {mergeApplicationEntries,ApplicationConflict} from './lib/application-storage.js';
+import {applicationsFromFragment,addLinkedApplication} from './lib/application-link.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=70';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=71';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -879,7 +880,7 @@ loadBrowserConnection();
 // Event bindings
 wireTrackpadAndKeys();
 for (const button of document.querySelectorAll('button[data-view]')) button.addEventListener('click', () => setView(button.dataset.view));
-window.addEventListener('hashchange', () => setView(location.hash.slice(1)));
+window.addEventListener('hashchange', () => {if(!consumeApplicationLink())setView(location.hash.slice(1));});
 $('refresh-jobs').addEventListener('click',refreshJobs);
 $('refresh-app').addEventListener('click', async () => {
   const button = $('refresh-app');
@@ -1071,7 +1072,26 @@ if(connectionFragment){
   history.replaceState(null,'',location.pathname+location.search+'#profile');
   (async()=>{await cvStore('put','connection',{token:connectionFragment[1]});await loadBrowserConnection(false);await loadSavedCVs();})().catch(()=>toast('Could not connect this device.'));
 }
-setView(location.hash.slice(1)); render();
+// Consume an explicit add link in this browser's storage, preserving its notebook.
+function consumeApplicationLink(){
+ const fragment=location.hash;
+ if(!/^#add-applications?=/.test(fragment))return false;
+ let message='';
+ try{
+  if(storageError)throw Error('Saved data could not be read. Export a backup before adding an application.');
+  refreshSavedApplications();
+  const incoming=applicationsFromFragment(fragment);
+  let next=entries;
+  for(const entry of incoming)next=addLinkedApplication(next,entry).entries;
+  if(persist(KEY,next)){
+   message=incoming.map(e=>e.company).join(', ')+': saved in this browser. Existing applications kept.';
+  }
+ }catch(error){message=error.message;}
+ setView('notebook');render();
+ if(message)toast(message);
+ return true;
+}
+if(!consumeApplicationLink()){setView(location.hash.slice(1));render();}
 if (storageError) toast('Some saved data could not be read. Export a backup before making changes.');
 if (discovery.fetchedAt) $('feed-status').textContent = `Feed last retrieved ${dateText(discovery.fetchedAt)} · This is not the posting date`;
 if (!discovery.fetchedAt || Date.now() - new Date(discovery.fetchedAt).getTime() > 60*60*1000) refreshJobs();

@@ -317,3 +317,9 @@ Application lists refresh when another tab saves or when a hidden tab becomes vi
 Backup import also accepts a `kind: "job-notebook-applications"` recovery file containing validated `entries`. It adds missing applications without replacing existing entries, profile, CVs or swipe history; duplicate job identities/links are retained unchanged. Full notebook backups keep their existing restore behavior. URL retrieval is available under Applications → + Add; Refresh updates an older open client without clearing saved applications.
 
 Validation: 182 Node tests pass. Native T3 browser checks confirmed saving with an active filter/search, live updates from a second tab, blocked conflicting note edits with both versions retained, and additive recovery that does not duplicate entries when imported twice.
+
+### Release 71: application recovery links
+
+An explicit `#add-applications=` link carries up to ten validated Applied records in a URL fragment. Opening it saves those records in that browser and opens All applications. It does not transfer a complete notebook or establish sync. Existing entries, notes, drafts, CVs and preferences remain intact. Matching saved/preparing applications can be marked Applied; already applied, interviewing, offered and archived entries retain their dates and stages. Reopening the link creates no duplicates. The fragment is removed after handling, and malformed batches fail validation before any records are written.
+
+Validation: 187 Node tests pass. Application-link tests cover additive imports into a 17-entry notebook, duplicates, preservation of later stages and draft details, invalid dates/URLs and all-or-nothing batch validation. Native T3 checks verified 17 existing entries become 20 after adding three, original notes are retained, reopening the link adds nothing and hash navigation preserves profile and discovery data. Application storage remains local unless encrypted device sync is explicitly paired.
