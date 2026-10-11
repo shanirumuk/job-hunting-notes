@@ -11,3 +11,10 @@ test('not-applied corrections clear submission reminders and preserve notes and 
  assert.equal(changeApplicationStatus(entry,'Interview','2026-09-30').applicationDate,'2026-01-01');
  assert.throws(()=>changeApplicationStatus(entry,'delete','2026-09-30'));
 });
+test('rejection preserves submission history and notes while clearing the follow-up reminder',()=>{
+ const entry={id:'one',company:'Example',title:'Analyst',status:'Interview',applicationDate:'2026-10-08',interviewDate:'2026-10-10',followUpDate:'2026-10-12',notes:'Keep recruiter feedback',materials:'Developer CV'};
+ const next=changeApplicationStatus(entry,'Rejected','2026-10-11');
+ assert.deepEqual(next,{...entry,status:'Rejected',followUpDate:''});
+ assert.equal(entry.followUpDate,'2026-10-12');
+ assert.equal(validateEntries(JSON.parse(JSON.stringify([next])))[0].status,'Rejected');
+});

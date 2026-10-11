@@ -18,7 +18,7 @@ test('a linked submission updates a saved copy without losing notes or drafts',(
  assert.equal(result.length,1);assert.deepEqual(result[0],{...saved,status:'Applied',applicationDate:'2026-10-08'});
 });
 test('a repeated link preserves later stages and existing dates',()=>{
- for(const status of ['Applied','Interview','Offer','Archived']){
+ for(const status of ['Applied','Interview','Offer','Rejected','Archived']){
   const saved={...incoming,id:'local',status,applicationDate:'2026-10-07',notes:'Keep this'};
   assert.deepEqual(addLinkedApplication([saved],incoming).entries,[saved]);
  }

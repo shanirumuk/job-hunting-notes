@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=71" />
+  <link rel="stylesheet" href="styles.css?v=72" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -69,7 +69,7 @@
       <section id="notebook-view" class="view" aria-labelledby="notebook-title" hidden>
         <div class="intro"><p class="eyebrow">YOUR APPLICATION SPACE</p><h1 id="notebook-title">Your <em>applications.</em></h1><p class="subtitle">From a promising role to your next conversation.</p></div>
         <section class="toolbar" aria-label="Application tools"><label class="search-field"><span class="sr-only">Search applications</span><input id="search-input" type="search" placeholder="Search your applications" autocomplete="off" /></label><button class="primary-button" id="add-button" type="button" aria-label="Add application">+ Add</button></section>
-        <section class="status-line"><p id="summary-text" aria-live="polite"></p><div class="filters" role="group" aria-label="Filter applications"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="not applied">Not applied</button><button class="filter" data-filter="preparing">Preparing</button><button class="filter" data-filter="to apply">Saved</button><button class="filter" data-filter="applied">Applied</button><button class="filter" data-filter="interview">Interview</button><button class="filter" data-filter="follow-up">Follow-ups due</button></div></section>
+        <section class="status-line"><p id="summary-text" aria-live="polite"></p><div class="filters" role="group" aria-label="Filter applications"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="not applied">Not applied</button><button class="filter" data-filter="preparing">Preparing</button><button class="filter" data-filter="to apply">Saved</button><button class="filter" data-filter="applied">Applied</button><button class="filter" data-filter="interview">Interview</button><button class="filter" data-filter="rejected">Rejected</button><button class="filter" data-filter="follow-up">Follow-ups due</button></div></section>
         <section id="applications" class="application-list" aria-label="Applications"></section>
         <div class="empty-state" id="empty-state" hidden><h2>No applications here yet</h2><p>Save a role from Discover, or add one yourself.</p><button class="text-button" id="empty-add-button">Add your first role</button></div>
       </section>
@@ -156,7 +156,7 @@
           <label>Company<input id="company" required maxlength="90" placeholder="e.g. Deliverect" /></label>
           <label>Role title<input id="title" required maxlength="120" placeholder="e.g. Implementation Consultant" /></label>
           <label>Location<input id="location" maxlength="100" placeholder="e.g. Berlin · Hybrid" /></label>
-          <label>Status<select id="status"><option value="To apply">Saved</option><option>Not applied</option><option>Preparing</option><option>Applied</option><option>Interview</option><option>Offer</option><option>Archived</option></select></label>
+          <label>Status<select id="status"><option value="To apply">Saved</option><option>Not applied</option><option>Preparing</option><option>Applied</option><option>Interview</option><option>Offer</option><option>Rejected</option><option>Archived</option></select></label>
           <label>Application date<input id="application-date" type="date" /></label>
           <label>Interview date<input id="interview-date" type="date" /></label><label>Follow-up date<input id="follow-up-date" type="date" /><small>Reminder for an applied, interview or offer stage. Clear when done.</small></label>
           <label class="wide">CV / materials used<input id="materials" maxlength="150" placeholder="e.g. Consulting CV PDF · tailored cover letter" /></label>
@@ -226,6 +226,6 @@
     </div>
     <div class="sheet-actions"><button id="reset-locations" type="button" class="secondary-button">Reset filters</button><button id="apply-locations" type="button" class="primary-button">Show matches</button></div>
   </div></dialog>
-  <script type="module" src="app.js?v=71"></script>
+  <script type="module" src="app.js?v=72"></script>
 </body>
 </html>
