@@ -27,7 +27,7 @@ test('Chrome recovery adds missing applications and CVs, keeps rejection, retrie
  await page.goto('/?app-refresh=repeated#restore-notebook='+p.code);await expect(page.locator('#nav-count')).toHaveText('19');expect(claims).toBe(1);expect(acks).toBe(2);
 });
 test('tampered private transfer leaves existing records and missing CVs untouched',async({page})=>{
- const p=await recovery();p.encrypted.ciphertext='A'+p.encrypted.ciphertext.slice(1);
+ const p=await recovery();p.encrypted.ciphertext=(p.encrypted.ciphertext[0]==='A'?'B':'A')+p.encrypted.ciphertext.slice(1);
  await page.route('**/api/device',r=>r.fulfill({json:{encrypted:p.encrypted}}));await boot(page);await page.goto('/?app-refresh=tampered#restore-notebook='+p.code);
  await expect(page.locator('#toast')).toContainText('could not be verified');await expect(page.locator('#nav-count')).toHaveText('17');expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence)).toBe('');
  expect(await page.evaluate(async()=>{const {getItem}=await import('/lib/device-store.js');return !!await getItem('developer');})).toBe(false);
