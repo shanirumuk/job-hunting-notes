@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {firecrawlPlan,firecrawlSearchBatch,normalizeFirecrawlJob,publicListingURL,searchFirecrawlJobs} from '../server/firecrawl-jobs.js';
+import {firecrawlPlan,firecrawlSearchBatch,normalizeFirecrawlJob,publicListingURL,listingIndexURL,searchFirecrawlJobs} from '../server/firecrawl-jobs.js';
 import {cvSearchSkills,searchRoleGroups} from '../lib/job-search-profile.js';import {createJobsHandler} from '../api/jobs.js';
 const description='Requirements:\nAPI integrations experience.\nSQL experience.\nEnglish proficiency.\nResponsibilities:\nCoordinate implementation rollouts.';
 const json={isJobPosting:true,isClosed:false,title:'Implementation Consultant',company:'Example',location:'Germany',remote:false,description,publishedAt:'2026-10-01',expiresAt:''};
@@ -11,12 +11,12 @@ test('search terms use a bounded CV skill vocabulary without contact details or 
  assert.match(query,/API integrations/);assert.match(query,/junior/);assert.match(query,/linkedin.com\/jobs\/view/);assert.doesNotMatch(query,/Private Employer|private@example/);
 });
 test('every displayed search area is searched in both employer and LinkedIn batches',()=>{
- const plan=firecrawlPlan();assert.equal(plan.length,5);
+ const plan=firecrawlPlan();assert(plan.length>=5);assert(plan.every(q=>q.length<=500));
  for(const group of searchRoleGroups)for(const title of group.titles){
-  assert(plan[group.batch].includes('"'+title+'"'),title+' absent from employer search');
-  assert(plan[4].includes('"'+title+'"'),title+' absent from LinkedIn search');
+  assert(plan.filter(q=>!q.includes('site:linkedin.com')).some(q=>q.includes('"'+title+'"')),title+' absent from employer search');
+  assert(plan.filter(q=>q.includes('site:linkedin.com')).some(q=>q.includes('"'+title+'"')),title+' absent from LinkedIn search');
  }
- assert.match(plan[3],/project coordinator/);assert.match(plan[3],/change analyst/);assert.match(plan[2],/functional consultant/);
+ assert.match(plan.join(' '),/project coordinator/);assert.match(plan.join(' '),/change analyst/);assert.match(plan.join(' '),/functional consultant/);
 });
 test('legacy related-role settings never narrow automatic discovery',()=>{
  const plan=firecrawlPlan({includeAdjacent:false}).join(' ');
@@ -62,4 +62,31 @@ test('API errors are actionable and provider response details cannot leak creden
  const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};
  await handler({method:'GET',url:'/api/jobs?region=africa&skills=python',headers:{}},res);assert.equal(res.code,429);assert.match(res.data.error,/allowance|rate/);assert(!JSON.stringify(res.data).includes('secret-key'));
  await handler({method:'GET',url:'/api/jobs?skills=private-email',headers:{}},res);assert.equal(res.code,400);
+});
+test('all CV search combinations stay within Firecrawl’s 500-character query limit',()=>{
+ for(const region of ['international','europe','asia','north-america']){
+  const plan=firecrawlPlan({region,skills:['api','sql','requirements','workflows'],junior:true});
+  assert(plan.every(q=>q.length<=500));
+  for(const group of searchRoleGroups)for(const title of group.titles)assert(plan.some(q=>q.includes('"'+title+'"')));
+ }
+});
+test('job search indexes cannot become vacancies or consume paid page extractions',async()=>{
+ for(const url of ['https://uk.indeed.com/q-implementation-consultant-entry-level-l-london-jobs.html','https://linkedin.com/jobs/search/?keywords=analyst','https://example.org/careers','https://example.org/jobs/search']){
+  assert(listingIndexURL(url));assert.equal(normalizeFirecrawlJob(document,url),null);
+ }
+ assert.equal(listingIndexURL('https://linkedin.com/jobs/view/developer-1234567890/'),false);
+ let scrapes=0;
+ const result=await firecrawlSearchBatch('index test',{fetcher:async url=>{if(url.endsWith('/search'))return response({web:[{url:'https://uk.indeed.com/q-developer-jobs.html'},{url:'https://linkedin.com/jobs/search/'}]});scrapes++;return response(document);}});
+ assert.equal(scrapes,0);assert.deepEqual(result.jobs,[]);
+});
+test('source verification handles markdown links without accepting invented skills',()=>{
+ const linked={...document,markdown:document.markdown.replace('API integrations','[API](https://example.org/docs) integrations')};
+ assert(normalizeFirecrawlJob(linked,'https://example.org/job/linked'));
+ assert.throws(()=>normalizeFirecrawlJob({...linked,json:{...json,description:description+'\nInvented certification mandatory.'}},'https://example.org/job/linked'),/verified/);
+});
+test('unreadable adverts do not stop other search batches, but exhausted credits remain visible',async()=>{
+ const urls={web:[{url:'https://example.org/job/unreadable'}]};
+ const result=await firecrawlSearchBatch('unreadable batch',{fetcher:async url=>url.endsWith('/search')?response(urls):{ok:false,status:500,json:async()=>({success:false})}});
+ assert.equal(result.partial,true);assert.deepEqual(result.jobs,[]);
+ await assert.rejects(()=>firecrawlSearchBatch('credit limit batch',{fetcher:async url=>url.endsWith('/search')?response(urls):{ok:false,status:402,json:async()=>({success:false})}}),/allowance/);
 });

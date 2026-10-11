@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=73" />
+  <link rel="stylesheet" href="styles.css?v=74" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -96,7 +96,7 @@
 <details class="profile-section" id="email-alert-settings"><summary><span>LinkedIn alerts<small>Bring Gmail job alerts into Discover</small></span><span class="section-chevron" aria-hidden="true">⌄</span></summary><div class="form-grid">
   <label class="wide checkbox-label"><input id="email-alert-enabled" type="checkbox" /> Check forwarded LinkedIn alerts while this notebook is open</label>
   <p class="wide small-note" id="email-alert-status" role="status">Checking your email connection…</p>
-  <div class="wide"><span class="mini-label">FORWARDING ADDRESS</span><p id="email-alert-address">Not connected yet</p><button id="email-alert-copy" type="button" class="text-button" hidden>Copy address</button><button id="email-alert-check" type="button" class="secondary-button" disabled>Check alerts</button></div>
+  <div class="wide"><span class="mini-label">FORWARDING ADDRESS</span><p id="email-alert-address">Not connected yet</p><div class="email-alert-actions"><button id="email-alert-copy" type="button" class="text-button" hidden>Copy address</button><button id="email-alert-check" type="button" class="secondary-button" disabled>Check alerts</button></div></div>
   <p class="wide small-note" id="email-alert-queue"></p><div class="wide" id="email-alert-unreadable"></div>
   <details class="wide"><summary>Set up Gmail forwarding</summary>
     <ol><li>Connect your Resend receiving inbox to Job Notebook. Use the forwarding address shown above once connected.</li><li>In Gmail on your computer, open Settings → See all settings → Forwarding and POP/IMAP → Add a forwarding address.</li><li>Confirm the address using the verification email in Resend’s Receiving inbox.</li><li>Create a Gmail filter for your LinkedIn job-alert emails and choose Forward it to this address. Keep general inbox forwarding disabled.</li></ol>
@@ -237,6 +237,6 @@
     </div>
     <div class="sheet-actions"><button id="reset-locations" type="button" class="secondary-button">Reset filters</button><button id="apply-locations" type="button" class="primary-button">Show matches</button></div>
   </div></dialog>
-  <script type="module" src="app.js?v=73"></script>
+  <script type="module" src="app.js?v=74"></script>
 </body>
 </html>

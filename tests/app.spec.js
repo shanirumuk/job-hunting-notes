@@ -242,7 +242,7 @@ test('app refresh reloads the latest shell and preserves saved records and PDFs'
 });
 test('phone reading text and app refresh remain readable and reachable',async ({page})=>{
   await page.setViewportSize({width:384,height:832});await setup(page);
-  for(const selector of ['.inline-role p','.job-location'])expect(await page.locator(selector).first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+  for(const selector of ['.inline-role p','.job-location'])expect(await page.locator(selector).first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),selector).toBeGreaterThanOrEqual(16);
   for(const [width,height] of [[320,568],[384,832],[832,384]]){await page.setViewportSize({width,height});expect(await page.locator('#refresh-app').evaluate(el=>{const r=el.getBoundingClientRect();return r.width>=44&&r.height>=44&&el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);}
 });
 

@@ -7,7 +7,7 @@ async function setup(page,profile={evidence,languages:'English C1'},jobs=[good])
 }
 test('CV-driven discovery excludes support, too many years and weak skills, and explains the match',async({page})=>{
  const jobs=[good,{...good,id:'support',title:'Customer Support Manager',link:'https://example.org/support',description:'Requirements:\nCall center management experience.\nCustomer complaint handling.'},{...good,id:'senior-years',link:'https://example.org/senior-years',description:good.description+'\n5 years of experience in implementation.'},{...good,id:'weak',link:'https://example.org/weak',description:'Requirements:\nAPI experience.\nUnderwater robotics expertise.\nPhysics degree.'}];
- await setup(page,undefined,jobs);await expect(page.locator('#deck-count')).toHaveText('1 role to explore');await expect(page.locator('.card-fit-summary')).toContainText('Skills evidence: 10/10');await expect(page.locator('.match-reasons')).toContainText('your CV');
+ await setup(page,undefined,jobs);await expect(page.locator('#deck-count')).toHaveText('1 role to explore');await expect(page.locator('.card-fit-summary')).toContainText('Quick CV check passed');await expect(page.locator('.match-reasons')).toContainText('your CV');
  for(const viewport of [{width:1440,height:900},{width:390,height:844},{width:740,height:360}]){
   await page.setViewportSize(viewport);await expect(page.locator('#active-card')).toBeVisible();await expect(page.locator('#pass-job')).toBeInViewport();await expect(page.locator('#prepare-job')).toBeInViewport();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  }
@@ -15,6 +15,11 @@ test('CV-driven discovery excludes support, too many years and weak skills, and 
 });
 test('missing CV asks for evidence and does not present generic recommendations',async({page})=>{
  await setup(page,{evidence:''});await expect(page.locator('#active-card')).toHaveCount(0);await expect(page.locator('.deck-empty')).toContainText('start with your CV');
+});
+test('bounded Firecrawl scan reaches LinkedIn batches after empty employer results',async({page})=>{
+ let calls=0;await page.route('**/api/jobs*',r=>{calls++;return r.fulfill({json:{source:'Firecrawl',searchBatchCount:9,jobs:calls===9?[good]:[],nextPage:null,nextSearch:calls<9?'fc:'+calls:null,fetchedAt:new Date().toISOString()}});});
+ await page.addInitScript(evidence=>{localStorage.setItem('job-notebook-international-v23','1');localStorage.setItem('job-notebook-profile-v1',JSON.stringify({evidence,languages:'English C1'}));},evidence);
+ await page.goto('/');await expect(page.locator('#active-card')).toContainText('Example');expect(calls).toBe(9);
 });
 test('pasting a listing link retrieves editable fields and saves the description and LinkedIn source',async({page})=>{
  let calls=0;await page.route('**/api/import-job',r=>{calls++;return r.fulfill({json:{job:{...good,source:'LinkedIn',publishedAt:'2026-10-01',description:good.description}}});});

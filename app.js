@@ -14,9 +14,12 @@ import {mergeApplicationEntries,ApplicationConflict} from './lib/application-sto
 import {applicationsFromFragment,addLinkedApplication} from './lib/application-link.js';
 import {mergeAlertJobs} from './lib/job-alerts.js';
 import {mountEmailAlertInbox} from './lib/email-alert-inbox.js';
+import {restorePrivateLink} from './lib/private-recovery.js';
 await recoverImport();
+const privateRecoveryResult=await restorePrivateLink().catch(()=>({ok:false,message:'Private recovery could not read this browser’s storage. Your saved notebook has been kept.'}));
+window.addEventListener('hashchange',()=>{if(location.hash.startsWith('#restore-notebook='))location.reload();});
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=73';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=74';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -461,6 +464,7 @@ async function refreshJobs(more=false) {
   const data=await response.json();
   if(requestId!==feedRequestId)return;
   if(!response.ok||!Array.isArray(data.jobs))throw new Error(data.error||'Could not load jobs.');
+  if(!more&&data.source==='Firecrawl'&&Number.isInteger(data.searchBatchCount))autoBudget=Math.min(12,Math.max(0,data.searchBatchCount-1));
   const incoming=data.jobs.filter(j=>j&&typeof j.id==='string'&&typeof j.company==='string'&&typeof j.title==='string'&&safeURL(j.link));
   discovery.reviewed ||= {};
   for(const job of discovery.jobs)if(discovery.decisions[job.id])discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link};
@@ -1096,6 +1100,7 @@ function consumeApplicationLink(){
 }
 if(!consumeApplicationLink()){setView(location.hash.slice(1));render();}
 if (storageError) toast('Some saved data could not be read. Export a backup before making changes.');
+if(privateRecoveryResult)toast(privateRecoveryResult.message);
 if (discovery.fetchedAt) $('feed-status').textContent = `Feed last retrieved ${dateText(discovery.fetchedAt)} · This is not the posting date`;
 if (!discovery.fetchedAt || Date.now() - new Date(discovery.fetchedAt).getTime() > 60*60*1000) refreshJobs();
 

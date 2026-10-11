@@ -1033,3 +1033,35 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 .assessment-scores p { background: #fff; border-radius: 12px; padding: 14px; margin: 0; }
 .assessment-scores strong, .assessment-scores span { display: block; }
 .assessment-scores span { margin-top: 6px; overflow-wrap: anywhere; }
+
+/* Keep compact filters and alert settings readable and reachable by touch. */
+.email-alert-actions { display:flex; flex-wrap:wrap; gap:8px; }
+#email-alert-settings details summary { min-height:44px; display:flex; align-items:center; cursor:pointer; }
+@media (max-width:899px), (pointer:coarse) {
+ .refresh-button { min-width:44px; min-height:44px; }
+ .job-location, .inline-role p { font-size:max(16px,.8rem); }
+ .inline-role .highlight-tools .highlight-help, .inline-role .match-reasons p { font-size:max(16px,.8rem); }
+ .deck-meta, .deck-meta .text-button { min-height:44px; }
+ .experience-filter { min-height:44px; font-size:max(14px,.75rem); padding:8px; }
+ .filter-choice strong, .filter-section h3 { font-size:max(16px,.8rem); }
+ .filter-choice small, .filter-section .filter-caption, .filter-rules p, .filter-rules li { font-size:max(14px,.75rem); }
+ .filter-more summary, .filter-rules summary { min-height:44px; display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:max(16px,.8rem); }
+ .location-controls .filter-choice, #email-alert-settings .checkbox-label { min-height:48px; }
+ .inline-role .source-note, .listing-date { font-size:max(16px,.8rem); line-height:1.5; }
+ .email-alert-actions button { flex:1 1 140px; min-height:44px; }
+ #editor-dialog .sheet-actions { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.6fr); }
+ #edit-materials { grid-column:1/-1; min-height:44px; }
+ #delete-button { grid-column:1; min-height:44px; }
+ #save-application { grid-column:2; min-height:44px; }
+ #delete-button[hidden] ~ #save-application { grid-column:1/-1; }
+ #save-status { grid-column:1/-1; order:1; overflow-wrap:anywhere; font-size:14px; }
+}
+@media (orientation:landscape) and (min-width:600px) and (max-height:600px) {
+ .deck-area { grid-template-rows:44px 44px minmax(0,1fr) 44px auto; }
+ .deck-meta { grid-column:1; grid-row:1; height:44px; }
+ .experience-filter { grid-column:1; grid-row:2; margin:0; }
+ #job-deck { grid-column:1; grid-row:3; }
+ .swipe-actions { grid-column:2; grid-row:1/4; }
+ .feed-status { grid-column:1/-1; grid-row:4; min-height:44px; font-size:12px; }
+ #retry-jobs, #load-more-jobs { grid-column:1/-1; grid-row:5; min-height:44px; font-size:14px; }
+}
