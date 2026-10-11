@@ -12,9 +12,11 @@ import {recoverImport,getItem as deviceItem,setItem as deviceSetItem} from './li
 import {startDeviceSync} from './lib/device-sync.js';
 import {mergeApplicationEntries,ApplicationConflict} from './lib/application-storage.js';
 import {applicationsFromFragment,addLinkedApplication} from './lib/application-link.js';
+import {mergeAlertJobs} from './lib/job-alerts.js';
+import {mountEmailAlertInbox} from './lib/email-alert-inbox.js';
 await recoverImport();
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=72';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=73';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -794,7 +796,7 @@ async function downloadCV() {
   try {const stored = await cvStore('get',cvKey(entry.preparation.cv)); if (stored) download(stored.blob,stored.name,'application/pdf');}
   catch {toast('Could not read the CV. Attach your original file.');}
 }
-let browserConnection=null,browserConnectionVerified=false, browserController=null, browserEntryId=null, browserSessionId=null, browserRun=0;
+let browserConnection=null,browserConnectionVerified=false, browserController=null, browserEntryId=null, browserSessionId=null, browserRun=0,alertInbox=null;
 async function loadBrowserConnection(restore=true) {
   try {browserConnection=(await cvStore('get','connection'))?.token||null;}catch{browserConnection=null;}
   browserConnectionVerified=false;
@@ -819,6 +821,7 @@ async function loadBrowserConnection(restore=true) {
   updateReviewStatus();
   const job=deckJobs()[0]||nextReviewCandidate();if(job){const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(job);requestSummary(job);scheduleFitReview(job);}else renderDeck();
   $('test-browser').disabled=!browserConnection;$('disconnect-browser').hidden=!browserConnection;
+  alertInbox?.connectionChanged();
 }
 function releaseBrowserSession() {
   if(browserSessionId)fetch('/api/browser',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({sessionId:browserSessionId,action:'end'})}).catch(()=>{});
@@ -1104,6 +1107,11 @@ document.addEventListener('visibilitychange',checkFreshFeed);
 setInterval(checkFreshFeed,60000);
 
 startDeviceSync({state:()=>({entries:validateEntries(read(KEY,entries)),profile:validateProfile(read(PROFILE_KEY,profile)),discovery:read(DISCOVERY_KEY,discovery)}),applied:pack=>{entries=pack.entries;entriesBaseline=structuredClone(entries);profile=pack.profile;discovery=pack.discovery;pinnedJobId=null;undoAction=null;matchCache=new WeakMap();populateProfile();render();loadBrowserConnection(false);},notify:toast});
+alertInbox=mountEmailAlertInbox({getToken:()=>browserConnectionVerified?browserConnection:null,hasCV:()=>!!profile.evidence.trim(),knownJobs:()=>[...entries,...discovery.jobs],acceptJob:job=>{
+ const before=discovery.jobs;discovery.jobs=mergeAlertJobs(before,[job]);
+ if(!saveDiscovery()){discovery.jobs=before;throw Error('Could not save this listing on your device.');}
+ matchCache=new WeakMap();render();
+}});
 function refreshSavedApplications(){
  try{const raw=localStorage.getItem(KEY);if(!raw)return;const saved=validateEntries(JSON.parse(raw));if(JSON.stringify(saved)===JSON.stringify(entriesBaseline))return;entries=saved;entriesBaseline=structuredClone(saved);undoAction=null;render();}
  catch{toast('Could not read applications saved in another tab. Export a backup before making changes.');}
