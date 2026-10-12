@@ -15,11 +15,12 @@ import {applicationsFromFragment,addLinkedApplication} from './lib/application-l
 import {mergeAlertJobs} from './lib/job-alerts.js';
 import {mountEmailAlertInbox} from './lib/email-alert-inbox.js';
 import {restorePrivateLink} from './lib/private-recovery.js';
+import {recoverSubmittedApplications} from './lib/application-recovery.js';
 await recoverImport();
 const privateRecoveryResult=await restorePrivateLink().catch(()=>({ok:false,message:'Private recovery could not read this browser’s storage. Your saved notebook has been kept.'}));
 window.addEventListener('hashchange',()=>{if(location.hash.startsWith('#restore-notebook='))location.reload();});
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=74';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=75';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -41,8 +42,9 @@ if (!discovery || !Array.isArray(discovery.jobs) || !discovery.decisions || type
 let listingHighlights=null;
 let activeFilter = 'all', activeView = 'discover', undoAction = null, preparationId = null, loading = false, toastTimer, selectedRole = null, decisionPending = false;
 let pinnedJobId=null, feedError=false, autoBudget=12,feedController=null,feedRequestId=0;
+let feedRetryTimer=null,feedRetryAttempts=0;
 if(!Object.hasOwn(discovery,'nextPage'))discovery.nextPage=discovery.fetchedAt?4:1;
-feedError=!!discovery.sourceErrors?.length&&discovery.nextPage===null;
+feedError=!!discovery.lastError;
 let matchCache = new WeakMap(), cachedProfile = profile;
 const editor = $('editor-dialog'), backup = $('backup-dialog'), form = $('application-form');
 function toast(message) {$('toast').textContent = message; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').hidden = true, 5500);}
@@ -77,6 +79,10 @@ try {
  if(!localStorage.getItem('job-notebook-discovery-v26')&&!storageError){
   discovery.nextPage=1;discovery.nextSearch=null;discovery.fetchedAt='';discovery.sourceErrors=[];feedError=false;
   if(saveDiscovery())localStorage.setItem('job-notebook-discovery-v26','1');
+ }
+ if(!localStorage.getItem('job-notebook-source-recovery-v75')&&!storageError){
+  discovery.nextPage=1;discovery.nextSearch=null;discovery.fetchedAt='';discovery.sourceErrors=[];discovery.lastError='';feedError=false;
+  if(saveDiscovery())localStorage.setItem('job-notebook-source-recovery-v75','1');
  }
 }catch{storageError=true;}
 // Keep the original one-time status migration, including its original storage marker.
@@ -132,7 +138,7 @@ function render() {
 function scopeLabel(){return profile.country?europeanCountries.find(c=>c.value===profile.country)?.label:profile.geography==='international'?'International · excluding the US':profile.geography==='europe'?'Across Europe':regions[profile.geography];}
 function restartDiscovery(){
  feedController?.abort();feedRequestId++;loading=false;
- pinnedJobId=null;candidateReviewBudget=6;autoBudget=12;feedError=false;discovery.nextPage=1;discovery.nextSearch=null;discovery.sourceErrors=[];discovery.fetchedAt='';
+ clearTimeout(feedRetryTimer);feedRetryAttempts=0;discovery.lastError='';pinnedJobId=null;candidateReviewBudget=6;autoBudget=12;feedError=false;discovery.nextPage=1;discovery.nextSearch=null;discovery.sourceErrors=[];discovery.fetchedAt='';
  saveDiscovery();render();refreshJobs();
 }
 function openLocations(showRules=false){
@@ -363,14 +369,14 @@ function renderDeck() {
   pinnedJobId=job?.id||null;
   maybeLoadMore(jobs.length);
   $('deck-count').textContent = `${jobs.length} role${jobs.length === 1 ? '' : 's'} to explore`;
-  $('load-more-jobs').hidden=!hasMoreJobs()||!job||feedError||!!discovery.sourceErrors?.length;
+  $('load-more-jobs').hidden=!hasMoreJobs()||!job||feedError;
   $('load-more-jobs').disabled=loading;
   $('undo-swipe').disabled = !undoAction;
   $('swipe-actions').hidden = !job;
   if (!job) {
   listingHighlights?.destroy();listingHighlights=null;
-  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${!profile.evidence.trim()?'Let’s start with your CV.' : loading ? 'Finding your next possibility…' : feedError ? 'The search paused.' : hasMoreJobs() ? 'More results to search.' : discovery.fetchedAt ? 'No unreviewed matches in this search.' : 'Let’s find your kind of work.'}</h2><p>${!profile.evidence.trim()?'Upload your CVs in My profile. Suggestions need a documented skills match above 6/10 and experience within your dated CV history.' : loading ? 'Looking for roles with skills evidence above 6/10 and suitable experience requirements.' : feedError ? 'A source could not be reached. Retry to keep searching; your saved roles are safe.' : hasMoreJobs() ? 'No matches in the batches checked so far. More source searches or pages remain; keep searching or adjust your filters.' : 'No more matching roles in the listings retrieved so far for '+esc(scopeLabel())+'. This is a limited set of public sources, not every vacancy. Change filters, check for new postings later, or revisit roles you passed.'}</p><button class="primary-button" id="empty-refresh" ${loading ? 'disabled' : ''}>${loading ? 'Finding roles…' : feedError?'Retry search':hasMoreJobs()?'Keep searching':'Check for new jobs'}</button><button class="secondary-button" data-view="profile">Review my CV details</button>${browserConnectionVerified&&!candidateReviewBudget?'<button class="text-button" data-more-reviews>Review more candidates</button>':''}${reviewServiceIssue?'<p role="status">'+esc(reviewServiceIssue)+' <button class="text-button" data-retry-fit>Retry full review</button></p>':''}${Object.keys(discovery.decisions).length ? '<button class="text-button" id="revisit-passed">Revisit passed roles</button>' : ''}<button class="text-button" data-change-locations>Change search filters</button><p class="source-note">Listings found with Firecrawl across employer sites and public job pages, including LinkedIn when readable. Your location, experience, role and listing-age filters still apply.</p></div>`;
-    const candidate=nextReviewCandidate();if(candidate){$('feed-status').textContent='Comparing promising roles with your full CV. Only skills matches above 6/10 will appear.';scheduleFitReview(candidate);}
+  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${!profile.evidence.trim()?'Let’s start with your CV.' : loading ? 'Finding your next possibility…' : feedError ? 'The search paused.' : hasMoreJobs() ? 'More results to search.' : discovery.fetchedAt ? 'No unreviewed matches in this search.' : 'Let’s find your kind of work.'}</h2><p>${!profile.evidence.trim()?'Upload your CVs in My profile. Suggestions need a documented skills match above 6/10 and experience within your dated CV history.' : loading ? 'Looking for roles with skills evidence above 6/10 and suitable experience requirements.' : feedError ? esc(discovery.lastError||'A source could not be reached. Retry to keep searching; your saved roles are safe.') : hasMoreJobs() ? 'No matches in the batches checked so far. More source searches or pages remain; keep searching or adjust your filters.' : 'No more matching roles in the listings retrieved so far for '+esc(scopeLabel())+'. This is a limited set of public sources, not every vacancy. Change filters, check for new postings later, or revisit roles you passed.'}</p><button class="primary-button" id="empty-refresh" ${loading ? 'disabled' : ''}>${loading ? 'Finding roles…' : feedError?'Retry search':hasMoreJobs()?'Keep searching':'Check for new jobs'}</button><button class="secondary-button" data-view="profile">Review my CV details</button>${browserConnectionVerified&&!candidateReviewBudget?'<button class="text-button" data-more-reviews>Review more candidates</button>':''}${reviewServiceIssue?'<p role="status">'+esc(reviewServiceIssue)+' <button class="text-button" data-retry-fit>Retry full review</button></p>':''}${Object.keys(discovery.decisions).length ? '<button class="text-button" id="revisit-passed">Revisit passed roles</button>' : ''}<button class="text-button" data-change-locations>Change search filters</button><p class="source-note">Listings found with Firecrawl across employer sites and public job pages, including LinkedIn when readable. Your location, experience, role and listing-age filters still apply.</p></div>`;
+    const candidate=nextReviewCandidate();if(candidate){const status=document.createElement('p');status.className='source-note';status.id='candidate-review-status';status.setAttribute('role','status');status.textContent='Comparing promising roles with your full CV. Only skills matches above 6/10 will appear.';$('job-deck').firstElementChild.append(status);scheduleFitReview(candidate);}
     return;
   }
   const previousCard=$('active-card');
@@ -448,6 +454,7 @@ function maybeLoadMore(count){
 async function refreshJobs(more=false) {
  more=more===true;
  if (loading) return;
+ clearTimeout(feedRetryTimer);
  if(!profile.evidence.trim()){renderDeck();return;}
  if(!more)autoBudget=4;
  if(more&&!hasMoreJobs())return;
@@ -456,14 +463,15 @@ async function refreshJobs(more=false) {
  const requestId=++feedRequestId;feedController=new AbortController();
  const params=new URLSearchParams();if(more)params.set('search',discovery.nextSearch||'done');if(searchOnly)params.set('searchOnly','1');if(page!==1)params.set('page',page);if(profile.geography!=='international')params.set('region',profile.geography);if(profile.country)params.set('country',profile.country);if(profile.includeBroadRemote)params.set('broad','1');
  const skills=cvSearchSkills(profile);if(skills.length)params.set('skills',skills.join(','));const months=recordedEmploymentMonths(profile);if(months!==null&&months<=36)params.set('junior','1');
- loading=true;feedError=false;$('refresh-jobs').disabled=true;$('feed-status').textContent=more?'Finding more matching roles…':'Checking for new jobs…';
+ let rateIssue=null,retryMore=more;
+ loading=true;feedError=false;discovery.lastError='';$('refresh-jobs').disabled=true;$('feed-status').textContent=more?'Finding more matching roles…':'Checking for new jobs…';
  if(!$('active-card'))renderDeck();
  try {
   const token=browserConnection||(await cvStore('get','connection').catch(()=>null))?.token;
-  const response=await fetch('/api/jobs'+(params.size?'?'+params:''),{headers:token?{Authorization:'Bearer '+token}:{},signal:AbortSignal.any([feedController.signal,AbortSignal.timeout(80000)])});
+  const response=await fetch('/api/jobs'+(params.size?'?'+params:''),{headers:token?{Authorization:'Bearer '+token}:{},signal:AbortSignal.any([feedController.signal,AbortSignal.timeout(115000)])});
   const data=await response.json();
   if(requestId!==feedRequestId)return;
-  if(!response.ok||!Array.isArray(data.jobs))throw new Error(data.error||'Could not load jobs.');
+  if(!response.ok||!Array.isArray(data.jobs))throw Object.assign(new Error(data.error||'Could not load jobs.'),{code:data.code,retryAfter:Number(response.headers.get('Retry-After'))||data.retryAfter});
   if(!more&&data.source==='Firecrawl'&&Number.isInteger(data.searchBatchCount))autoBudget=Math.min(12,Math.max(0,data.searchBatchCount-1));
   const incoming=data.jobs.filter(j=>j&&typeof j.id==='string'&&typeof j.company==='string'&&typeof j.title==='string'&&safeURL(j.link));
   discovery.reviewed ||= {};
@@ -479,19 +487,27 @@ async function refreshJobs(more=false) {
   if(more&&discovery.nextPage===previousPage&&discovery.nextSearch===previousSearch)autoBudget=0;
   if(data.stale){discovery.nextPage=previousPage;discovery.nextSearch=previousSearch;feedError=true;}
   if(data.retryPage)feedError=true;
+  if(data.sourceIssue){feedError=true;discovery.lastError=data.sourceIssue.message;rateIssue=data.sourceIssue;retryMore=true;}
+  else feedRetryAttempts=0;
   discovery.sourceErrors=more?[...new Set([...(discovery.sourceErrors||[]).filter(source=>!['Firecrawl page extraction'].includes(source)),...(data.sourceErrors||[])])]:data.sourceErrors||[];
   discovery.fetchedAt=typeof data.fetchedAt==='string'&&Number.isFinite(Date.parse(data.fetchedAt))?data.fetchedAt:new Date().toISOString();saveDiscovery();
   const failures=(discovery.sourceErrors||[]).length;
-  if(failures&&(!hasMoreJobs()||discovery.sourceErrors.includes('Firecrawl')))feedError=true;
-  $('feed-status').textContent=feedError?'Search paused · Retry to continue':failures?`${discovery.sourceErrors.join(', ')} unavailable · Other listings are still available`:hasMoreJobs()?'More source results available · Load more or keep browsing':'Current source searches checked · Coverage is limited';
+  if(discovery.sourceErrors.includes('Firecrawl'))feedError=true;
+  $('feed-status').textContent=feedError?discovery.lastError||'Search paused · Retry to continue':failures?'Some adverts could not be read. Other source searches are still available.':hasMoreJobs()?'More source results available · Load more or keep browsing':'Current source searches checked · Coverage is limited';
  } catch(error) {
   if(requestId!==feedRequestId)return;
-  feedError=true;discovery.nextPage=more?previousPage:1;discovery.nextSearch=previousSearch;
-  $('feed-status').textContent=error.message||'Firecrawl search paused · Retry search';
+  feedError=true;discovery.nextPage=more?previousPage:1;discovery.nextSearch=more?previousSearch:'start';
+  discovery.lastError=error.message||'Firecrawl search paused · Retry search';rateIssue=error;
+  $('feed-status').textContent=discovery.lastError;
  } finally {
   if(requestId!==feedRequestId)return;
   saveDiscovery();
   loading=false;$('refresh-jobs').disabled=false;
+  if(rateIssue?.code==='FIRECRAWL_RATE_LIMIT'&&feedRetryAttempts<2){
+   feedRetryAttempts++;const seconds=Math.max(2,Math.min(60,Number(rateIssue.retryAfter)||10));
+   discovery.lastError=rateIssue.message+' Retrying in '+seconds+' seconds.';$('feed-status').textContent=discovery.lastError;saveDiscovery();
+   feedRetryTimer=setTimeout(()=>{if(requestId===feedRequestId&&activeView==='discover'&&!document.hidden&&!loading)refreshJobs(retryMore);},seconds*1000);
+  }
   $('retry-jobs').hidden=!feedError&&!discovery.sourceErrors?.length;
   renderDeck();
  }
@@ -813,13 +829,24 @@ async function loadBrowserConnection(restore=true) {
    if(!response.ok)throw Error(response.status===401?'The private setup was not accepted. Import your connection file again.':'The server could not verify your connection. Try Check connection again.');
    browserConnectionVerified=true;fitReviewErrors.clear();fitReviewRetries.clear();
    $('browser-connection-status').textContent=reviewServiceIssue?'Private connection verified. '+reviewServiceIssue:'Private connection verified. Full CV reviews are enabled.';
-   const {correction,reviewProvider}=await response.json();
+   const {correction,reviewProvider,applicationRecovery}=await response.json();
    if(reviewProvider?.provider==='openai'){
     reviewServiceIssue=reviewProvider.configured?null:'OpenAI setup is needed: add OPENAI_API_KEY in Vercel’s production environment settings and redeploy. Your saved CVs are ready.';
     $('browser-connection-status').textContent='Private connection verified. '+(reviewServiceIssue||'GPT-6 Luna is configured; open a job to check its review.');
    }
    const corrected=applyProfileCorrections(profile,correction);
    if(corrected!==profile){profile=validateProfile(corrected);persist(PROFILE_KEY,profile);populateProfile();renderDeck();}
+   if(applicationRecovery){
+    const marker='job-notebook-application-recovery:'+applicationRecovery.id;
+    if(!localStorage.getItem(marker)){
+     refreshSavedApplications();
+     const recovered=recoverSubmittedApplications(entries,applicationRecovery);
+     if(persist(KEY,recovered.entries)){
+      localStorage.setItem(marker,'1');render();
+      if(recovered.changed)toast('Your submitted applications were restored in this browser. Existing notes and rejection statuses kept.');
+     }
+    }
+   }
   }catch(error){$('browser-connection-status').textContent=error.name==='TimeoutError'?'Connection check timed out. Try Check connection again.':error.message;}
   $('check-private-connection').disabled=!browserConnection;
   updateReviewStatus();
@@ -1101,8 +1128,8 @@ function consumeApplicationLink(){
 if(!consumeApplicationLink()){setView(location.hash.slice(1));render();}
 if (storageError) toast('Some saved data could not be read. Export a backup before making changes.');
 if(privateRecoveryResult)toast(privateRecoveryResult.message);
-if (discovery.fetchedAt) $('feed-status').textContent = `Feed last retrieved ${dateText(discovery.fetchedAt)} · This is not the posting date`;
-if (!discovery.fetchedAt || Date.now() - new Date(discovery.fetchedAt).getTime() > 60*60*1000) refreshJobs();
+if (discovery.fetchedAt) $('feed-status').textContent = discovery.lastError||`Feed last retrieved ${dateText(discovery.fetchedAt)} · This is not the posting date`;
+if (feedError||!discovery.fetchedAt || Date.now() - new Date(discovery.fetchedAt).getTime() > 60*60*1000) refreshJobs(feedError&&hasMoreJobs());
 
 document.addEventListener('click',event=>{if(event.target.closest('[data-edit-evidence]')){setView('profile');const field=$('profile-evidence');field.closest('details').open=true;field.focus();field.scrollIntoView({block:'center'});}if(event.target.closest('[data-retry-summary]')){const job=deckJobs()[0];if(job){summaryErrors.delete(job.id);$('role-summary').innerHTML=summaryMarkup(job);requestSummary(job);}}});
 

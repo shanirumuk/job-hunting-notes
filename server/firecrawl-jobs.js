@@ -33,16 +33,27 @@ export function firecrawlPlan({region='international',country='',skills=[],junio
 // single vacancy even when structured extraction selects one of its cards.
 export function listingIndexURL(value){
  const u=new URL(value),host=u.hostname.toLowerCase(),path=u.pathname.toLowerCase();
+ if(/(^|\.)remoterocketship\.com$/.test(host)&&/^\/country\//.test(path))return true;
  if(/(^|\.)linkedin\.com$/.test(host))return !/^\/jobs\/view\/[^/]+/.test(path);
  if(/(^|\.)indeed\.[a-z.]+$/.test(host))return !/\/(?:viewjob|rc\/clk|pagead\/clk)/.test(path)&&!u.searchParams.has('jk');
  return /(?:^|\/)(?:jobs\/search|search|search-jobs|job-search|jobs-search)(?:\/|$)/.test(path)||/\/q-[^/]+/.test(path)||/\/(?:jobs|careers)\/?$/.test(path);
 }
-async function call(endpoint,body,{fetcher=fetch,apiKey=process.env.FIRECRAWL_API_KEY,timeout=45000}={}){
+async function call(endpoint,body,{fetcher=fetch,apiKey=process.env.FIRECRAWL_API_KEY,timeout=45000,deadline=Infinity,pause=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={},attempt=0){
  const headers={'Content-Type':'application/json'};if(apiKey)headers.Authorization='Bearer '+apiKey;
- let response;try{response=await fetcher('https://api.firecrawl.dev/v2/'+endpoint,{method:'POST',headers,body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});}catch{throw failure('Firecrawl could not finish this search. Retry shortly.');}
+ const remaining=Math.min(timeout,deadline-Date.now());if(remaining<1000)throw failure('Firecrawl could not finish this search. Retry shortly.');
+ const requestBody=body.timeout?{...body,timeout:Math.max(1000,Math.min(body.timeout,remaining-500))}:body;
+ let response;try{response=await fetcher('https://api.firecrawl.dev/v2/'+endpoint,{method:'POST',headers,body:JSON.stringify(requestBody),signal:AbortSignal.timeout(Math.ceil(remaining))});}catch{throw failure('Firecrawl could not finish this search. Retry shortly.');}
  const data=await response.json().catch(()=>({}));
+ // Firecrawl's unsupported-site refusal is about the target URL, not the
+ // owner's credentials. Keep other adverts usable when this source fails.
+ if(response.status===403&&endpoint==='scrape'&&/do not support this site|UNSUPPORTED_SITE|THIRD_PARTY_DATA_|SCRAPE_PROMPT_INJECTION_DETECTED/i.test(String(data.code||'')+' '+String(data.error||'')))throw failure('This source is not supported by Firecrawl. Use the employer’s advert.',422,'FIRECRAWL_SOURCE_BLOCKED');
  if(response.status===401||response.status===403)throw failure('Firecrawl needs a valid server connection. Configure FIRECRAWL_API_KEY in the server environment.',503,'FIRECRAWL_SETUP_REQUIRED');
- if(response.status===402||response.status===429)throw failure('Firecrawl search allowance or rate limit was reached. Retry later or check the Firecrawl account.',429,'FIRECRAWL_LIMIT');
+ if(response.status===402)throw failure('Firecrawl credits are exhausted. Check the Firecrawl account before retrying.',402,'FIRECRAWL_QUOTA_EXHAUSTED');
+ if(response.status===429){
+  const retryAfter=Math.max(2,Math.min(60,Number(response.headers?.get('Retry-After'))||10));
+  if(!attempt&&retryAfter<=10&&deadline-Date.now()>retryAfter*1000+1000){await pause(retryAfter*1000);return call(endpoint,body,{fetcher,apiKey,timeout,deadline,pause},1);}
+  throw Object.assign(failure('Firecrawl is receiving too many requests. The search will retry after a short pause.',429,'FIRECRAWL_RATE_LIMIT'),{retryAfter});
+ }
  if(!response.ok||data.success!==true)throw failure('Firecrawl could not read this source. Try again or use the employer’s listing.');
  return data.data;
 }
@@ -77,14 +88,20 @@ export async function importFirecrawlJob(url,options={}){
  return job;
 }
 export async function firecrawlSearchBatch(query,options={}){
+ options={...options,deadline:options.deadline||Date.now()+100000};
  const data=await call('search',{query,limit:5,sources:[{type:'web'}],timeout:15000},{...options,timeout:20000});
  if(!Array.isArray(data?.web))throw failure('Firecrawl returned unreadable search results.');
- const urls=[...new Set(data.web.map(r=>{try{const url=publicListingURL(r.url);return listingIndexURL(url)?null:url;}catch{return null;}}).filter(Boolean))].slice(0,3);
- const results=await Promise.allSettled(urls.map(url=>readJob(url,options))),jobs=[];
+ const priority=url=>/jobs\.ashbyhq\.com|(?:job-)?boards\.greenhouse\.io|jobs(?:\.eu)?\.lever\.co|apply\.workable\.com|jobs\.smartrecruiters\.com|join\.com/i.test(new URL(url).hostname)?0:/linkedin\.com$/i.test(new URL(url).hostname)?2:1;
+ const urls=[...new Set(data.web.map(r=>{try{const url=publicListingURL(r.url);return listingIndexURL(url)?null:url;}catch{return null;}}).filter(Boolean))].sort((a,b)=>priority(a)-priority(b)).slice(0,3);
+ const results=[];
+ // Two concurrent reads avoid filling the free plan's browser queue.
+ for(let i=0;i<urls.length;i+=2)results.push(...await Promise.allSettled(urls.slice(i,i+2).map(url=>readJob(url,options))));
+ const jobs=[];
  for(const result of results)if(result.status==='fulfilled'&&result.value&&!jobs.some(j=>sameJob(j,result.value)))jobs.push(result.value);
- const connectionFailure=results.find(r=>r.status==='rejected'&&['FIRECRAWL_LIMIT','FIRECRAWL_SETUP_REQUIRED'].includes(r.reason?.code));
- if(connectionFailure)throw connectionFailure.reason;
- return {jobs,partial:results.some(r=>r.status==='rejected'),sourceErrors:results.some(r=>r.status==='rejected')?['Firecrawl page extraction']:[]};
+ const connectionFailure=results.find(r=>r.status==='rejected'&&['FIRECRAWL_QUOTA_EXHAUSTED','FIRECRAWL_RATE_LIMIT','FIRECRAWL_SETUP_REQUIRED'].includes(r.reason?.code));
+ if(connectionFailure&&!jobs.length)throw connectionFailure.reason;
+ const sourceIssue=connectionFailure?{code:connectionFailure.reason.code,message:connectionFailure.reason.message,retryAfter:connectionFailure.reason.retryAfter||0}:null;
+ return {jobs,partial:results.some(r=>r.status==='rejected'),sourceErrors:results.some(r=>r.status==='rejected')?['Firecrawl page extraction']:[],...(sourceIssue?{sourceIssue}:{})};
 }
 export async function searchFirecrawlJobs(input,options={}){
  const plan=firecrawlPlan(input),cursor=input.cursor||'start';
@@ -92,10 +109,10 @@ export async function searchFirecrawlJobs(input,options={}){
  const index=cursor==='start'?0:Number(cursor.replace(/^fc:/,''));
  if(cursor!=='start'&&!/^fc:\d+$/.test(cursor)||!Number.isInteger(index)||index<0||index>=plan.length)throw failure('Invalid Firecrawl search cursor.',400);
  const key=plan[index],cached=cache.get(key);let batch;
- if(cached&&Date.now()-cached.time<(cached.batch.partial?60000:TTL))batch=cached.batch;
+ if(cached&&!cached.batch.sourceIssue&&Date.now()-cached.time<(cached.batch.partial?60000:TTL))batch=cached.batch;
  else{
   if(!pending.has(key))pending.set(key,firecrawlSearchBatch(key,options).then(batch=>{cache.set(key,{time:Date.now(),batch});if(cache.size>100)cache.delete(cache.keys().next().value);return batch;}).finally(()=>pending.delete(key)));
   batch=await pending.get(key);
  }
- return {...batch,nextSearch:index+1<plan.length?'fc:'+(index+1):null,nextPage:null,source:'Firecrawl',searchBatchCount:plan.length,searchQueries:[{q:plan[index]}],fetchedAt:new Date().toISOString()};
+ return {...batch,nextSearch:batch.sourceIssue?cursor:index+1<plan.length?'fc:'+(index+1):null,nextPage:null,source:'Firecrawl',searchBatchCount:plan.length,searchQueries:[{q:plan[index]}],fetchedAt:new Date().toISOString()};
 }

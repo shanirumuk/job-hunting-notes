@@ -58,9 +58,9 @@ test('search continuation advances only after a successful batch and reuses cach
  await assert.rejects(searchFirecrawlJobs({...input,cursor:'fc:999'},options),/cursor/);assert.equal(calls,2);
 });
 test('API errors are actionable and provider response details cannot leak credentials',async()=>{
- const handler=createJobsHandler({fetcher:async()=>({ok:false,status:429,json:async()=>({success:false,error:'secret-key'})})});
+ const handler=createJobsHandler({pause:async()=>{},fetcher:async()=>({ok:false,status:429,json:async()=>({success:false,error:'secret-key'})})});
  const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};
- await handler({method:'GET',url:'/api/jobs?region=africa&skills=python',headers:{}},res);assert.equal(res.code,429);assert.match(res.data.error,/allowance|rate/);assert(!JSON.stringify(res.data).includes('secret-key'));
+ await handler({method:'GET',url:'/api/jobs?region=africa&skills=python',headers:{}},res);assert.equal(res.code,429);assert.equal(res.data.code,'FIRECRAWL_RATE_LIMIT');assert.match(res.data.error,/retry/);assert(!JSON.stringify(res.data).includes('secret-key'));
  await handler({method:'GET',url:'/api/jobs?skills=private-email',headers:{}},res);assert.equal(res.code,400);
 });
 test('all CV search combinations stay within Firecrawl’s 500-character query limit',()=>{
@@ -88,5 +88,27 @@ test('unreadable adverts do not stop other search batches, but exhausted credits
  const urls={web:[{url:'https://example.org/job/unreadable'}]};
  const result=await firecrawlSearchBatch('unreadable batch',{fetcher:async url=>url.endsWith('/search')?response(urls):{ok:false,status:500,json:async()=>({success:false})}});
  assert.equal(result.partial,true);assert.deepEqual(result.jobs,[]);
- await assert.rejects(()=>firecrawlSearchBatch('credit limit batch',{fetcher:async url=>url.endsWith('/search')?response(urls):{ok:false,status:402,json:async()=>({success:false})}}),/allowance/);
+ await assert.rejects(()=>firecrawlSearchBatch('credit limit batch',{fetcher:async url=>url.endsWith('/search')?response(urls):{ok:false,status:402,json:async()=>({success:false})}}),/credits/);
+});
+test('unsupported LinkedIn pages cannot become credential failures or halt employer discovery',async()=>{
+ let active=0,peak=0;
+ const result=await firecrawlSearchBatch('unsupported LinkedIn and direct employers',{fetcher:async(url,opts)=>{
+  if(url.endsWith('/search'))return response({web:[{url:'https://www.linkedin.com/jobs/view/test-1234567890/'},{url:'https://www.remoterocketship.com/country/europe/jobs/junior-analyst/'},{url:'https://example.org/job/direct-employer'}]});
+  const target=JSON.parse(opts.body).url;active++;peak=Math.max(peak,active);await new Promise(r=>setTimeout(r,2));active--;
+  return target.includes('linkedin.com')?{ok:false,status:403,json:async()=>({success:false,error:'We apologize for the inconvenience but we do not support this site.'})}:response(document);
+ }});
+ assert.equal(result.jobs.length,1);assert(result.partial);assert(peak<=2);assert(result.jobs[0].link.includes('direct-employer'));
+});
+test('temporary rate limits back off once, while genuine credit exhaustion is a separate error',async()=>{
+ let attempts=0;const delays=[];
+ const result=await firecrawlSearchBatch('temporary rate test',{pause:async ms=>delays.push(ms),fetcher:async()=>++attempts===1?{ok:false,status:429,headers:{get:()=>2},json:async()=>({success:false})}:response({web:[]})});
+ assert.deepEqual(result.jobs,[]);assert.deepEqual(delays,[2000]);assert.equal(attempts,2);
+});
+test('a partial rate failure retains verified adverts and the same cursor for retry',async()=>{
+ const input={region:'asia',skills:['testing'],cursor:'fc:3'};
+ const result=await searchFirecrawlJobs(input,{pause:async()=>{},fetcher:async(url,opts)=>{
+  if(url.endsWith('/search'))return response({web:[{url:'https://example.org/job/retained-after-limit'},{url:'https://example.org/job/rate-limited'}]});
+  return JSON.parse(opts.body).url.includes('rate-limited')?{ok:false,status:429,headers:{get:()=>20},json:async()=>({success:false})}:response(document);
+ }});
+ assert.equal(result.jobs.length,1);assert.equal(result.nextSearch,'fc:3');assert.equal(result.sourceIssue.code,'FIRECRAWL_RATE_LIMIT');
 });
