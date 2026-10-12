@@ -37,6 +37,11 @@ test('a newly requested individee repair runs after the original receipt without
  await page.reload();await expect(page.locator('#nav-count')).toHaveText('18');
  await page.evaluate(()=>{const key='job-notebook-v1';localStorage.setItem(key,JSON.stringify(JSON.parse(localStorage.getItem(key)).filter(e=>e.company!=='individee')));});await page.reload();await expect(page.locator('#nav-count')).toHaveText('17');
 });
+test('the targeted repair makes an existing placeholder entry visible as individee and preserves its rejection',async({page})=>{
+ const repair={version:1,id:'individee-details',entries:[record('individee')],refreshDetails:true};await service(page,{repairs:[repair]});await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[],nextPage:null,nextSearch:null}}));await seed(page,{connected:false});
+ await page.evaluate(async()=>{const key='job-notebook-v1',rows=JSON.parse(localStorage.getItem(key));rows.push({id:'local-individee',company:'LinkedIn',title:'Saved job',location:'Berlin',link:'https://example.org/jobs/individee',status:'Rejected',applicationDate:'2026-10-08',notes:'Keep my recruiter notes'});localStorage.setItem(key,JSON.stringify(rows));localStorage.setItem('job-notebook-application-recovery:submitted-october','1');localStorage.setItem('job-notebook-application-recovery:individee-details','1');await(await import('/lib/device-store.js')).setItem('connection',{token:'x'.repeat(43)});});
+ await page.reload();await expect(page.locator('#notebook-view')).toContainText('individee');await expect(page.locator('#nav-count')).toHaveText('18');const entry=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-v1')).find(e=>e.id==='local-individee'));expect(entry).toMatchObject({company:'individee',status:'Rejected',notes:'Keep my recruiter notes',applicationDate:'2026-10-08'});
+});
 test('a search error remains visible while a promising candidate is being reviewed',async({page})=>{
  await service(page,{configured:true});await page.route('**/api/jobs*',r=>r.fulfill({status:503,json:{error:'The source connection failed. Please retry.',code:'FIRECRAWL_SETUP_REQUIRED'}}));
  let release,reviewStarted=0;const gate=new Promise(resolve=>release=resolve);await page.route('**/api/fit-review',async r=>{reviewStarted++;await gate;await r.fulfill({status:503,json:{error:'Test ended'}}).catch(()=>{});});

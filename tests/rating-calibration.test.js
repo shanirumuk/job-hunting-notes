@@ -26,7 +26,8 @@ test('discovery uses the evidence floor rather than an optimistic score over onl
  assert.equal(reviewClearsDiscovery(rated),true);
  assert.equal(reviewClearsDiscovery({...rated,skillsLower:6}),false);
  assert.equal(reviewClearsDiscovery({...rated,skillsCoverage:69}),false);
- assert.equal(reviewClearsDiscovery({...rated,points:base.points.map(p=>p.text==='Leadership'?{...p,importance:'essential'}:p)}),false);
+ const essential={...base,points:base.points.map(p=>p.text==='Leadership'?{...p,importance:'essential'}:p)};
+ assert.equal(reviewClearsDiscovery({...essential,...scoreReview(essential)}),false);
 });
 test('equivalent transferable achievements fully support capabilities without inventing management scope',()=>{
  const score=scoreReview(review([{...point('Cross-team coordination'),evidenceKind:'transferable'},point('People management','missing','essential')]));

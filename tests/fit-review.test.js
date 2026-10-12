@@ -2,6 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {validateReview,reviewParagraphs,reviewInput} from '../server/fit-review.js';
 import {scoreReview,factorWeights,reviewInsights,reviewClearsDiscovery} from '../lib/fit-review.js';
+test('a skills match above six can include recorded gaps in tools and lifestyle trade-offs without claiming those tools',()=>{
+ const points=Array.from({length:5},(_,i)=>({paragraph:i,text:'Required skill '+i,category:'required',dimension:'skill',importance:'essential',status:i===4?'missing':'match'}));
+ const factors=[{key:'workStyle',status:'gap',note:'Mostly coding.'}];const value={points,factors,issues:[]};const review={...value,...scoreReview(value)};
+ assert.equal(review.skills,8);assert.equal(review.skillsLower,8);assert(reviewClearsDiscovery(review));
+ assert(!reviewClearsDiscovery({...review,factors:[{key:'eligibility',status:'gap'}]}));
+ assert(!reviewClearsDiscovery({...review,points:[...points,{category:'required',dimension:'experience',text:'Several years of relevant CRM administration',status:'missing'}]}));
+});
 import {createFitReviewHandler} from '../api/fit-review.js';
 export const input={job:{title:'Analyst',location:'Germany',description:'Requirements:\nEnglish proficiency is essential.\nSQL experience required.\nBenefits:\n30 days of holiday.'},profile:{evidence:'SQL reporting.',languages:'English native (C1)',workRights:'',salaryTarget:'',motivation:'',startDate:'',relocation:''}};
 export const output={summary:'English and SQL align with your evidence. Confirm the working arrangements.',cv:'Business Analyst CV',cvReason:'Lead with SQL reporting.',points:[{text:'English proficiency',paragraph:3,sourceQuote:'English proficiency is essential.',category:'required',importance:'essential',status:'match',note:'Native English is recorded.',cvQuote:'English native (C1)'},{text:'SQL experience',paragraph:4,sourceQuote:'SQL experience required.',category:'required',importance:'standard',status:'match',note:'SQL reporting is recorded.',cvQuote:'SQL reporting.'}],factors:Object.keys(factorWeights).map(key=>({key,status:'unknown',note:'Not established in the advert and profile.',sourceQuote:'',cvQuote:''})),audit:reviewParagraphs(input).map((_,paragraph)=>({paragraph,kind:paragraph===3||paragraph===4?'required':paragraph===2||paragraph===5?'heading':paragraph===6?'benefit':'background'})),issues:[]};

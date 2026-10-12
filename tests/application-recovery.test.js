@@ -3,6 +3,11 @@ import {recoverSubmittedApplications,validateApplicationRecovery} from '../lib/a
 import setup from '../api/setup.js';
 const entry=(id)=>({id,company:id,title:'Developer',location:'Berlin',link:'https://example.org/jobs/'+id,status:'Applied',applicationDate:'2026-10-08'});
 const recovery={version:1,id:'submitted-october',entries:['Bloom','individee','Delivery'].map(entry)};
+test('a targeted details repair corrects a placeholder company without changing the submitted status, notes or date',()=>{
+ const saved={...entry('individee'),id:'local',company:'LinkedIn',title:'Saved job',status:'Rejected',applicationDate:'2026-10-07',notes:'Keep my rejection notes'};
+ const repaired=recoverSubmittedApplications([saved],{...recovery,id:'specific-details',entries:[entry('individee')],refreshDetails:true}).entries;
+ assert.equal(repaired.length,1);assert.deepEqual(repaired[0],{...saved,company:'individee',title:'Developer',location:'Berlin'});
+});
 test('authenticated recovery adds all missing submissions, is repeatable and preserves existing recruitment stages',()=>{
  const originals=Array.from({length:17},(_,i)=>({...entry('existing-'+i),notes:'Keep '+i}));
  const next=recoverSubmittedApplications(originals,recovery);assert.equal(next.entries.length,20);assert.deepEqual(next.entries.slice(3),originals);assert.deepEqual(recoverSubmittedApplications(next.entries,recovery).entries,next.entries);
