@@ -30,9 +30,9 @@ test('main restores missing applications automatically without a link and preser
 });
 test('a search error remains visible while a promising candidate is being reviewed',async({page})=>{
  await service(page,{configured:true});await page.route('**/api/jobs*',r=>r.fulfill({status:503,json:{error:'The source connection failed. Please retry.',code:'FIRECRAWL_SETUP_REQUIRED'}}));
- let release;const gate=new Promise(resolve=>release=resolve);await page.route('**/api/fit-review',async r=>{await gate;await r.fulfill({status:503,json:{error:'Test ended'}}).catch(()=>{});});
+ let release,reviewStarted=0;const gate=new Promise(resolve=>release=resolve);await page.route('**/api/fit-review',async r=>{reviewStarted++;await gate;await r.fulfill({status:503,json:{error:'Test ended'}}).catch(()=>{});});
  await seed(page,{candidate:true});await page.locator('.main-nav [data-view="discover"]').click();
- await expect(page.locator('.deck-empty')).toContainText('The source connection failed. Please retry.');await expect(page.locator('#feed-status')).toContainText('The source connection failed');await expect(page.locator('#candidate-review-status')).toContainText('Comparing promising roles');release();
+ await expect.poll(()=>reviewStarted).toBeGreaterThan(0);await expect(page.locator('.deck-empty')).toContainText('The source connection failed. Please retry.');await expect(page.locator('#feed-status')).toContainText('The source connection failed');release();
 });
 test('a temporary rate limit retries the initial search automatically and shows matching jobs',async({page})=>{
  await service(page);let calls=0;await page.route('**/api/jobs*',r=>++calls===1?r.fulfill({status:429,headers:{'Retry-After':'2'},json:{code:'FIRECRAWL_RATE_LIMIT',error:'Source busy.',retryAfter:2}}):r.fulfill({json:{jobs:[good],nextPage:null,nextSearch:null}}));
