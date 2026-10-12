@@ -7,7 +7,11 @@ export default function handler(req,res){
  if(req.method!=='POST')return res.status(405).json({error:'Use POST.'});
  if(!authorized(req))return res.status(401).json({error:'Connect this device using your private setup first.'});
  if(req.body?.action==='profile-corrections'){
-  try{return res.status(200).json({correction:JSON.parse(process.env.JOB_NOTEBOOK_PROFILE_CORRECTIONS||'null'),reviewProvider:reviewProvider(),applicationRecovery:process.env.JOB_NOTEBOOK_APPLICATION_RECOVERY?validateApplicationRecovery(JSON.parse(process.env.JOB_NOTEBOOK_APPLICATION_RECOVERY)):null});}
+  try{
+   const repairs=JSON.parse(process.env.JOB_NOTEBOOK_APPLICATION_REPAIRS||'[]');
+   if(!Array.isArray(repairs)||repairs.length>10)throw Error('Invalid application repairs.');
+   return res.status(200).json({correction:JSON.parse(process.env.JOB_NOTEBOOK_PROFILE_CORRECTIONS||'null'),reviewProvider:reviewProvider(),applicationRecovery:process.env.JOB_NOTEBOOK_APPLICATION_RECOVERY?validateApplicationRecovery(JSON.parse(process.env.JOB_NOTEBOOK_APPLICATION_RECOVERY)):null,applicationRepairs:repairs.map(validateApplicationRecovery)});
+  }
   catch{return res.status(500).json({error:'Profile corrections could not be loaded.'});}
  }
  if(!process.env.JOB_NOTEBOOK_CV_SETUP)return res.status(503).json({error:'Saved CVs are not configured.'});

@@ -34,7 +34,7 @@ test('Germany and the UK cannot alternate ahead of other relevant European marke
 test('country-specific Firecrawl searches use separate caches and validated geography',async()=>{
  const {createJobsHandler}=await import('../api/jobs.js');const requested=[];
  const handler=createJobsHandler({fetcher:async(url,options)=>{const body=JSON.parse(options.body);requested.push(body.query);return {ok:true,status:200,json:async()=>({success:true,data:{web:[]}})};}});
- async function request(query){const res={setHeader(){},status(n){this.code=n;return this;},json(d){this.data=d;}};await handler({method:'GET',url:'/api/jobs?'+query,headers:{}},res);return res;}
+ async function request(query){const res={setHeader(){},status(n){this.code=n;return this;},json(d){this.data=d;}};await handler({method:'GET',url:'/api/jobs?search=start&'+query,headers:{}},res);return res;}
  const pt=await request('region=europe&country=portugal');const nl=await request('region=europe&country=netherlands');assert.equal(pt.code,200);assert.equal(nl.code,200);assert.equal(pt.data.nextPage,null);
  assert(requested.some(q=>q.includes('Portugal')));assert(requested.some(q=>q.includes('Netherlands')));
  const count=requested.length;await request('region=europe&country=portugal');assert.equal(requested.length,count);

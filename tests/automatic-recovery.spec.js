@@ -15,8 +15,8 @@ async function seed(page,{candidate=false,connected=true}={}){
  await page.goto('/#notebook');
  if(connected){await page.evaluate(async()=>{const {setItem}=await import('/lib/device-store.js');await setItem('connection',{token:'x'.repeat(43)});for(const type of ['consulting','analyst','developer'])await setItem(type,{name:type+'.pdf',blob:new Blob(['%PDF-1.7 existing '+type],{type:'application/pdf'})});});await page.reload();await expect(page.locator('#nav-count')).toHaveText('19');await expect(page.locator('#browser-connection-status')).toContainText('Private connection verified');}
 }
-async function service(page,{configured=false}={}){
- await page.route('**/api/setup',r=>r.fulfill({json:{reviewProvider:{provider:'openai',configured},applicationRecovery:recovery}}));
+async function service(page,{configured=false,repairs=[]}={}){
+ await page.route('**/api/setup',r=>r.fulfill({json:{reviewProvider:{provider:'openai',configured},applicationRecovery:recovery,applicationRepairs:repairs}}));
  await page.route('**/api/job-alerts',r=>r.fulfill({json:{configured:false}}));
  await page.route('**/api/summary',r=>r.fulfill({status:503,json:{error:'Test only'}}));
 }
@@ -27,6 +27,15 @@ test('main restores missing applications automatically without a link and preser
  const before=await read();expect(before.entries.find(e=>e.id==='my-bloom').status).toBe('Rejected');expect(before.entries.find(e=>e.id==='my-bloom').notes).toBe('Keep rejection notes');expect(before.profile.email).toBe('existing@example.org');expect(before.profile.geography).toBe('europe');
  await page.reload();await expect(page.locator('#nav-count')).toHaveText('19');
  await page.evaluate(()=>{const key='job-notebook-v1';localStorage.setItem(key,JSON.stringify(JSON.parse(localStorage.getItem(key)).filter(e=>e.company!=='Delivery Hero')));});await page.reload();await expect(page.locator('#nav-count')).toHaveText('18');
+});
+test('a newly requested individee repair runs after the original receipt without restoring other deleted applications',async({page})=>{
+ const repair={version:1,id:'individee-confirmed-missing',entries:[record('individee')]};
+ await service(page,{repairs:[repair]});await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[],nextPage:null,nextSearch:null}}));await seed(page,{connected:false});
+ await page.evaluate(async()=>{localStorage.setItem('job-notebook-application-recovery:submitted-october','1');const {setItem}=await import('/lib/device-store.js');await setItem('connection',{token:'x'.repeat(43)});});
+ await page.reload();await expect(page.locator('#nav-count')).toHaveText('18');
+ const restored=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-v1')));expect(restored.find(e=>e.company==='individee')).toMatchObject({status:'Applied',applicationDate:'2026-10-08'});expect(restored.find(e=>e.id==='my-bloom')).toMatchObject({status:'Rejected',notes:'Keep rejection notes'});expect(restored.some(e=>e.company==='Delivery Hero')).toBe(false);
+ await page.reload();await expect(page.locator('#nav-count')).toHaveText('18');
+ await page.evaluate(()=>{const key='job-notebook-v1';localStorage.setItem(key,JSON.stringify(JSON.parse(localStorage.getItem(key)).filter(e=>e.company!=='individee')));});await page.reload();await expect(page.locator('#nav-count')).toHaveText('17');
 });
 test('a search error remains visible while a promising candidate is being reviewed',async({page})=>{
  await service(page,{configured:true});await page.route('**/api/jobs*',r=>r.fulfill({status:503,json:{error:'The source connection failed. Please retry.',code:'FIRECRAWL_SETUP_REQUIRED'}}));

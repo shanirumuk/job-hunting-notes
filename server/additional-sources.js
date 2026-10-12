@@ -4,7 +4,8 @@ export const employerBoards=[
  {slug:'Ashby',company:'Ashby'}, {slug:'linear',company:'Linear'},
  {slug:'supabase',company:'Supabase'}, {slug:'n8n',company:'n8n'},
  {slug:'lightspeedhq',company:'Lightspeed Commerce'}, {slug:'gt-hq',company:'GT'},
- {slug:'neara',company:'Neara'}, {slug:'choco',company:'Choco'}
+ {slug:'neara',company:'Neara'}, {slug:'choco',company:'Choco'},
+ {slug:'deepslate',company:'Deepslate'}, {slug:'almedia',company:'Almedia'}, {slug:'bjakcareer',company:'Bjak'}
 ];
 async function json(url,fetcher){const response=await fetcher(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('Source unavailable');return response.json();}
 export async function fetchRemoteOK(fetcher=fetch){
@@ -38,7 +39,7 @@ async function cached(key,fetcher){
  if(!pending.has(key))pending.set(key,fetcher().then(jobs=>{cache.set(key,{jobs,time:Date.now()});return jobs;}).finally(()=>pending.delete(key)));
  return pending.get(key);
 }
-export async function additionalSources(fetcher=fetch,{useCache=true}={}){
+export async function additionalSources(fetcher=fetch,{useCache=true,development=false}={}){
  const sources=[{name:'Remote OK',key:'remoteok',load:()=>fetchRemoteOK(fetcher)},...employerBoards.map(board=>({name:board.company+' careers',key:board.slug,board:board.slug,load:()=>fetchEmployerBoard(board,fetcher)}))];
  const results=await Promise.allSettled(sources.map(s=>useCache?cached(s.key,s.load):s.load()));
  const jobs=[],sourceErrors=[],refreshedEmployerBoards=[];
@@ -47,7 +48,7 @@ export async function additionalSources(fetcher=fetch,{useCache=true}={}){
   if(result.status==='rejected'){sourceErrors.push(source.name);continue;}
   if(source.board)refreshedEmployerBoards.push(source.board);
   // Avoid downloading hundreds of unrelated engineering and sales postings.
-  jobs.push(...result.value.filter(j=>/analyst|implement|consult|success|operations|project|product|solutions|support|integration|delivery|business systems/i.test(j.title)));
+  jobs.push(...result.value.filter(j=>/analyst|implement|consult|success|operations|project|product|solutions|support|integration|delivery|business systems/i.test(j.title)||development&&/developer|(?:software|front[ -]?end|back[ -]?end|full[ -]?stack) engineer/i.test(j.title)));
  }
  return {jobs,sourceErrors,refreshedEmployerBoards};
 }

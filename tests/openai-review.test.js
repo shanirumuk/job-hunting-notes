@@ -11,6 +11,7 @@ test('direct OpenAI requests use structured output, no stored response, and serv
   return response({status:'completed',output:[{type:'reasoning',summary:[]},{type:'message',content:[{type:'output_text',text:'{"answer":"supported"}'}]}]});
  }});
  assert.equal(result.answer,'supported');assert.equal(body.model,'gpt-6-luna');assert.equal(body.store,false);assert.equal(body.text.format.strict,true);assert.equal(body.reasoning.effort,'medium');assert(!JSON.stringify(body).includes('test-private-key'));
+ await extractStructured({instructions:'Compare evidence.',input:'CV and advert',schema,reasoningEffort:'low'},{apiKey:'test-private-key',fetcher:async(url,options)=>{assert.equal(JSON.parse(options.body).reasoning.effort,'low');return response({status:'completed',output:[{type:'message',content:[{type:'output_text',text:'{"answer":"supported"}'}]}]});}});
 });
 test('setup, quota, permission and incomplete errors never leak provider details',async()=>{
  let calls=0;await assert.rejects(extractStructured({schema},{apiKey:'',fetcher:async()=>{calls++;}}),e=>e.serviceCode==='REVIEW_SETUP_REQUIRED');assert.equal(calls,0);

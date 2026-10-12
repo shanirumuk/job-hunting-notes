@@ -1,0 +1,19 @@
+import {test,expect} from '@playwright/test';
+const jobs=Array.from({length:4},(_,i)=>({id:'queue-'+i,company:'Employer '+i,title:'Business Analyst',location:'Berlin, Germany',link:'https://example.org/queue/'+i,description:'Requirements:\nInterpret customer needs and turn them into a technical rollout plan for department '+i+'.'}));
+const review={version:6,skills:8,skillsLower:8,overall:7,summary:'Requirements work transfers to this role.',cv:'Business Analyst CV',cvReason:'Use analysis evidence.',points:[{text:'Interpret customer needs',sourceQuote:jobs[0].description.split('\n')[1],category:'required',dimension:'skill',importance:'standard',status:'match',evidenceKind:'transferable',note:'Requirements evidence.',cvQuote:'SQL reporting and requirements documentation.'}],factors:[],audit:[],issues:[]};
+async function setup(page){
+ await page.addInitScript(()=>{localStorage.setItem('job-notebook-v1','[]');localStorage.setItem('job-notebook-profile-v1',JSON.stringify({geography:'europe',evidence:'SQL reporting and requirements documentation.',languages:'English C1'}));});
+ await page.route('**/api/setup',r=>r.fulfill({json:{reviewProvider:{provider:'openai',configured:true}}}));await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs,nextPage:null,nextSearch:null}}));await page.route('**/api/job-alerts',r=>r.fulfill({json:{configured:false}}));await page.route('**/api/summary',r=>r.fulfill({status:503,json:{error:'Not needed'}}));
+ await page.goto('/#notebook');await page.evaluate(async()=>{const {setItem}=await import('/lib/device-store.js');await setItem('connection',{token:'x'.repeat(43)});});await page.reload();await expect(page.locator('#browser-connection-status')).toContainText('Private connection verified');
+}
+test('returning to Discover starts two bounded CV checks, displays a passing result immediately and preserves pending work',async({page})=>{
+ let active=0,peak=0;const waiting=[];
+ await page.route('**/api/fit-review',async route=>{expect(route.request().postDataJSON().purpose).toBe('discovery');active++;peak=Math.max(peak,active);await new Promise(resolve=>waiting.push({route,resolve}));active--;await route.fulfill({json:{review}}).catch(()=>{});});
+ await setup(page);expect(waiting.length).toBe(0);await page.locator('.main-nav [data-view="discover"]').click();await expect.poll(()=>waiting.length).toBe(2);expect(peak).toBe(2);await expect(page.locator('#candidate-review-status')).toContainText('2 CV checks running');await expect(page.locator('#active-card')).toHaveCount(0);
+ waiting[0].resolve();await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','queue-0');await expect(page.locator('.card-fit-summary')).toContainText('8/10');await expect.poll(()=>waiting.length).toBe(3);expect(peak).toBe(2);
+ for(const item of waiting)item.resolve();
+});
+test('failed background checks have a working retry when no cards are visible',async({page})=>{
+ let calls=0;await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({status:503,json:{error:'Temporary review failure'}});});await setup(page);await page.locator('.main-nav [data-view="discover"]').click();await expect.poll(()=>calls).toBe(4);await expect(page.locator('#active-card')).toHaveCount(0);await expect(page.locator('[data-retry-fit]')).toContainText('Retry CV checks');
+ await page.route('**/api/fit-review',r=>r.fulfill({json:{review}}));await page.locator('[data-retry-fit]').click();await expect(page.locator('#active-card')).toHaveCount(1);
+});

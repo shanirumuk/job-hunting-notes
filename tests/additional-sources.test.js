@@ -26,11 +26,11 @@ test('an explicit US-only employer address is not expanded to North America',asy
  assert.equal(jobs[0].location,'United States');assert.equal(matchJob(jobs[0],defaultProfile).eligible,false);
 });
 
-test('jobs endpoint uses Firecrawl rather than the previous feeds',async()=>{
+test('Firecrawl continuation stays isolated from the initial public feed batch',async()=>{
  const {createJobsHandler}=await import('../api/jobs.js');const requested=[];
  const description='Requirements:\nSQL experience.\nAPI integrations experience.\nEnglish proficiency.';
  const handler=createJobsHandler({fetcher:async(url,options)=>{requested.push(url);return {ok:true,status:200,json:async()=>({success:true,data:url.endsWith('/search')?{web:[{url:'https://example.org/new-source'}]}:{markdown:'Example Business Analyst\n'+description,json:{isJobPosting:true,isClosed:false,title:'Business Analyst',company:'Example',location:'Canada',remote:true,description,publishedAt:'2026-10-01',expiresAt:''}}})};}});
  const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};
- await handler({method:'GET',url:'/api/jobs?region=north-america&skills=sql',headers:{}},res);
+ await handler({method:'GET',url:'/api/jobs?region=north-america&skills=sql&search=start',headers:{}},res);
  assert.equal(res.code,200);assert.equal(res.data.source,'Firecrawl');assert.equal(res.data.jobs[0].source,'Firecrawl · example.org');assert(requested.every(url=>url.startsWith('https://api.firecrawl.dev/v2/')));
 });

@@ -92,7 +92,7 @@ export async function generateReview(input,options={}){
  const result=await withProviderFallback((provider,timeLeft)=>generateWithProvider(input,{...options,provider,timeLeft}),{primaryShare:.8});
  return {...result.value,fallback:result.fallback};
 }
-async function generateWithProvider(input,{onAttempt,extract=extractStructured,provider,timeLeft}){
+async function generateWithProvider(input,{onAttempt,extract=extractStructured,provider,timeLeft,purpose='detail'}){
  const direct=provider.provider==='openai';
  if(!direct&&!process.env.BROWSERBASE_API_KEY)throw Error('Review service is not configured');
  let browser,stagehand;
@@ -106,7 +106,7 @@ async function generateWithProvider(input,{onAttempt,extract=extractStructured,p
   if(page)await page.evaluate(text=>{document.body.replaceChildren();const article=document.createElement('article');article.style.whiteSpace='pre-wrap';article.textContent=text;document.body.append(article);},content);
   let correction='';
   for(let attempt=0;attempt<2;attempt++){
-   try{const prompt=instruction+' Use cvParagraph to cite an exact C-numbered applicant paragraph, paragraph for a checklist source, and sourceParagraph for a practical-factor source. Do not compose quotes; -1 means no evidence. Unknown factors with no source must use -1.'+correction;const data=direct?await extract({instructions:prompt,input:content,schema:extractionSchema,timeout:Math.min(200000,timeLeft())}):(await stagehand.extract(prompt,extractionSchema,{timeout:Math.min(200000,timeLeft())})).data;const cite=point=>({...point,cvQuote:cvLines[point.cvParagraph]?.text||'',sourceQuote:reviewParagraphs(input)[point.paragraph??point.sourceParagraph]||''});const mapped={...data,points:data.points.map(cite),factors:data.factors.map(cite)};await onAttempt?.(mapped);return {...validateReview(mapped,input),provider:provider.provider,model:provider.model};}catch(error){if(attempt===1||error.serviceCode||fallbackReason(error))throw error;correction=' Fix this validation problem in your next response: '+error.message;}
+   try{const concise=purpose==='discovery'?' For this discovery check, keep each note under 120 characters, the summary under 240 characters and CV reason under 120 characters. Keep ALL qualification comparisons and the complete audit; use the same evidence standards.':'';const prompt=instruction+' Use cvParagraph to cite an exact C-numbered applicant paragraph, paragraph for a checklist source, and sourceParagraph for a practical-factor source. Do not compose quotes; -1 means no evidence. Unknown factors with no source must use -1.'+concise+correction;const data=direct?await extract({instructions:prompt,input:content,schema:extractionSchema,reasoningEffort:purpose==='discovery'?'low':'medium',timeout:Math.min(200000,timeLeft())}):(await stagehand.extract(prompt,extractionSchema,{timeout:Math.min(200000,timeLeft())})).data;const cite=point=>({...point,cvQuote:cvLines[point.cvParagraph]?.text||'',sourceQuote:reviewParagraphs(input)[point.paragraph??point.sourceParagraph]||''});const mapped={...data,points:data.points.map(cite),factors:data.factors.map(cite)};await onAttempt?.(mapped);return {...validateReview(mapped,input),provider:provider.provider,model:provider.model};}catch(error){if(attempt===1||error.serviceCode||fallbackReason(error))throw error;correction=' Fix this validation problem in your next response: '+error.message;}
   }
  }finally{await stagehand?.close().catch(()=>{});await browser?.close().catch(()=>{});}
 }

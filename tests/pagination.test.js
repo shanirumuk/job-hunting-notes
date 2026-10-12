@@ -31,10 +31,10 @@ test('Jobicy preserves country restrictions, description paragraphs, attribution
  assert.equal(jobs.length,1);assert.equal(jobs[0].location,'Canada, South Africa');assert.equal(jobs[0].source,'Jobicy');
  assert.match(jobs[0].description,/Configure systems\.\n\nTrain customers\./);assert.match(jobs[0].description,/50000–70000 CAD yearly/);
 });
-test('Firecrawl failures return a retryable message without reverting to old feeds',async()=>{
+test('Firecrawl failures return a retryable message without replacing a successful initial feed batch',async()=>{
  const {createJobsHandler}=await import('../api/jobs.js');
  const urls=[],handler=createJobsHandler({fetcher:async url=>{urls.push(url);return {ok:false,status:500,json:async()=>({success:false})};}});
  const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};
- await handler({method:'GET',url:'/api/jobs?region=asia',headers:{}},res);
+ await handler({method:'GET',url:'/api/jobs?region=asia&search=start',headers:{}},res);
  assert.equal(res.code,503);assert.match(res.data.error,/Firecrawl/);assert(urls.every(url=>url.startsWith('https://api.firecrawl.dev/')));
 });

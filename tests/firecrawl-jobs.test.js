@@ -60,7 +60,7 @@ test('search continuation advances only after a successful batch and reuses cach
 test('API errors are actionable and provider response details cannot leak credentials',async()=>{
  const handler=createJobsHandler({pause:async()=>{},fetcher:async()=>({ok:false,status:429,json:async()=>({success:false,error:'secret-key'})})});
  const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};
- await handler({method:'GET',url:'/api/jobs?region=africa&skills=python',headers:{}},res);assert.equal(res.code,429);assert.equal(res.data.code,'FIRECRAWL_RATE_LIMIT');assert.match(res.data.error,/retry/);assert(!JSON.stringify(res.data).includes('secret-key'));
+ await handler({method:'GET',url:'/api/jobs?region=africa&skills=python&search=start',headers:{}},res);assert.equal(res.code,429);assert.equal(res.data.code,'FIRECRAWL_RATE_LIMIT');assert.match(res.data.error,/retry/);assert(!JSON.stringify(res.data).includes('secret-key'));
  await handler({method:'GET',url:'/api/jobs?skills=private-email',headers:{}},res);assert.equal(res.code,400);
 });
 test('all CV search combinations stay within Firecrawl’s 500-character query limit',()=>{

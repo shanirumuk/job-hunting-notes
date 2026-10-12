@@ -12,11 +12,11 @@ test('the complete recovery is validated before use',()=>{
  for(const change of [p=>{p.entries[2].status='Rejected'},p=>{p.entries[2].link='javascript:bad'},p=>{p.id='../../bad'},p=>{p.entries=[]}]){const p=structuredClone(recovery);change(p);assert.throws(()=>validateApplicationRecovery(p));}
 });
 test('server recovery remains private and is returned only to the authorised owner',()=>{
- const previous=Object.fromEntries(['JOB_NOTEBOOK_ACCESS_TOKEN','JOB_NOTEBOOK_APPLICATION_RECOVERY','JOB_NOTEBOOK_PROFILE_CORRECTIONS'].map(k=>[k,process.env[k]]));
+ const previous=Object.fromEntries(['JOB_NOTEBOOK_ACCESS_TOKEN','JOB_NOTEBOOK_APPLICATION_RECOVERY','JOB_NOTEBOOK_APPLICATION_REPAIRS','JOB_NOTEBOOK_PROFILE_CORRECTIONS'].map(k=>[k,process.env[k]]));
  try{
-  process.env.JOB_NOTEBOOK_ACCESS_TOKEN='x'.repeat(43);process.env.JOB_NOTEBOOK_APPLICATION_RECOVERY=JSON.stringify(recovery);delete process.env.JOB_NOTEBOOK_PROFILE_CORRECTIONS;
+  process.env.JOB_NOTEBOOK_ACCESS_TOKEN='x'.repeat(43);process.env.JOB_NOTEBOOK_APPLICATION_RECOVERY=JSON.stringify(recovery);process.env.JOB_NOTEBOOK_APPLICATION_REPAIRS=JSON.stringify([{...recovery,id:'individee-repair',entries:[entry('individee')]}]);delete process.env.JOB_NOTEBOOK_PROFILE_CORRECTIONS;
   const call=token=>{const res={setHeader(){},status(n){this.code=n;return this;},json(d){this.data=d;}};setup({method:'POST',headers:{authorization:'Bearer '+token},body:{action:'profile-corrections'}},res);return res;};
-  const denied=call('wrong');assert.equal(denied.code,401);assert.equal(denied.data.applicationRecovery,undefined);
-  const result=call('x'.repeat(43));assert.equal(result.code,200);assert.equal(result.data.applicationRecovery.entries.length,3);assert(!JSON.stringify(result.data).includes('x'.repeat(43)));
+  const denied=call('wrong');assert.equal(denied.code,401);assert.equal(denied.data.applicationRecovery,undefined);assert.equal(denied.data.applicationRepairs,undefined);
+  const result=call('x'.repeat(43));assert.equal(result.code,200);assert.equal(result.data.applicationRecovery.entries.length,3);assert.equal(result.data.applicationRepairs[0].entries.length,1);assert.equal(result.data.applicationRepairs[0].entries[0].company,'individee');assert(!JSON.stringify(result.data).includes('x'.repeat(43)));
  }finally{for(const [k,v] of Object.entries(previous))v===undefined?delete process.env[k]:process.env[k]=v;}
 });

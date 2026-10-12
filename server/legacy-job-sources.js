@@ -1,4 +1,4 @@
-// Retained for existing source-adapter regression fixtures. Live discovery uses Firecrawl.
+// Initial public feeds complement Firecrawl's search and page extraction.
 import {listingDate} from '../lib/listing-freshness.js';
 import {plainText,safeURL,descriptionText} from '../lib/model.js';
 

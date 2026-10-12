@@ -53,7 +53,7 @@ test('busy reviews retry automatically and show progress in the Fit dialog',asyn
  await expect(page.locator('#full-review-status')).toContainText('Retrying automatically');
  await page.locator('.listing-info').click();await expect(page.locator('#fit-dialog-review-status')).toContainText('Retrying automatically');
  await expect.poll(()=>calls).toBe(2);await expect(page.locator('#fit-dialog-review-status')).toContainText('1–4 minutes');
- release();await expect(page.locator('#role-content')).toContainText('OVERALL APPLICATION FIT');await expect(page.locator('.fit-score')).toContainText('6.5');
+ release();await expect(page.locator('#role-content')).toContainText('APPLICATION RECOMMENDATION');await expect(page.locator('.fit-score')).toContainText('6.5');
 });
 
 test('saved connection is verified with the server and can be rechecked after rejection',async({page})=>{
@@ -76,7 +76,7 @@ test('exhausted provider allowance is explained and stops automatic calls across
  await page.locator('.listing-info').click();await expect(page.locator('#fit-dialog-review-status')).toContainText('allowance is exhausted');
  expect(calls).toBe(1);expect(summaries).toBe(0);
  await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({json:{review}});});
- await page.locator('#fit-dialog-review-status [data-retry-fit]').click();await expect(page.locator('#role-content')).toContainText('OVERALL APPLICATION FIT');expect(calls).toBe(2);
+ await page.locator('#fit-dialog-review-status [data-retry-fit]').click();await expect(page.locator('#role-content')).toContainText('APPLICATION RECOMMENDATION');expect(calls).toBe(2);
 });
 
 test('confirmed analytical and requirements evidence is added without replacing imported CVs',async({page})=>{
@@ -92,7 +92,7 @@ test('confirmed analytical and requirements evidence is added without replacing 
  await expect(page.locator('.qualification.match').filter({hasText:'analytical approach'})).toHaveCount(1);
  await expect(page.locator('.qualification.match').filter({hasText:'Translating business needs'})).toHaveCount(1);
  await expect(page.locator('.qualification-details')).not.toContainText('Additional Requirements');
- await expect(page.locator('#role-content')).toContainText('LOCAL REQUIREMENT EVIDENCE');
+ await expect(page.locator('#role-content')).toContainText('FULL ASSESSMENT PENDING');
  const evidence=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence);expect(evidence).toContain('SQL reporting.');
  await page.reload();expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-profile-v1')).evidence)).toBe(evidence);
 });

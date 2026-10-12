@@ -5,10 +5,10 @@ export function reviewProvider(selected){
  return {provider,model:provider==='openai'?OPENAI_REVIEW_MODEL:'anthropic/claude-sonnet-4-6',configured:!!(provider==='openai'?process.env.OPENAI_API_KEY:process.env.BROWSERBASE_API_KEY)};
 }
 const serviceError=(code,message,status=503)=>Object.assign(new Error(message),{serviceCode:code,status});
-export async function extractStructured({instructions,input,schema,name='job_review',maxOutputTokens=16000,timeout=120000},{fetcher=fetch,apiKey=process.env.OPENAI_API_KEY}={}){
+export async function extractStructured({instructions,input,schema,name='job_review',maxOutputTokens=16000,timeout=120000,reasoningEffort='medium'},{fetcher=fetch,apiKey=process.env.OPENAI_API_KEY}={}){
  if(!apiKey)throw serviceError('REVIEW_SETUP_REQUIRED','Add OPENAI_API_KEY to the production server settings to enable GPT-6 Luna reviews.');
  const jsonSchema=z.toJSONSchema(schema);delete jsonSchema.$schema;
- let response;try{response=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${apiKey}`},body:JSON.stringify({model:OPENAI_REVIEW_MODEL,store:false,instructions,input,reasoning:{effort:'medium'},max_output_tokens:maxOutputTokens,text:{format:{type:'json_schema',name,strict:true,schema:jsonSchema}}}),signal:AbortSignal.timeout(timeout)});}catch{throw serviceError('REVIEW_PROVIDER_UNAVAILABLE','OpenAI is temporarily unreachable. Trying an available backup.');}
+ let response;try{response=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${apiKey}`},body:JSON.stringify({model:OPENAI_REVIEW_MODEL,store:false,instructions,input,reasoning:{effort:reasoningEffort},max_output_tokens:maxOutputTokens,text:{format:{type:'json_schema',name,strict:true,schema:jsonSchema}}}),signal:AbortSignal.timeout(timeout)});}catch{throw serviceError('REVIEW_PROVIDER_UNAVAILABLE','OpenAI is temporarily unreachable. Trying an available backup.');}
  const data=await response.json().catch(()=>({}));
  if(!response.ok){
   // Never expose provider messages: they can contain key/account fragments.
