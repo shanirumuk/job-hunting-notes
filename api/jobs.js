@@ -11,7 +11,7 @@ export function createJobsHandler(options={}) {return async function handler(req
  const skills=(params.get('skills')||'').split(',').filter(Boolean);
  if(skills.length>4||skills.some(key=>!Object.hasOwn(searchSkills,key))||cursor.length>30)return res.status(400).json({error:'Invalid CV search terms.'});
  if(process.env.JOB_NOTEBOOK_ACCESS_TOKEN&&!authorized({...req,headers:req.headers||{}}))return res.status(401).json({error:'Connect your device in My profile to search with Firecrawl.'});
- try{return res.status(200).json(await searchFirecrawlJobs({region,country,skills,junior:params.get('junior')==='1',cursor},options));}
+ try{return res.status(200).json(await searchFirecrawlJobs({region,country,skills,junior:params.get('junior')==='1',development:params.get('development')==='1',cursor},options));}
  catch(error){if(error.retryAfter)res.setHeader('Retry-After',String(error.retryAfter));return res.status(error.status||503).json({error:error.code?error.message:'Firecrawl search is temporarily unavailable. Retry shortly.',code:error.code||'FIRECRAWL_UNAVAILABLE',...(error.retryAfter?{retryAfter:error.retryAfter}:{})});}
 };}
 export default createJobsHandler();

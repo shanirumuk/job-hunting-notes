@@ -5,8 +5,8 @@ import {applyProfileCorrections} from './lib/profile-corrections.js';
 import {REVIEW_VERSION,reviewInsights,factorLabels,reviewClearsDiscovery,ratingCategory} from './lib/fit-review.js';
 import {parseCVJSON,mergeCVImports} from './lib/cv-json.js';
 import {parseCVPDF} from './lib/cv-pdf.js';
-import {cvSearchSkills,searchRoleGroups} from './lib/job-search-profile.js';
-import {recordedEmploymentMonths} from './lib/insights.js';
+import {cvSearchSkills,hasDevelopmentEvidence,roleGroupsForCV} from './lib/job-search-profile.js?v=76';
+import {recordedEmploymentMonths} from './lib/insights.js?v=76';
 import {regions,europeanCountries,geographicMatch,scopedLocation} from './lib/geography.js';
 import {recoverImport,getItem as deviceItem,setItem as deviceSetItem} from './lib/device-store.js';
 import {startDeviceSync} from './lib/device-sync.js';
@@ -20,7 +20,7 @@ await recoverImport();
 const privateRecoveryResult=await restorePrivateLink().catch(()=>({ok:false,message:'Private recovery could not read this browser’s storage. Your saved notebook has been kept.'}));
 window.addEventListener('hashchange',()=>{if(location.hash.startsWith('#restore-notebook='))location.reload();});
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=75';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=76';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -84,6 +84,10 @@ try {
   discovery.nextPage=1;discovery.nextSearch=null;discovery.fetchedAt='';discovery.sourceErrors=[];discovery.lastError='';feedError=false;
   if(saveDiscovery())localStorage.setItem('job-notebook-source-recovery-v75','1');
  }
+ if(!localStorage.getItem('job-notebook-cv-role-coverage-v76')&&!storageError&&hasDevelopmentEvidence(profile)){
+  discovery.nextPage=1;discovery.nextSearch=null;discovery.fetchedAt='';discovery.sourceErrors=[];discovery.lastError='';feedError=false;
+  if(saveDiscovery())localStorage.setItem('job-notebook-cv-role-coverage-v76','1');
+ }
 }catch{storageError=true;}
 // Keep the original one-time status migration, including its original storage marker.
 try {
@@ -124,7 +128,7 @@ function render() {
   const cvFit=discoveryFit({title:'Business Analyst',description:''},profile);
   $('experience-filter').textContent='CV match > 6/10 · How it works';
   $('compass-cv').textContent=cvFit.months!==null?'Dated CV history: '+(cvFit.months/12).toFixed(1)+' years':'Add dated CV details for experience checks';
-  $('search-role-areas').innerHTML=searchRoleGroups.map(group=>`<span>${esc(group.label)}</span>`).join('');
+  $('search-role-areas').innerHTML=roleGroupsForCV(profile).map(group=>`<span>${esc(group.label)}</span>`).join('');
   const q = $('search-input').value.trim().toLowerCase();
   const filtered = entries.filter(e => (activeFilter === 'all' || (activeFilter === 'follow-up' ? followUpDue(e) : e.status.toLowerCase() === activeFilter)) && (!q || [e.company,e.title,e.location,e.notes,e.requirements].join(' ').toLowerCase().includes(q)));
   if(activeFilter==='follow-up')filtered.sort((a,b)=>a.followUpDate.localeCompare(b.followUpDate));
@@ -463,6 +467,7 @@ async function refreshJobs(more=false) {
  const requestId=++feedRequestId;feedController=new AbortController();
  const params=new URLSearchParams();if(more)params.set('search',discovery.nextSearch||'done');if(searchOnly)params.set('searchOnly','1');if(page!==1)params.set('page',page);if(profile.geography!=='international')params.set('region',profile.geography);if(profile.country)params.set('country',profile.country);if(profile.includeBroadRemote)params.set('broad','1');
  const skills=cvSearchSkills(profile);if(skills.length)params.set('skills',skills.join(','));const months=recordedEmploymentMonths(profile);if(months!==null&&months<=36)params.set('junior','1');
+ if(hasDevelopmentEvidence(profile))params.set('development','1');
  let rateIssue=null,retryMore=more;
  loading=true;feedError=false;discovery.lastError='';$('refresh-jobs').disabled=true;$('feed-status').textContent=more?'Finding more matching roles…':'Checking for new jobs…';
  if(!$('active-card'))renderDeck();

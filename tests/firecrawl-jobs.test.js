@@ -11,7 +11,7 @@ test('search terms use a bounded CV skill vocabulary without contact details or 
  assert.match(query,/API integrations/);assert.match(query,/junior/);assert.match(query,/linkedin.com\/jobs\/view/);assert.doesNotMatch(query,/Private Employer|private@example/);
 });
 test('every displayed search area is searched in both employer and LinkedIn batches',()=>{
- const plan=firecrawlPlan();assert(plan.length>=5);assert(plan.every(q=>q.length<=500));
+ const plan=firecrawlPlan({development:true});assert(plan.length>=5);assert(plan.every(q=>q.length<=500));
  for(const group of searchRoleGroups)for(const title of group.titles){
   assert(plan.filter(q=>!q.includes('site:linkedin.com')).some(q=>q.includes('"'+title+'"')),title+' absent from employer search');
   assert(plan.filter(q=>q.includes('site:linkedin.com')).some(q=>q.includes('"'+title+'"')),title+' absent from LinkedIn search');
@@ -19,8 +19,8 @@ test('every displayed search area is searched in both employer and LinkedIn batc
  assert.match(plan.join(' '),/project coordinator/);assert.match(plan.join(' '),/change analyst/);assert.match(plan.join(' '),/functional consultant/);
 });
 test('legacy related-role settings never narrow automatic discovery',()=>{
- const plan=firecrawlPlan({includeAdjacent:false}).join(' ');
- assert.equal(searchRoleGroups.length,7);
+ const plan=firecrawlPlan({includeAdjacent:false,development:true}).join(' ');
+ assert.equal(searchRoleGroups.length,8);
  for(const group of searchRoleGroups)for(const title of group.titles)assert(plan.includes('"'+title+'"'));
 });
 test('the jobs endpoint searches broadly even for old clients sending a related-role setting',async()=>{
@@ -65,13 +65,13 @@ test('API errors are actionable and provider response details cannot leak creden
 });
 test('all CV search combinations stay within Firecrawl’s 500-character query limit',()=>{
  for(const region of ['international','europe','asia','north-america']){
-  const plan=firecrawlPlan({region,skills:['api','sql','requirements','workflows'],junior:true});
+  const plan=firecrawlPlan({region,skills:['api','sql','requirements','workflows'],junior:true,development:true});
   assert(plan.every(q=>q.length<=500));
   for(const group of searchRoleGroups)for(const title of group.titles)assert(plan.some(q=>q.includes('"'+title+'"')));
  }
 });
 test('job search indexes cannot become vacancies or consume paid page extractions',async()=>{
- for(const url of ['https://uk.indeed.com/q-implementation-consultant-entry-level-l-london-jobs.html','https://linkedin.com/jobs/search/?keywords=analyst','https://example.org/careers','https://example.org/jobs/search']){
+ for(const url of ['https://uk.indeed.com/q-implementation-consultant-entry-level-l-london-jobs.html','https://linkedin.com/jobs/search/?keywords=analyst','https://example.org/careers','https://example.org/jobs/search','https://www.ziprecruiter.com/Jobs/Junior-Full-Stack-Developer-Jobs-Canada','https://www.roberthalf.com/au/en/jobs/all/junior-full-stack-developer']){
   assert(listingIndexURL(url));assert.equal(normalizeFirecrawlJob(document,url),null);
  }
  assert.equal(listingIndexURL('https://linkedin.com/jobs/view/developer-1234567890/'),false);
@@ -111,4 +111,19 @@ test('a partial rate failure retains verified adverts and the same cursor for re
   return JSON.parse(opts.body).url.includes('rate-limited')?{ok:false,status:429,headers:{get:()=>20},json:async()=>({success:false})}:response(document);
  }});
  assert.equal(result.jobs.length,1);assert.equal(result.nextSearch,'fc:3');assert.equal(result.sourceIssue.code,'FIRECRAWL_RATE_LIMIT');
+});
+test('known unsupported sites are not repeatedly requested, and another account is not affected',async()=>{
+ let scrapes=0;
+ const options={apiKey:'blocked-site-test-account',fetcher:async url=>{
+  if(url.endsWith('/search'))return response({web:[{url:'https://blocked.example.org/job/'+scrapes}]});
+  scrapes++;return {ok:false,status:403,json:async()=>({success:false,code:'UNSUPPORTED_SITE',error:'We do not support this site.'})};
+ }};
+ await firecrawlSearchBatch('first blocked source',options);await firecrawlSearchBatch('second blocked source',options);assert.equal(scrapes,1);
+ await firecrawlSearchBatch('different account source',{...options,apiKey:'another-test-account'});assert.equal(scrapes,2);
+});
+test('limited page reads prioritise non-senior employer adverts over senior search hits',async()=>{
+ const read=[];const result=await firecrawlSearchBatch('prioritised source test',{fetcher:async(url,opts)=>{
+  if(url.endsWith('/search'))return response({web:[{title:'Senior Frontend Engineer',url:'https://example.org/job/prioritise-senior'},{title:'Principal Engineer',url:'https://example.org/job/prioritise-principal'},{title:'Frontend Engineer',url:'https://example.org/job/prioritise-frontend'},{title:'Junior Developer',url:'https://example.org/job/prioritise-junior'},{title:'Software Engineer',url:'https://example.org/job/prioritise-software'}]});
+  read.push(JSON.parse(opts.body).url);return response(document);
+ }});assert.equal(read.length,3);assert.equal(result.jobs.length,1);assert(read.every(url=>!url.includes('senior')&&!url.includes('principal')));
 });

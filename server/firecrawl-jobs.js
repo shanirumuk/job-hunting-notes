@@ -4,39 +4,52 @@ import {regions,europeanCountries} from '../lib/geography.js';
 import {searchSkills,searchRoleGroups} from '../lib/job-search-profile.js';
 import {safeURL,descriptionText,plainText,sameJob} from '../lib/model.js';
 import {listingDate} from '../lib/listing-freshness.js';
+import {isSeniorRole} from '../lib/experience-filter.js';
 import {importURL,publicAddress} from './job-import.js';
-const cache=new Map(),pending=new Map(),TTL=6*60*60*1000;
+const cache=new Map(),pending=new Map(),blockedSources=new Map(),TTL=6*60*60*1000;
 const failure=(message,status=503,code='FIRECRAWL_UNAVAILABLE')=>Object.assign(Error(message),{status,code});
 export function publicListingURL(value){
  const url=importURL(value),host=url.hostname.replace(/^\[|\]$/g,'');
  if((isIP(host)&&!publicAddress(host))||!host.includes('.'))throw Error('Use a public job listing URL.');
  return url.href;
 }
-export function firecrawlPlan({region='international',country='',skills=[],junior=false}={}){
- const place=country?europeanCountries.find(c=>c.value===country)?.label:region==='international'?'(Europe OR Africa OR Asia OR Canada OR Australia OR worldwide)':({europe:'Europe',africa:'Africa',asia:'Asia',oceania:'(Australia OR New Zealand)','north-america':'(Canada OR Mexico)','south-america':'"South America"'}[region]);
+export function firecrawlPlan({region='international',country='',skills=[],junior=false,development=false}={}){
+ const place=country?europeanCountries.find(c=>c.value===country)?.label:region==='international'?'(Germany OR Europe OR Canada OR "South Africa" OR Australia OR Singapore)':({europe:'(Europe OR Germany OR Netherlands OR UK)',africa:'(Africa OR "South Africa" OR Kenya OR Nigeria)',asia:'(Asia OR India OR Singapore)',oceania:'(Australia OR New Zealand)','north-america':'(Canada OR Mexico)','south-america':'(Brazil OR Chile OR "South America")'}[region]);
  if(!Object.hasOwn(regions,region)||!place)throw Error('Invalid search location.');
  const hints=skills.slice(0,4).map(key=>searchSkills[key]).filter(Boolean).map(s=>'"'+s+'"').join(' OR ');
- const base=`${place} ${junior?'(junior OR associate) ':''}${hints?'('+hints+') ':''}job -"United States" -site:indeed.com -site:glassdoor.com`;
- const groups=searchRoleGroups,quoted=titles=>'('+titles.map(title=>'"'+title+'"').join(' OR ')+')';
- const chunks=(titles,prefix='')=>{
+ // Exclude US locations after reading the advert. A US headquarters or footer
+ // must not remove an otherwise eligible European or African vacancy.
+ const base=`${place} ${junior?'(junior OR associate OR "1 year" OR "2 years" OR "entry level") ':''}${hints?'('+hints+') ':''}job -site:indeed.com -site:glassdoor.com`;
+ const groups=searchRoleGroups.filter(group=>!group.development||development),quoted=titles=>'('+titles.map(title=>'"'+title+'"').join(' OR ')+')';
+ const chunks=(titles,prefix='',suffix=base,termLimit=Infinity)=>{
   const result=[];let chunk=[];
   for(const title of titles){
-   if(chunk.length&&(prefix+quoted([...chunk,title])+' '+base).length>500){result.push(prefix+quoted(chunk)+' '+base);chunk=[];}
+   const candidate=prefix+quoted([...chunk,title])+' '+suffix;
+   const terms=candidate.replace(/\bOR\b/g,'').trim().split(/\s+/).length;
+   if(chunk.length&&(candidate.length>500||terms>termLimit)){result.push(prefix+quoted(chunk)+' '+suffix);chunk=[];}
    chunk.push(title);
   }
-  if(chunk.length)result.push(prefix+quoted(chunk)+' '+base);
+  if(chunk.length)result.push(prefix+quoted(chunk)+' '+suffix);
   return result;
  };
- return [...[0,1,2,3].flatMap(batch=>chunks(groups.filter(group=>group.batch===batch).flatMap(group=>group.titles))),...chunks(groups.flatMap(group=>group.titles),'site:linkedin.com/jobs/view/ ')];
+ const employerSites='site:jobs.ashbyhq.com ';
+ const developerStack=skills.includes('javascript')?'(JavaScript OR TypeScript) ':skills.includes('python')?'Python ':'';
+ const developmentTitles=groups.filter(group=>group.development).flatMap(group=>group.titles);
+ // Current development skills deserve their own focused searches. Requiring
+ // every language, role alias and career-direction term loses valid adverts.
+ const focusedPlace=country?place:({international:'Germany',europe:'Germany',africa:'"South Africa"',asia:'Singapore',oceania:'Australia','north-america':'Canada','south-america':'Brazil'}[region]);
+ const developmentQueries=developmentTitles.length?chunks(developmentTitles,employerSites,focusedPlace+' '+developerStack+'job',16):[];
+ return [...developmentQueries,...[0,1,2,3].flatMap(batch=>chunks(groups.filter(group=>group.batch===batch).flatMap(group=>group.titles))),...chunks(groups.flatMap(group=>group.titles),'site:linkedin.com/jobs/view/ ')];
 }
 // A result index may contain many real adverts. It cannot be treated as a
 // single vacancy even when structured extraction selects one of its cards.
 export function listingIndexURL(value){
  const u=new URL(value),host=u.hostname.toLowerCase(),path=u.pathname.toLowerCase();
  if(/(^|\.)remoterocketship\.com$/.test(host)&&/^\/country\//.test(path))return true;
+ if(/(^|\.)ziprecruiter\.com$/.test(host)&&/^\/jobs\//.test(path))return true;
  if(/(^|\.)linkedin\.com$/.test(host))return !/^\/jobs\/view\/[^/]+/.test(path);
  if(/(^|\.)indeed\.[a-z.]+$/.test(host))return !/\/(?:viewjob|rc\/clk|pagead\/clk)/.test(path)&&!u.searchParams.has('jk');
- return /(?:^|\/)(?:jobs\/search|search|search-jobs|job-search|jobs-search)(?:\/|$)/.test(path)||/\/q-[^/]+/.test(path)||/\/(?:jobs|careers)\/?$/.test(path);
+ return /(?:^|\/)(?:jobs\/(?:search|all)|search|search-jobs|job-search|jobs-search)(?:\/|$)/.test(path)||/\/q-[^/]+/.test(path)||/\/(?:jobs|careers)\/?$/.test(path);
 }
 async function call(endpoint,body,{fetcher=fetch,apiKey=process.env.FIRECRAWL_API_KEY,timeout=45000,deadline=Infinity,pause=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={},attempt=0){
  const headers={'Content-Type':'application/json'};if(apiKey)headers.Authorization='Bearer '+apiKey;
@@ -52,7 +65,7 @@ async function call(endpoint,body,{fetcher=fetch,apiKey=process.env.FIRECRAWL_AP
  if(response.status===429){
   const retryAfter=Math.max(2,Math.min(60,Number(response.headers?.get('Retry-After'))||10));
   if(!attempt&&retryAfter<=10&&deadline-Date.now()>retryAfter*1000+1000){await pause(retryAfter*1000);return call(endpoint,body,{fetcher,apiKey,timeout,deadline,pause},1);}
-  throw Object.assign(failure('Firecrawl is receiving too many requests. The search will retry after a short pause.',429,'FIRECRAWL_RATE_LIMIT'),{retryAfter});
+  throw Object.assign(failure('Firecrawl is receiving too many requests. Please retry after a short pause.',429,'FIRECRAWL_RATE_LIMIT'),{retryAfter});
  }
  if(!response.ok||data.success!==true)throw failure('Firecrawl could not read this source. Try again or use the employer’s listing.');
  return data.data;
@@ -79,7 +92,9 @@ export function normalizeFirecrawlJob(data,url){
 async function readJob(url,options){
  const key='page:'+url,existing=cache.get(key);
  if(existing&&Date.now()-existing.time<60*60*1000)return existing.job;
- if(!pending.has(key))pending.set(key,call('scrape',{url,formats:['markdown',{type:'json',schema,prompt:prompt+' Include all advertised job locations in location, not just the first.'}],onlyMainContent:true,maxAge:0,timeout:40000},options).then(data=>{const job=normalizeFirecrawlJob(data,url);cache.set(key,{time:Date.now(),job});if(cache.size>100)cache.delete(cache.keys().next().value);return job;}).finally(()=>pending.delete(key)));
+ const host=new URL(url).hostname,sourceKey=createHash('sha256').update(options.apiKey||process.env.FIRECRAWL_API_KEY||'').digest('hex')+':'+(/(^|\.)linkedin\.com$/.test(host)?'linkedin.com':host),blocked=blockedSources.get(sourceKey);
+ if(blocked&&Date.now()-blocked.time<10*60*1000)throw blocked.error;
+ if(!pending.has(key))pending.set(key,call('scrape',{url,formats:['markdown',{type:'json',schema,prompt:prompt+' Include all advertised job locations in location, not just the first.'}],onlyMainContent:true,maxAge:0,timeout:40000},options).then(data=>{const job=normalizeFirecrawlJob(data,url);cache.set(key,{time:Date.now(),job});if(cache.size>100)cache.delete(cache.keys().next().value);return job;}).catch(error=>{if(error.code==='FIRECRAWL_SOURCE_BLOCKED'){blockedSources.set(sourceKey,{time:Date.now(),error});if(blockedSources.size>64)blockedSources.delete(blockedSources.keys().next().value);}throw error;}).finally(()=>pending.delete(key)));
  return pending.get(key);
 }
 export async function importFirecrawlJob(url,options={}){
@@ -92,7 +107,7 @@ export async function firecrawlSearchBatch(query,options={}){
  const data=await call('search',{query,limit:5,sources:[{type:'web'}],timeout:15000},{...options,timeout:20000});
  if(!Array.isArray(data?.web))throw failure('Firecrawl returned unreadable search results.');
  const priority=url=>/jobs\.ashbyhq\.com|(?:job-)?boards\.greenhouse\.io|jobs(?:\.eu)?\.lever\.co|apply\.workable\.com|jobs\.smartrecruiters\.com|join\.com/i.test(new URL(url).hostname)?0:/linkedin\.com$/i.test(new URL(url).hostname)?2:1;
- const urls=[...new Set(data.web.map(r=>{try{const url=publicListingURL(r.url);return listingIndexURL(url)?null:url;}catch{return null;}}).filter(Boolean))].sort((a,b)=>priority(a)-priority(b)).slice(0,3);
+ const urls=[...new Map(data.web.map(r=>{try{const url=publicListingURL(r.url);return listingIndexURL(url)?null:[url,{url,title:r.title||''}];}catch{return null;}}).filter(Boolean)).values()].sort((a,b)=>Number(isSeniorRole(a))-Number(isSeniorRole(b))||priority(a.url)-priority(b.url)).slice(0,3).map(r=>r.url);
  const results=[];
  // Two concurrent reads avoid filling the free plan's browser queue.
  for(let i=0;i<urls.length;i+=2)results.push(...await Promise.allSettled(urls.slice(i,i+2).map(url=>readJob(url,options))));

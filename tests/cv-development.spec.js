@@ -1,0 +1,12 @@
+import {test,expect} from '@playwright/test';
+const evidence='Experience: Full Stack Developer · Example · September 2024 - Present.\nBuilt TypeScript and React applications, REST API integrations and SQL reports.\nDelivered requirements, testing and automated deployment.';
+const job={id:'software',company:'Matching software employer',title:'Junior Full Stack Developer',location:'Berlin, Germany',link:'https://example.org/software',description:'Responsibilities:\nHands-on software development, REST APIs and automated testing.\nRequirements:\nTypeScript experience.\nReact experience.\nSQL experience.\nEnglish proficiency.'};
+test('development experience widens the actual search and shows only qualified software roles',async({page})=>{
+ const requests=[];await page.addInitScript(evidence=>{localStorage.setItem('job-notebook-v1','[]');localStorage.setItem('job-notebook-profile-v1',JSON.stringify({evidence,languages:'English C1'}));localStorage.setItem('job-notebook-international-v23','1');},evidence);
+ await page.route('**/api/jobs*',r=>{requests.push(r.request().url());return r.fulfill({json:{jobs:[job,{...job,id:'too-senior',link:'https://example.org/senior',description:job.description+'\n5 years of software development experience.'},{...job,id:'wrong-skills',link:'https://example.org/other',description:'Requirements:\nSwift expertise.\niOS development experience.\nKotlin experience.\nEnglish proficiency.'}],nextPage:null,nextSearch:null}});});
+ await page.goto('/');await expect(page.locator('#deck-count')).toHaveText('1 role to explore');await expect(page.locator('#active-card')).toContainText('Matching software employer');await expect(page.locator('#search-role-areas')).toContainText('Software & low-code');expect(new URL(requests[0]).searchParams.get('development')).toBe('1');await expect(page.locator('.cv-tag')).toContainText('Full Stack Developer CV');
+});
+test('generic business evidence does not turn on development searches',async({page})=>{
+ const requests=[];await page.addInitScript(()=>{localStorage.setItem('job-notebook-profile-v1',JSON.stringify({evidence:'Requirements documentation, SQL reports and stakeholder coordination.'}));});
+ await page.route('**/api/jobs*',r=>{requests.push(r.request().url());return r.fulfill({json:{jobs:[job],nextPage:null,nextSearch:null}});});await page.goto('/');await expect(page.locator('#active-card')).toHaveCount(0);await expect(page.locator('#search-role-areas')).not.toContainText('Software & low-code');expect(new URL(requests[0]).searchParams.has('development')).toBe(false);
+});

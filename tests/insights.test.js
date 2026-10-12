@@ -1,5 +1,11 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {germanRequirement,roleInsights} from '../lib/insights.js';
+import {listingSections} from '../lib/insights.js';
+test('plural markdown nice-to-haves stay optional and nested must-have headings are not requirements',()=>{
+ const text='### What We’re Looking For: Must-Haves:\n- Solid professional experience with **TypeScript**.\n### Nice-to-Haves:\n- Fluent German skills (spoken and written).\n- Experience with **Figma**.';
+ const sections=listingSections(text);assert.deepEqual(sections.requirements,['Solid professional experience with TypeScript.']);assert.deepEqual(sections.preferred,['Fluent German skills (spoken and written).','Experience with Figma.']);
+ const points=roleInsights({description:text},{evidence:'Built TypeScript applications. I have not used Figma.',languages:'German B1'}).requirements;assert(points.filter(p=>/German|Figma/.test(p.label)).every(p=>p.preferred));
+});
 import {gzipSync} from 'node:zlib';import setup from '../api/setup.js';
 test('German levels are scoped to the language and compared with B1',()=>{
  assert.equal(germanRequirement('English C1 and German B1 required.').status,'match');
