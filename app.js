@@ -319,7 +319,7 @@ async function requestFitReview(job){
  finally{
   activeReviews.delete(key);
   renderDeck();
-  const current=deckJobs()[0]||nextReviewCandidate();
+  const current=fitReviewRetries.has(key)?job:(activeView==='discover'?deckJobs().find(candidate=>!fullReview(candidate)&&!activeReviews.has(fitReviewKey(candidate))):null)||nextReviewCandidate();
   updateReviewStatus();
   if(current&&(fitReviewKey(current)!==key||fitReviewRetries.has(key)&&!fitReviewErrors.has(key)))scheduleFitReview(current);
  }
