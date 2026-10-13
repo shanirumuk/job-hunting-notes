@@ -581,7 +581,8 @@ async function refreshJobs(more=false) {
   discovery.reviewed ||= {};
   for(const job of discovery.jobs)if(discovery.decisions[job.id])discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link};
   const refreshedBoards=new Set(data.stale?[]:data.refreshedEmployerBoards||[]),incomingIds=new Set(incoming.map(j=>j.id));
-  const retained=discovery.jobs.filter(j=>!j.employerBoard||!refreshedBoards.has(j.employerBoard)||incomingIds.has(j.id)||discovery.decisions[j.id]);
+  const listedIds=Array.isArray(data.listedEmployerJobIds)?new Set(data.listedEmployerJobIds):incomingIds;
+  const retained=discovery.jobs.filter(j=>!j.employerBoard||!refreshedBoards.has(j.employerBoard)||listedIds.has(j.id)||discovery.decisions[j.id]);
   const merged=new Map(retained.map(j=>[j.id,j]));for(const job of incoming)merged.set(job.id,job);
   // Keep full descriptions for relevant roles, plus recent reviewed cards for undo/revisit.
   const all=[...merged.values()];

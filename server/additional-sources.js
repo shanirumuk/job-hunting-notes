@@ -42,13 +42,13 @@ async function cached(key,fetcher){
 export async function additionalSources(fetcher=fetch,{useCache=true,development=false}={}){
  const sources=[{name:'Remote OK',key:'remoteok',load:()=>fetchRemoteOK(fetcher)},...employerBoards.map(board=>({name:board.company+' careers',key:board.slug,board:board.slug,load:()=>fetchEmployerBoard(board,fetcher)}))];
  const results=await Promise.allSettled(sources.map(s=>useCache?cached(s.key,s.load):s.load()));
- const jobs=[],sourceErrors=[],refreshedEmployerBoards=[];
+ const jobs=[],sourceErrors=[],refreshedEmployerBoards=[],listedEmployerJobIds=[];
  for(const [i,result] of results.entries()){
   const source=sources[i];
   if(result.status==='rejected'){sourceErrors.push(source.name);continue;}
-  if(source.board)refreshedEmployerBoards.push(source.board);
+  if(source.board){refreshedEmployerBoards.push(source.board);listedEmployerJobIds.push(...result.value.map(j=>j.id));}
   // Avoid downloading hundreds of unrelated engineering and sales postings.
   jobs.push(...result.value.filter(j=>/analyst|implement|consult|success|operations|project|product|solutions|support|integration|delivery|business systems/i.test(j.title)||development&&/developer|(?:software|front[ -]?end|back[ -]?end|full[ -]?stack) engineer/i.test(j.title)));
  }
- return {jobs,sourceErrors,refreshedEmployerBoards};
+ return {jobs,sourceErrors,refreshedEmployerBoards,listedEmployerJobIds};
 }

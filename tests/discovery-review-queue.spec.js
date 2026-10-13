@@ -91,3 +91,11 @@ test('private server comparisons restore a ready card in a browser without a loc
  await page.goto('/?server-ready=1#discover');await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','queue-0');await expect(page.locator('.card-fit-summary')).toContainText('8/10');expect(paid).toBe(0);
  await page.locator('.main-nav [data-view="notebook"]').click();await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','queue-0');expect(paid).toBe(0);
 });
+
+test('a source batch cap does not remove a ready role still present in the full employer list',async({page})=>{
+ await setup(page,{inputJobs:[]});const cached={...jobs[0],employerBoard:'example'};
+ await page.route('**/api/review-cache',r=>{const input={job:{title:cached.title,location:cached.location,remote:false,description:cached.description},profile:r.request().postDataJSON().profile},hash=createHash('sha256').update(JSON.stringify([7,new Date().toISOString().slice(0,7),input])).digest('hex');return r.fulfill({json:{records:[{hash,job:cached,review,savedAt:Date.now()}]}});});
+ await page.goto('/?listed-ready=1#discover');await expect(page.locator('#active-card')).toHaveAttribute('data-job-id',cached.id);
+ await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[],refreshedEmployerBoards:['example'],listedEmployerJobIds:[cached.id],nextPage:null,nextSearch:null}}));
+ await page.locator('#refresh-jobs').click();await expect(page.locator('#refresh-jobs')).toBeEnabled();await expect(page.locator('#active-card')).toHaveAttribute('data-job-id',cached.id);
+});

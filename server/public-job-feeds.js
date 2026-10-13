@@ -13,12 +13,14 @@ export async function publicJobFeeds(input,{fetcher=fetch,useCache=true}={}){
  const load=async()=>{
   const sources=[['Arbeitnow',()=>fetchJobs(fetcher)],['Remotive',()=>fetchRemoteJobs(fetcher)],['Jobicy',()=>fetchInternationalJobs(fetcher)],['Employer careers',()=>additionalSources(fetcher,{useCache,development})]];
   const results=await Promise.allSettled(sources.map(([,load])=>load()));
-  const jobs=[],sourceErrors=[],refreshedEmployerBoards=[],sourcesChecked=[];
+  const jobs=[],sourceErrors=[],refreshedEmployerBoards=[],sourcesChecked=[],listedEmployerJobIds=[];
   for(const [i,result] of results.entries()){
    if(result.status==='rejected'){sourceErrors.push(sources[i][0]);continue;}
    sourcesChecked.push(sources[i][0]);const value=result.value;
    const rows=Array.isArray(value)?value:value.jobs;
    sourceErrors.push(...(value.sourceErrors||[]));refreshedEmployerBoards.push(...(value.refreshedEmployerBoards||[]));
+   if(Array.isArray(value.listedEmployerJobIds))listedEmployerJobIds.push(...value.listedEmployerJobIds);
+   else for(const job of rows)if(job.employerBoard&&value.refreshedEmployerBoards?.includes(job.employerBoard))listedEmployerJobIds.push(job.id);
    for(const job of rows){
     if(/\b(?:United States|USA|US)\b/i.test(job.location)&&!locationInfo(job).continents.length)continue;
     const role=/analyst|implement|consult|onboard|project|process|product|operations|integration|application|customer success/i.test(job.title)||development&&/developer|(?:software|front[ -]?end|back[ -]?end|full[ -]?stack) engineer/i.test(job.title);
@@ -31,7 +33,7 @@ export async function publicJobFeeds(input,{fetcher=fetch,useCache=true}={}){
   const patterns={javascript:/\b(?:JavaScript|TypeScript|React|Next[ .]?js|Node[ .]?js)\b/i,python:/\bPython\b/i,api:/\bAPIs?\b/i,sql:/\b(?:SQL|PostgreSQL|MySQL)\b/i,crm:/\bCRM\b/i,requirements:/requirements|business analysis/i,testing:/testing|automated tests?/i,workflows:/workflow|process improvement/i};
   const priority=job=>skills.reduce((n,key)=>n+(patterns[key]?.test(job.description||'')?(key===skills[0]?2:1):0),0);
   jobs.sort((a,b)=>Number(isSeniorRole(a))-Number(isSeniorRole(b))||priority(b)-priority(a));
-  const value={jobs:diverseAdverts(jobs,100),sourceErrors,refreshedEmployerBoards,sourcesChecked,nextPage:null,nextSearch:'start',source:'Employer careers and public job feeds',fetchedAt:new Date().toISOString()};
+  const value={jobs:diverseAdverts(jobs,100),sourceErrors,refreshedEmployerBoards,listedEmployerJobIds,sourcesChecked,nextPage:null,nextSearch:'start',source:'Employer careers and public job feeds',fetchedAt:new Date().toISOString()};
   if(useCache&&(jobs.length||!sourceErrors.length)){cache.set(key,{time:Date.now(),value});if(cache.size>30)cache.delete(cache.keys().next().value);}
   return value;
  };
