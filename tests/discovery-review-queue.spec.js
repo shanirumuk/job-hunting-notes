@@ -59,3 +59,18 @@ test('unsuitable candidates cannot empty the review budget again on every reload
  await page.reload();await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('[data-more-reviews]')).toBeVisible();await page.waitForTimeout(450);expect(calls).toBe(12);
  await page.locator('[data-more-reviews]').click();await expect.poll(()=>calls).toBe(20);
 });
+
+test('a returning shortlist starts its refill as soon as the connection is verified without waiting for a feed refresh',async({page})=>{
+ const many=Array.from({length:15},(_,i)=>({...jobs[0],id:'warm-'+i,company:'Employer '+i,link:'https://example.org/warm/'+i,description:jobs[0].description+' Department '+i+'.'}));
+ await setup(page,{inputJobs:many});
+ await page.evaluate(async review=>{
+  const {setItem}=await import('/lib/device-store.js?v=80'),{defaultProfile}=await import('/lib/model.js?v=78');const p={...defaultProfile,...JSON.parse(localStorage.getItem('job-notebook-profile-v1'))},j=JSON.parse(localStorage.getItem('job-notebook-discovery-v1')).jobs[0];
+  const input={job:{title:j.title,location:j.location,remote:!!j.remote,description:j.description},profile:Object.fromEntries(['evidence','languages','workRights','salaryTarget','motivation','workStyle','startDate','relocation'].map(k=>[k,p[k]||'']))};
+  const key=JSON.stringify([7,new Date().toISOString().slice(0,7),input]),hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(key))),b=>b.toString(16).padStart(2,'0')).join('');await setItem('fit-reviews',{[hash]:review});
+ },review);
+ let verify;await page.route('**/api/setup',async r=>{if(r.request().postDataJSON()?.action!=='profile-corrections')return r.fulfill({status:503,json:{error:'PDF restore is not part of this test'}});await new Promise(resolve=>verify=resolve);await r.fulfill({json:{reviewProvider:{provider:'openai',configured:true}}}).catch(()=>{});});
+ const waiting=[];await page.route('**/api/fit-review',async r=>{await new Promise(resolve=>waiting.push(resolve));await r.fulfill({json:{review}}).catch(()=>{});});
+ await page.goto('/?warm-return=1#discover');await expect(page.locator('#deck-count')).toHaveText('1 role to explore');expect(waiting.length).toBe(0);
+ await expect.poll(()=>typeof verify).toBe('function');verify();await expect.poll(()=>waiting.length).toBe(2);await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','warm-0');
+ for(const resolve of waiting)resolve();
+});

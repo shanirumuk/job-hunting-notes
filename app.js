@@ -913,6 +913,7 @@ async function loadBrowserConnection(restore=true) {
   }catch(error){$('browser-connection-status').textContent=error.name==='TimeoutError'?'Connection check timed out. Try Check connection again.':error.message;}
   $('check-private-connection').disabled=!browserConnection;
   updateReviewStatus();
+  renderDeck();
   const job=deckJobs()[0]||nextReviewCandidate();if(job){const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(job);requestSummary(job);scheduleFitReview(job);}else renderDeck();
   $('test-browser').disabled=!browserConnection;$('disconnect-browser').hidden=!browserConnection;
   alertInbox?.connectionChanged();
