@@ -20,6 +20,10 @@ test('a failed feed retains other adverts and hands continuation to Firecrawl',a
  const d=await publicJobFeeds({region:'africa'},{useCache:false,fetcher:async url=>{if(url.includes('arbeitnow.com'))throw Error('Unavailable');return fetcher(url);}});
  assert.equal(d.jobs.length,1);assert(d.sourceErrors.includes('Arbeitnow'));assert.equal(d.nextSearch,'start');
 });
+test('the complete live employer index survives role filters and result limits',async()=>{
+ const d=await publicJobFeeds({region:'europe',development:false},{useCache:false,fetcher:async url=>url.includes('/job-board/linear?')?response({jobs:[{id:'listed-hidden-role',title:'Staff Platform Engineer',isListed:true,jobUrl:'https://example.org/live',location:'Berlin',descriptionPlain:'Unrelated engineering role.'}]}):fetcher(url)});
+ assert(d.refreshedEmployerBoards.includes('linear'));assert(d.listedEmployerJobIds.includes('ashby-linear-listed-hidden-role'));assert(!d.jobs.some(j=>j.id==='ashby-linear-listed-hidden-role'));
+});
 test('the actual jobs handler serves an initial feed batch and validates dated experience before network work',async()=>{
  const calls=[];const handler=createJobsHandler({useCache:false,fetcher:async(...args)=>{calls.push(args[0]);return fetcher(...args);}});
  const request=async url=>{const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};await handler({method:'GET',url,headers:{}},res);return res;};
