@@ -967,6 +967,7 @@ for(const button of document.querySelectorAll('[data-browser-input]'))button.add
   catch(error){toast(error.message);}finally{button.disabled=false;}
 });
 window.addEventListener('pagehide',releaseBrowserSession);
+window.addEventListener('pagehide',()=>{feedRequestId++;feedController?.abort();loading=false;clearTimeout(feedRetryTimer);});
 $('close-browser').addEventListener('click',endApplicationBrowser);$('browser-end').addEventListener('click',endApplicationBrowser);
 $('browser-dialog').addEventListener('cancel',e=>{e.preventDefault();endApplicationBrowser();});
 $('browser-submitted').addEventListener('click',()=>{const entry=entries.find(e=>e.id===browserEntryId);if(entry){entry.status='Applied';entry.applicationDate=today();saveEntries();undoAction=null;render();}endApplicationBrowser();toast('Recorded as submitted by you.');});
@@ -1195,7 +1196,9 @@ if(!consumeApplicationLink()){setView(location.hash.slice(1));render();}
 if (storageError) toast('Some saved data could not be read. Export a backup before making changes.');
 if(privateRecoveryResult)toast(privateRecoveryResult.message);
 if (discovery.fetchedAt&&!deckJobs().length) $('feed-status').textContent = discovery.lastError||`Feed last retrieved ${dateText(discovery.fetchedAt)} · This is not the posting date`;
-if (feedError||!discovery.fetchedAt || Date.now() - new Date(discovery.fetchedAt).getTime() > 60*60*1000) refreshJobs(feedError&&hasMoreJobs());
+// A returning visit checks the free feeds first. A failed or interrupted fetch
+// must not turn reloading the app into another paid web-search request.
+if (feedError||!discovery.fetchedAt || Date.now() - new Date(discovery.fetchedAt).getTime() > 60*60*1000) refreshJobs();
 
 document.addEventListener('click',event=>{if(event.target.closest('[data-edit-evidence]')){setView('profile');const field=$('profile-evidence');field.closest('details').open=true;field.focus();field.scrollIntoView({block:'center'});}if(event.target.closest('[data-retry-summary]')){const job=deckJobs()[0];if(job){summaryErrors.delete(job.id);$('role-summary').innerHTML=summaryMarkup(job);requestSummary(job);}}});
 

@@ -43,6 +43,12 @@ test('ten ready roles pause paid work, five consumed roles trigger a refill and 
  let release;await page.route('**/api/setup',async route=>{await new Promise(resolve=>release=resolve);await route.fulfill({json:{reviewProvider:{provider:'openai',configured:true}}}).catch(()=>{});});
  await page.reload({waitUntil:'domcontentloaded'});await expect(page.locator('#deck-count')).toHaveText('10 roles to explore');await expect(page.locator('#active-card')).toBeVisible();
  expect(waiting.length).toBe(15);release?.();
+ // A stale source failure on return refreshes the free feeds, retaining ready
+ // cards, rather than resuming a paid Firecrawl cursor automatically.
+ await page.route('**/api/setup',r=>r.fulfill({json:{reviewProvider:{provider:'openai',configured:true}}}));
+ const refreshed=[];await page.route('**/api/jobs*',r=>{refreshed.push(r.request().url());return r.fulfill({json:{jobs:many,nextPage:null,nextSearch:'start'}});});
+ await page.evaluate(()=>{const d=JSON.parse(localStorage.getItem('job-notebook-discovery-v1'));d.fetchedAt='2020-01-01';d.lastError='Source interrupted';d.nextSearch='start';localStorage.setItem('job-notebook-discovery-v1',JSON.stringify(d));});
+ await page.reload();await expect(page.locator('#deck-count')).toHaveText('10 roles to explore');await expect.poll(()=>refreshed.length).toBe(1);expect(new URL(refreshed[0]).searchParams.has('search')).toBe(false);expect(waiting.length).toBe(15);
 });
 
 test('unsuitable candidates cannot empty the review budget again on every reload',async({page})=>{
