@@ -23,3 +23,33 @@ test('failed background checks have a working retry when no cards are visible',a
  let calls=0;await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({status:503,json:{error:'Temporary review failure'}});});await setup(page);await page.locator('.main-nav [data-view="discover"]').click();await expect.poll(()=>calls).toBe(4);await expect(page.locator('#active-card')).toHaveCount(0);await expect(page.locator('[data-retry-fit]')).toContainText('Retry CV checks');
  await page.route('**/api/fit-review',r=>r.fulfill({json:{review}}));await page.locator('[data-retry-fit]').click();await expect(page.locator('#active-card')).toHaveCount(1);
 });
+
+test('ten ready roles pause paid work, five consumed roles trigger a refill and cached cards render before connection checks',async({page})=>{
+ const many=Array.from({length:20},(_,i)=>({...jobs[0],id:'buffer-'+i,company:'Employer '+i,link:'https://example.org/buffer/'+i,description:jobs[0].description+' Department '+i+'.'}));
+ const waiting=[];let sources=0;
+ await page.route('**/api/fit-review',async route=>{await new Promise(resolve=>waiting.push({resolve}));await route.fulfill({json:{review}}).catch(()=>{});});
+ await setup(page,{inputJobs:many});
+ await page.route('**/api/jobs*',r=>{sources++;return r.fulfill({json:{jobs:many,nextPage:null,nextSearch:'start'}});});
+ await page.locator('.main-nav [data-view="discover"]').click();
+ for(let i=0;i<10;i++){await expect.poll(()=>waiting.length).toBeGreaterThan(i);waiting[i].resolve();await expect(page.locator('#deck-count')).toHaveText(`${i+1} role${i?'s':''} to explore`);}
+ await expect(page.locator('#feed-status')).toContainText('Refill at 5 remaining');
+ await page.waitForTimeout(450);expect(waiting.length).toBe(10);expect(sources).toBe(0);
+ for(let i=0;i<4;i++)await page.locator('#pass-job').click();
+ await expect(page.locator('#deck-count')).toHaveText('6 roles to explore');expect(waiting.length).toBe(10);
+ await page.locator('#pass-job').click();await expect(page.locator('#deck-count')).toHaveText('5 roles to explore');
+ for(let i=10;i<15;i++){await expect.poll(()=>waiting.length).toBeGreaterThan(i);waiting[i].resolve();await expect(page.locator('#deck-count')).toHaveText(`${i-4} roles to explore`);}
+ await page.waitForTimeout(450);expect(waiting.length).toBe(15);expect(sources).toBe(0);
+ const saved=await page.evaluate(async()=>Object.keys(await(await import('/lib/device-store.js?v=80')).getItem('fit-reviews')).length);expect(saved).toBe(15);
+ let release;await page.route('**/api/setup',async route=>{await new Promise(resolve=>release=resolve);await route.fulfill({json:{reviewProvider:{provider:'openai',configured:true}}}).catch(()=>{});});
+ await page.reload({waitUntil:'domcontentloaded'});await expect(page.locator('#deck-count')).toHaveText('10 roles to explore');await expect(page.locator('#active-card')).toBeVisible();
+ expect(waiting.length).toBe(15);release?.();
+});
+
+test('unsuitable candidates cannot empty the review budget again on every reload',async({page})=>{
+ const many=Array.from({length:20},(_,i)=>({...jobs[0],id:'budget-'+i,company:'Employer '+i,link:'https://example.org/budget/'+i,description:jobs[0].description+' Department '+i+'.'}));
+ let calls=0;await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({json:{review:{...review,skills:2,skillsLower:2}}});});await setup(page,{inputJobs:many});
+ await page.locator('.main-nav [data-view="discover"]').click();await expect.poll(()=>calls).toBe(12);await expect(page.locator('[data-more-reviews]')).toBeVisible();
+ const saved=await page.evaluate(async()=>Object.keys(await(await import('/lib/device-store.js?v=80')).getItem('fit-reviews')).length);expect(saved).toBe(12);
+ await page.reload();await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('[data-more-reviews]')).toBeVisible();await page.waitForTimeout(450);expect(calls).toBe(12);
+ await page.locator('[data-more-reviews]').click();await expect.poll(()=>calls).toBe(20);
+});

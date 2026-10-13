@@ -23,10 +23,13 @@ test('full review updates compact checks, uses local cache and refreshes after p
 test('late reviews cannot replace another job and errors offer a retry',async({page})=>{
  let release;const gate=new Promise(resolve=>release=resolve);let calls=0;
  await page.route('**/api/fit-review',async r=>{calls++;if(calls===1){await gate;await r.fulfill({json:{review}});}else if(calls===2)await r.fulfill({status:503,json:{error:'Review unavailable.'}});else await r.fulfill({json:{review:{...review,summary:'Second role reviewed.'}}});});
- await connect(page,[job,{...job,id:'second-job',link:'https://example.org/second-job',company:'Another',title:'Implementation Consultant'}]);
- await expect.poll(()=>calls).toBe(1);await page.locator('#pass-job').click();await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','second-job');release();
- await expect(page.locator('#full-review-status')).toContainText('Review unavailable');await expect(page.locator('#role-summary')).not.toContainText(review.summary);
- await page.locator('[data-retry-fit]').click();await expect(page.locator('#role-summary')).toContainText('Second role reviewed.');
+ await connect(page,[]);
+ await page.evaluate(job=>localStorage.setItem('job-notebook-v1',JSON.stringify([job,{...job,id:'second-job',link:'https://example.org/second-job',company:'Another',title:'Implementation Consultant'}].map(j=>({...j,status:'To apply',notes:'',applicationDate:'',interviewDate:''})))),job);
+ await page.reload();await page.locator('.main-nav [data-view="notebook"]').click();
+ await page.locator('[data-fit-entry="full-review-fixture"]').click();await expect.poll(()=>calls).toBe(1);await page.keyboard.press('Escape');
+ await page.locator('[data-fit-entry="second-job"]').click();await expect(page.locator('#fit-dialog-review-status')).toContainText('Review unavailable');release();
+ await expect(page.locator('#role-title')).toHaveText('Another');await expect(page.locator('#role-content')).not.toContainText(review.summary);
+ await page.locator('[data-retry-fit]').click();await expect(page.locator('#role-content')).toContainText('Second role reviewed.');
 });
 
 test('confirmed language and relocation corrections apply once without undoing later profile edits',async({page})=>{
@@ -51,10 +54,9 @@ test('busy reviews retry automatically and show progress in the Fit dialog',asyn
  let calls=0,release;const gate=new Promise(resolve=>release=resolve);
  await page.route('**/api/fit-review',async r=>{calls++;if(calls===1)await r.fulfill({status:429,headers:{'Retry-After':'2'},json:{error:'Busy'}});else{await gate;await r.fulfill({json:{review}});}});
  await connect(page);
- await expect(page.locator('#full-review-status')).toContainText('Retrying automatically');
- await page.locator('.listing-info').click();await expect(page.locator('#fit-dialog-review-status')).toContainText('Retrying automatically');
- await expect.poll(()=>calls).toBe(2);await expect(page.locator('#fit-dialog-review-status')).toContainText('1–4 minutes');
- release();await expect(page.locator('#role-content')).toContainText('APPLICATION RECOMMENDATION');await expect(page.locator('.fit-score')).toContainText('6.5');
+ await expect.poll(()=>calls).toBe(1);await expect(page.locator('#active-card')).toHaveCount(0);
+ await expect.poll(()=>calls).toBe(2);await expect(page.locator('#candidate-review-status')).toContainText('1 CV check');
+ release();await expect(page.locator('.card-fit-summary')).toContainText('8/10');await page.locator('.listing-info').click();await expect(page.locator('#role-content')).toContainText('APPLICATION RECOMMENDATION');await expect(page.locator('.fit-score')).toContainText('6.5');
 });
 
 test('saved connection is verified with the server and can be rechecked after rejection',async({page})=>{
@@ -72,12 +74,11 @@ test('exhausted provider allowance is explained and stops automatic calls across
  await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({status:402,json:{code:'REVIEW_QUOTA_EXHAUSTED',error:'Full reviews are paused because the Browserbase allowance is exhausted.'}});});
  await connect(page,[job,{...job,id:'quota-second',title:'Implementation Consultant',company:'Other',link:'https://example.org/other'}]);
  await page.route('**/api/summary',r=>{summaries++;return r.fulfill({status:503,json:{error:'Summary unavailable'}});});
- await expect(page.locator('#full-review-status')).toContainText('allowance is exhausted');
- await page.locator('#pass-job').click();await expect(page.locator('#full-review-status')).toContainText('allowance is exhausted');
- await page.locator('.listing-info').click();await expect(page.locator('#fit-dialog-review-status')).toContainText('allowance is exhausted');
+ await expect(page.locator('.deck-empty')).toContainText('allowance is exhausted');await expect(page.locator('#active-card')).toHaveCount(0);
+ await page.locator('.main-nav [data-view="notebook"]').click();await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('.deck-empty')).toContainText('allowance is exhausted');
  expect(calls).toBe(1);expect(summaries).toBe(0);
  await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({json:{review}});});
- await page.locator('#fit-dialog-review-status [data-retry-fit]').click();await expect(page.locator('#role-content')).toContainText('APPLICATION RECOMMENDATION');expect(calls).toBe(2);
+ await page.locator('[data-retry-fit]').click();await expect(page.locator('.card-fit-summary')).toContainText('8/10');await expect.poll(()=>calls).toBe(3);
 });
 
 test('confirmed analytical and requirements evidence is added without replacing imported CVs',async({page})=>{
@@ -102,9 +103,8 @@ test('missing OpenAI setup is visible without launching repeated failed reviews'
  await connect(page);
  let calls=0;await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({json:{review}});});
  await page.route('**/api/setup',r=>r.fulfill({json:{correction:null,reviewProvider:{provider:'openai',model:'gpt-6-luna',configured:false}}}));
- await page.reload();await expect(page.locator('#browser-connection-status')).toContainText('OpenAI setup is needed');await expect(page.locator('#full-review-status')).toContainText('OPENAI_API_KEY');
- await page.locator('.listing-info').click();await expect(page.locator('#fit-dialog-review-status')).toContainText('OpenAI setup is needed');expect(calls).toBe(0);
- await page.keyboard.press('Escape');await page.route('**/api/setup',r=>r.fulfill({json:{correction:null,reviewProvider:{provider:'openai',model:'gpt-6-luna',configured:true}}}));
+ await page.reload();await expect(page.locator('#browser-connection-status')).toContainText('OpenAI setup is needed');await expect(page.locator('.deck-empty')).toContainText('OPENAI_API_KEY');await expect(page.locator('#active-card')).toHaveCount(0);expect(calls).toBe(0);
+ await page.route('**/api/setup',r=>r.fulfill({json:{correction:null,reviewProvider:{provider:'openai',model:'gpt-6-luna',configured:true}}}));
  await page.reload();await expect(page.locator('#browser-connection-status')).toContainText('GPT-6 Luna is configured');await expect(page.locator('.card-fit-summary')).toContainText('Skills alignment: 8/10');
 });
 
@@ -168,6 +168,6 @@ test('background review can recognise transferable skills before a role enters s
 });
 test('a full review below the threshold removes the role without recording a pass or application',async({page})=>{
  await page.route('**/api/fit-review',r=>r.fulfill({json:{review:{...review,skills:5}}}));
- await connect(page);await expect(page.locator('#toast')).toContainText('insufficient skills or experience evidence');await expect(page.locator('#active-card')).toHaveCount(0);
+ await connect(page);await expect.poll(()=>page.evaluate(async()=>Object.keys(await(await import('/lib/device-store.js?v=80')).getItem('fit-reviews')||{}).length)).toBe(1);await expect(page.locator('#candidate-review-status')).toBeHidden();await expect(page.locator('#active-card')).toHaveCount(0);await expect(page.locator('#toast')).toBeHidden();
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-v1')))).toEqual([]);expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-discovery-v1')).decisions)).toEqual({});
 });

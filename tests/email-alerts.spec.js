@@ -13,7 +13,8 @@ test('email alerts persist matching candidates, hide gaps and preserve submitted
  },{profile,saved});
  await page.route('**/api/**',async route=>{
   const path=new URL(route.request().url()).pathname,body=route.request().postDataJSON()||{};
-  if(path==='/api/setup')return route.fulfill({json:{reviewProvider:{provider:'openai',configured:false}}});
+  if(path==='/api/setup')return route.fulfill({json:{reviewProvider:{provider:'openai',configured:true}}});
+  if(path==='/api/fit-review')return route.fulfill({json:{review:{version:7,skills:8,skillsLower:8,overall:8,cv:'Business Analyst CV',summary:'SQL and English are supported.',points:[],factors:[],audit:[],issues:[]}}});
   if(path==='/api/jobs')return route.fulfill({json:{jobs:[],nextPage:null,nextSearch:null,fetchedAt:new Date().toISOString()}});
   if(path==='/api/job-alerts')return route.fulfill({json:body.action==='status'?{configured:true,address:'fixture@alerts.resend.app'}:{processed:['fixture-email'],links:body.seen.includes('fixture-email')?[]:[{url:'https://www.linkedin.com/jobs/view/4473218727/'},{url:'https://www.linkedin.com/jobs/view/4473218728/'}],nextCursor:null,errors:[]}});
   if(path==='/api/import-job'){

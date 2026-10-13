@@ -16,10 +16,15 @@ test('CV-driven discovery excludes support, too many years and weak skills, and 
 test('missing CV asks for evidence and does not present generic recommendations',async({page})=>{
  await setup(page,{evidence:''});await expect(page.locator('#active-card')).toHaveCount(0);await expect(page.locator('.deck-empty')).toContainText('start with your CV');
 });
-test('bounded Firecrawl scan reaches LinkedIn batches after empty employer results',async({page})=>{
+test('empty Firecrawl batches stop at the search allowance and continue only on request',async({page})=>{
  let calls=0;await page.route('**/api/jobs*',r=>{calls++;return r.fulfill({json:{source:'Firecrawl',searchBatchCount:9,jobs:calls===9?[good]:[],nextPage:null,nextSearch:calls<9?'fc:'+calls:null,fetchedAt:new Date().toISOString()}});});
  await page.addInitScript(evidence=>{localStorage.setItem('job-notebook-international-v23','1');localStorage.setItem('job-notebook-profile-v1',JSON.stringify({evidence,languages:'English C1'}));},evidence);
- await page.goto('/');await expect(page.locator('#active-card')).toContainText('Example');expect(calls).toBe(9);
+ await page.route('**/api/setup',r=>r.fulfill({json:{reviewProvider:{provider:'openai',configured:true}}}));
+ await page.route('**/api/job-alerts',r=>r.fulfill({json:{configured:false}}));
+ await page.route('**/api/fit-review',r=>r.fulfill({json:{review:{version:7,skills:8,skillsLower:8,overall:8,summary:'API and SQL evidence.',cv:'Consulting CV',points:[],factors:[],audit:[],issues:[]}}}));
+ await page.goto('/#notebook');await page.evaluate(async()=>{await(await import('/lib/device-store.js?v=80')).setItem('connection',{token:'x'.repeat(43)});});await page.reload();await page.locator('.main-nav [data-view="discover"]').click();
+ await expect.poll(()=>calls).toBe(5);await page.waitForTimeout(400);expect(calls).toBe(5);
+ await page.locator('#empty-refresh').click();await expect(page.locator('#active-card')).toContainText('Example');expect(calls).toBe(9);
 });
 test('pasting a listing link retrieves editable fields and saves the description and LinkedIn source',async({page})=>{
  let calls=0;await page.route('**/api/import-job',r=>{calls++;return r.fulfill({json:{job:{...good,source:'LinkedIn',publishedAt:'2026-10-01',description:good.description}}});});
