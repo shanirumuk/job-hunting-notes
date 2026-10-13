@@ -52,7 +52,9 @@ test('a temporary rate limit retries the initial search automatically and shows 
  await service(page);let calls=0;await page.route('**/api/jobs*',r=>++calls===1?r.fulfill({status:429,headers:{'Retry-After':'2'},json:{code:'FIRECRAWL_RATE_LIMIT',error:'Source busy.',retryAfter:2}}):r.fulfill({json:{jobs:[good],nextPage:null,nextSearch:null}}));
  await seed(page,{connected:false});await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('#feed-status')).toContainText('Retrying in 2 seconds');await expect(page.locator('#active-card')).toContainText('Matching employer');expect(calls).toBe(2);
 });
-test('manual retry after an initial failure uses start instead of the completed-search cursor',async({page})=>{
- await service(page);const requests=[];await page.route('**/api/jobs*',r=>{requests.push(r.request().url());return requests.length===1?r.fulfill({status:503,json:{error:'Temporary source failure'}}):r.fulfill({json:{jobs:[good],nextPage:null,nextSearch:null}});});
- await seed(page,{connected:false});await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('#empty-refresh')).toHaveText('Retry search');await page.locator('#empty-refresh').click();await expect(page.locator('#active-card')).toContainText('Matching employer');expect(new URL(requests[1]).searchParams.get('search')).toBe('start');
+test('an initial source failure retries free feeds automatically without a search button',async({page})=>{
+ await page.clock.install();await service(page,{configured:true});const requests=[];await page.route('**/api/jobs*',r=>{requests.push(r.request().url());return requests.length<=2?r.fulfill({status:503,json:{error:'Temporary source failure'}}):r.fulfill({json:{jobs:[good],nextPage:null,nextSearch:null}});});
+ await page.route('**/api/fit-review',r=>r.fulfill({json:{review:{version:7,skills:8,skillsLower:8,points:[],factors:[],audit:[],cv:'Business Analyst CV',summary:'SQL evidence.'}}}));
+ await seed(page);await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('.deck-empty')).toContainText('Temporary source failure');await expect(page.getByRole('button',{name:/Keep searching|Retry search/})).toHaveCount(0);
+ await page.clock.fastForward(61000);await expect(page.locator('#active-card')).toContainText('Matching employer');expect(new URL(requests.at(-1)).searchParams.has('search')).toBe(false);
 });

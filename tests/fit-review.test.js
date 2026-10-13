@@ -74,10 +74,10 @@ test('review slots expire after terminated requests and late completions do not 
  let now=0;const releases=[];
  const handler=createFitReviewHandler(()=>new Promise(resolve=>releases.push(resolve)),()=>now);
  const previous=process.env.JOB_NOTEBOOK_ACCESS_TOKEN;process.env.JOB_NOTEBOOK_ACCESS_TOKEN='q'.repeat(43);
- const call=async()=>{const res={headers:{},setHeader(k,v){this.headers[k]=v;},status(code){this.code=code;return this;},json(data){this.data=data;}};await handler({method:'POST',headers:{authorization:'Bearer '+'q'.repeat(43)},body:input},res);return res;};
+ const call=async(title='Other')=>{const res={headers:{},setHeader(k,v){this.headers[k]=v;},status(code){this.code=code;return this;},json(data){this.data=data;}};await handler({method:'POST',headers:{authorization:'Bearer '+'q'.repeat(43)},body:{...input,job:{...input.job,title}}},res);return res;};
  try{
-  const first=call(),second=call();const busy=await call();assert.equal(busy.code,429);assert.equal(busy.headers['Retry-After'],'15');
-  now=300001;const third=call(),fourth=call();assert.equal(releases.length,4);
+  const first=call('A'),second=call('B');const busy=await call('C');assert.equal(busy.code,429);assert.equal(busy.headers['Retry-After'],'15');
+  now=300001;const third=call('A'),fourth=call('B');await new Promise(r=>setImmediate(r));assert.equal(releases.length,4);
   releases[0]({});releases[1]({});await Promise.all([first,second]);assert.equal((await call()).code,429);
   releases[2]({});releases[3]({});assert((await Promise.all([third,fourth])).every(r=>r.code===200));
  }finally{if(previous===undefined)delete process.env.JOB_NOTEBOOK_ACCESS_TOKEN;else process.env.JOB_NOTEBOOK_ACCESS_TOKEN=previous;}

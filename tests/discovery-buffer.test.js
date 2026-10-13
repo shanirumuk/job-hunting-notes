@@ -1,6 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readBuffer,advanceBuffer,canFillBuffer} from '../lib/discovery-buffer.js';
+import {readBuffer,advanceBuffer,canFillBuffer,dailyUsage,nextBudgetDay} from '../lib/discovery-buffer.js';
+test('daily credit limits roll over automatically and preserve usage on a returning visit',()=>{
+ const now=Date.parse('2026-10-13T18:00:00Z'),value={day:'2026-10-13',reviews:36,searches:6};
+ assert.deepEqual(dailyUsage(value,now),value);assert.equal(nextBudgetDay(now),Date.parse('2026-10-14T00:00:00Z'));
+ assert.deepEqual(dailyUsage(value,Date.parse('2026-10-14T00:00:00Z')),{day:'2026-10-14',reviews:0,searches:0});
+});
 test('a full shortlist waits until five remain before funding another refill',()=>{
  let buffer=advanceBuffer({refilling:true,reviews:2,searches:1},10);
  assert.equal(buffer.refilling,false);

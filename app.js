@@ -1,5 +1,5 @@
 import {experienceRequirement,experienceWithinLimit,isSeniorRole} from './lib/experience-filter.js';
-import {listingFreshness} from './lib/listing-freshness.js';
+import {listingFreshness} from './lib/listing-freshness.js?v=83';
 import {mountListingHighlights,validHighlights} from './lib/listing-highlights.js';
 import {applyProfileCorrections} from './lib/profile-corrections.js';
 import {REVIEW_VERSION,reviewInsights,factorLabels,reviewClearsDiscovery,ratingCategory,scoreReview} from './lib/fit-review.js?v=78';
@@ -9,7 +9,8 @@ import {cvSearchSkills,hasDevelopmentEvidence,roleGroupsForCV} from './lib/job-s
 import {recordedEmploymentMonths} from './lib/insights.js?v=78';
 import {regions,europeanCountries,geographicMatch,scopedLocation} from './lib/geography.js';
 import {recoverImport,getItem as deviceItem,setItem as deviceSetItem,updateItem as deviceUpdateItem} from './lib/device-store.js?v=80';
-import {READY_TARGET,REFILL_AT,REVIEW_LIMIT,SEARCH_LIMIT,readBuffer,advanceBuffer,canFillBuffer} from './lib/discovery-buffer.js';
+import {READY_TARGET,REFILL_AT,REVIEW_LIMIT,SEARCH_LIMIT,DAILY_REVIEW_LIMIT,DAILY_SEARCH_LIMIT,RESUME_DELAY,dailyUsage,nextBudgetDay,readBuffer,advanceBuffer,canFillBuffer} from './lib/discovery-buffer.js?v=83';
+import {advertGroupKey,compareCandidates} from './lib/discovery-candidates.js';
 import {startDeviceSync} from './lib/device-sync.js';
 import {mergeApplicationEntries,ApplicationConflict} from './lib/application-storage.js';
 import {applicationsFromFragment,addLinkedApplication} from './lib/application-link.js';
@@ -44,6 +45,7 @@ let listingHighlights=null;
 let activeFilter = 'all', activeView = 'discover', undoAction = null, preparationId = null, loading = false, toastTimer, selectedRole = null, decisionPending = false;
 let pinnedJobId=null, feedError=false, autoBudget=readBuffer(discovery.buffer).searches,feedController=null,feedRequestId=0;
 let candidateReviewBudget=readBuffer(discovery.buffer).reviews,bufferRefilling=readBuffer(discovery.buffer).refilling;
+let queueStarted=!!discovery.buffer?.started,resumeAt=Number(discovery.buffer?.resumeAt)||0,queueTimer=null,usage=dailyUsage(discovery.usage),restoringReviews=false;
 let feedRetryTimer=null,feedRetryAttempts=0;
 if(!Object.hasOwn(discovery,'nextPage'))discovery.nextPage=discovery.fetchedAt?4:1;
 feedError=!!discovery.lastError;
@@ -61,7 +63,7 @@ function persist(key, value) {
   catch(error) {toast(error instanceof ApplicationConflict?error.message:'Could not save on this device. Download a backup before closing this page.'); return false;}
 }
 function saveEntries() {return persist(KEY, entries);}
-function saveDiscovery() {discovery.buffer={refilling:bufferRefilling,reviews:candidateReviewBudget,searches:autoBudget};return persist(DISCOVERY_KEY, discovery);}
+function saveDiscovery() {discovery.buffer={refilling:bufferRefilling,reviews:candidateReviewBudget,searches:autoBudget,started:queueStarted,resumeAt};discovery.usage=usage;return persist(DISCOVERY_KEY, discovery);}
 // Apply the requested wider search once; later explicit geography choices are retained.
 try {
  const migration='job-notebook-international-v23';
@@ -107,6 +109,7 @@ function setView(view) {
   const changedProfile=readSavedProfile();
   if (!['discover','notebook','profile'].includes(view)) view = 'discover';
   activeView = view;
+  if(view==='discover'){queueStarted=true;saveDiscovery();}
   document.body.dataset.view = view;
   window.scrollTo(0, 0);
   $('main-content').scrollTop = 0;
@@ -114,7 +117,7 @@ function setView(view) {
   document.querySelectorAll('.nav-button').forEach(el => {el.classList.toggle('active',el.dataset.view === view); if (el.dataset.view === view) el.setAttribute('aria-current','page'); else el.removeAttribute('aria-current');});
   if (view === 'profile') populateProfile();
   if(changedProfile)render();
-  if(view==='discover')renderDeck();
+  if(view==='discover'||view==='notebook'&&queueStarted)renderDeck();
   history.replaceState(null, '', `#${view}`);
 }
 function followUpDue(entry) {return ['Applied','Interview','Offer'].includes(entry.status) && /^\d{4}-\d{2}-\d{2}$/.test(entry.followUpDate||'') && entry.followUpDate<=today();}
@@ -197,7 +200,7 @@ function deckJobs() {
   }
   const ranked=rankJobs(result);
   const pinned=ranked.findIndex(j=>j.id===pinnedJobId);if(pinned>0)ranked.unshift(...ranked.splice(pinned,1));
-  return ranked;
+  const groups=new Set();return ranked.filter(j=>{const key=advertGroupKey(j);if(groups.has(key))return false;groups.add(key);return true;});
 }
 const storedSummaries=read('job-notebook-summaries-v1',{});
 const summaryCache=storedSummaries&&typeof storedSummaries==='object'&&!Array.isArray(storedSummaries)?storedSummaries:{};
@@ -268,21 +271,53 @@ async function hydrateFitReviews(){
   if(review?.version===REVIEW_VERSION&&Array.isArray(review.points)&&Array.isArray(review.factors))fitReviewCache.set(key,review);
  }));
 }
-function resetBuffer(){bufferRefilling=true;candidateReviewBudget=REVIEW_LIMIT;autoBudget=SEARCH_LIMIT;}
+async function restoreServerReviews(){
+ try{
+  const response=await fetch('/api/review-cache',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({profile:reviewInputFor({title:'',description:''}).profile}),signal:AbortSignal.timeout(8000)});
+  if(!response.ok)return;const data=await response.json();
+  for(const record of (data.records||[]).slice(0,20)){
+   const job=record.job,review=record.review;
+   if(!job||typeof job.id!=='string'||typeof job.company!=='string'||!safeURL(job.link)||review?.version!==REVIEW_VERSION||!Array.isArray(review.points)||!Array.isArray(review.factors))continue;
+   const key=fitReviewKey(job),hash=await hashReviewKey(key);if(hash!==record.hash)continue;
+   const old=fitReviewCache.get(key);if(old&&Date.parse(old.checkedAt)>Date.parse(review.checkedAt))continue;
+   await saveFitReview(hash,review);fitReviewCache.set(key,review);
+   if(!discovery.jobs.some(j=>j.id===job.id))discovery.jobs.push(job);
+  }
+  saveDiscovery();
+ }catch{/* Saved local reviews remain available if private storage is slow. */}
+}
+function queueAllowed(){return queueStarted&&activeView!=='profile'&&!document.hidden&&!restoringReviews;}
+function resetBuffer(){usage=dailyUsage(usage);bufferRefilling=true;candidateReviewBudget=Math.min(REVIEW_LIMIT,DAILY_REVIEW_LIMIT-usage.reviews);autoBudget=Math.min(SEARCH_LIMIT,DAILY_SEARCH_LIMIT-usage.searches);resumeAt=0;}
 function updateBuffer(ready){
  const previous={refilling:bufferRefilling,reviews:candidateReviewBudget,searches:autoBudget},next=advanceBuffer(previous,ready);
- bufferRefilling=next.refilling;candidateReviewBudget=next.reviews;autoBudget=next.searches;
+ usage=dailyUsage(usage);bufferRefilling=next.refilling;candidateReviewBudget=Math.min(next.reviews,DAILY_REVIEW_LIMIT-usage.reviews);autoBudget=Math.min(next.searches,DAILY_SEARCH_LIMIT-usage.searches);
  if(JSON.stringify(previous)!==JSON.stringify(next))saveDiscovery();
 }
+function scheduleAutomaticDiscovery(){
+ clearTimeout(queueTimer);if(!queueAllowed()||!bufferRefilling||reviewServiceIssue||!browserConnectionVerified||activeReviews.size)return;
+ const pending=nextReviewCandidate({ignoreBudget:true,includeErrors:true}),needsWork=pending||hasMoreJobs()||feedError;
+ if(!needsWork)return;
+ const limited=!candidateReviewBudget||!pending&&!autoBudget,failed=feedError||fitReviewErrors.size&&!nextReviewCandidate({ignoreBudget:true});
+ if(!limited&&!failed)return;
+ if(!resumeAt){resumeAt=usage.reviews>=DAILY_REVIEW_LIMIT||!pending&&usage.searches>=DAILY_SEARCH_LIMIT?nextBudgetDay(Date.now()):Date.now()+RESUME_DELAY;saveDiscovery();}
+ const delay=Math.max(500,resumeAt-Date.now());
+ queueTimer=setTimeout(()=>{
+  if(!queueAllowed())return;
+  if(Date.now()<resumeAt){scheduleAutomaticDiscovery();return;}
+  resetBuffer();fitReviewErrors.clear();saveDiscovery();
+  if(feedError){feedError=false;refreshJobs();}else renderDeck();
+ },Math.min(60000,delay));
+}
 function nextReviewCandidate({includeErrors=false,ignoreBudget=false}={}){
- if(!ignoreBudget&&(!canFillBuffer({refilling:bufferRefilling,reviews:candidateReviewBudget},deckJobs().length,activeReviews.size)||document.hidden)||!profile.evidence.trim()||!browserConnectionVerified||reviewServiceIssue||activeView!=='discover')return null;
+ if(!ignoreBudget&&(!canFillBuffer({refilling:bufferRefilling,reviews:candidateReviewBudget},deckJobs().length,activeReviews.size)||!queueAllowed())||!profile.evidence.trim()||!browserConnectionVerified||reviewServiceIssue||!queueStarted||activeView==='profile'||restoringReviews)return null;
  const candidates=[];
+ const checkedGroups=new Set(discovery.jobs.filter(j=>fullReview(j)||activeReviews.has(fitReviewKey(j))).map(advertGroupKey));
  for(const job of discovery.jobs){
-  if(discovery.decisions[job.id]||(profile.hideSeniorRoles&&isSeniorRole(job))||!listingFreshness(job,{includeOlder:profile.includeOlderListings}).visible||entries.some(e=>sameJob(e,job))||fullReview(job)||activeReviews.has(fitReviewKey(job))||!includeErrors&&fitReviewErrors.has(fitReviewKey(job)))continue;
+  if((job.description||'').trim().length<50||checkedGroups.has(advertGroupKey(job))||discovery.decisions[job.id]||(profile.hideSeniorRoles&&isSeniorRole(job))||!listingFreshness(job,{includeOlder:profile.includeOlderListings}).visible||entries.some(e=>sameJob(e,job))||fullReview(job)||activeReviews.has(fitReviewKey(job))||!includeErrors&&fitReviewErrors.has(fitReviewKey(job)))continue;
   let match=matchCache.get(job);if(!match){const base=matchJob(job,profile);if(!base.eligible)continue;match={...base,experience:experienceRequirement(job),cvFit:discoveryFit(job,profile)};matchCache.set(job,match);}
   if(match.eligible&&match.cvFit.reason!=='experience')candidates.push({job,match,fit:match.cvFit});
  }
- candidates.sort((a,b)=>(b.fit.report.skillsScore||0)-(a.fit.report.skillsScore||0)||b.match.score-a.match.score);
+ candidates.sort((a,b)=>compareCandidates(a,b,profile));
  return candidates[0]?.job||null;
 }
 function reviewStatusMarkup(job){
@@ -305,7 +340,7 @@ function updateReviewStatus(){
 }
 function reviewProgress(){
  const found=discovery.jobs.length,checked=discovery.jobs.filter(job=>fullReview(job)).length;
- return `${found} advert${found===1?'':'s'} found · ${checked} reviewed · ${activeReviews.size} CV check${activeReviews.size===1?'':'s'} running. Matches above 6/10 appear as checks finish.`;
+ return `${found} adverts found · ${checked} reviewed · ${deckJobs().length} ready · ${activeReviews.size} CV check${activeReviews.size===1?'':'s'} running.`;
 }
 function scheduleFitReview(job,{explicit=$('role-dialog').open&&selectedRole?.id===job.id}={}){
  const key=fitReviewKey(job);
@@ -317,7 +352,7 @@ function scheduleFitReview(job,{explicit=$('role-dialog').open&&selectedRole?.id
 async function requestFitReview(job,{explicit=false}={}){
  const key=fitReviewKey(job),input=reviewInputFor(job);
  if(activeReviews.size>=2||activeReviews.has(key)||reviewServiceIssue||fullReview(job)||fitReviewErrors.has(key)||!profile.evidence.trim()||!browserConnectionVerified||!browserConnection||!job.description)return;
- if(!explicit&&(activeView!=='discover'||document.hidden||!canFillBuffer({refilling:bufferRefilling,reviews:candidateReviewBudget},deckJobs().length,activeReviews.size)))return;
+ if(!explicit&&(!queueAllowed()||!canFillBuffer({refilling:bufferRefilling,reviews:candidateReviewBudget},deckJobs().length,activeReviews.size)))return;
  if(fitReviewRetries.get(key)?.retryAt>Date.now()){scheduleFitReview(job);return;}
  activeReviews.add(key);updateReviewStatus();
  const next=nextReviewCandidate();if(next)scheduleFitReview(next);
@@ -336,9 +371,10 @@ async function requestFitReview(job,{explicit=false}={}){
    }
   }
   if(!review){
-   if(!explicit&&(activeView!=='discover'||document.hidden||!bufferRefilling||deckJobs().length>=READY_TARGET||!candidateReviewBudget&&!fitReviewRetries.has(key)))return;
-   if(!explicit&&!fitReviewRetries.has(key)){candidateReviewBudget--;saveDiscovery();}
-   const response=await fetch('/api/fit-review',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({...input,purpose:activeView==='discover'&&!$('role-dialog').open?'discovery':'detail'}),signal:AbortSignal.timeout(295000)});
+   if(!explicit&&(!queueAllowed()||!bufferRefilling||deckJobs().length>=READY_TARGET||!candidateReviewBudget&&!fitReviewRetries.has(key)))return;
+   if(!explicit&&!fitReviewRetries.has(key)){candidateReviewBudget--;usage.reviews++;saveDiscovery();}
+   const listing=Object.fromEntries(['id','company','link','source','publishedAt','employerBoard','availability','availabilityCheckedAt'].filter(k=>job[k]!==undefined).map(k=>[k,job[k]]));
+   const response=await fetch('/api/fit-review',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({...input,listing,purpose:explicit?'detail':'discovery'}),signal:AbortSignal.timeout(295000)});
    if(response.status===429){
     const attempts=(fitReviewRetries.get(key)?.attempts||0)+1;
     if(attempts>6)throw Error('The review service is still busy. Please retry in a few minutes.');
@@ -347,7 +383,7 @@ async function requestFitReview(job,{explicit=false}={}){
    }
    const data=await response.json();if(['REVIEW_QUOTA_EXHAUSTED','REVIEW_SETUP_REQUIRED','REVIEW_MODEL_UNAVAILABLE'].includes(data.code)){reviewServiceIssue=data.error;$('browser-connection-status').textContent='Private connection verified. '+reviewServiceIssue;const region=$('role-summary');if(region)region.innerHTML=summaryMarkup(job);}
    if(!response.ok)throw Error(data.error||'Review unavailable.');
-   review=data.review;
+   review=data.review;if(data.cached&&!explicit){usage.reviews=Math.max(0,usage.reviews-1);candidateReviewBudget=Math.min(REVIEW_LIMIT,candidateReviewBudget+1);saveDiscovery();}
    if(review?.version!==REVIEW_VERSION||!Array.isArray(review.points)||!Array.isArray(review.factors))throw Error('Review response was incomplete. Retry it.');
    await saveFitReview(hash,review);
   }
@@ -357,7 +393,7 @@ async function requestFitReview(job,{explicit=false}={}){
  finally{
   activeReviews.delete(key);
   renderDeck();
-  const current=fitReviewRetries.has(key)?job:(activeView==='discover'?deckJobs().find(candidate=>!fullReview(candidate)&&!activeReviews.has(fitReviewKey(candidate))):null)||nextReviewCandidate();
+  const current=fitReviewRetries.has(key)?job:nextReviewCandidate();
   updateReviewStatus();
   if(current&&(fitReviewKey(current)!==key||fitReviewRetries.has(key)&&!fitReviewErrors.has(key)))scheduleFitReview(current);
  }
@@ -427,16 +463,18 @@ function renderDeck() {
   pinnedJobId=job?.id||null;
   maybeLoadMore(jobs.length);
   $('deck-count').textContent = `${jobs.length} role${jobs.length === 1 ? '' : 's'} to explore`;
-  $('load-more-jobs').hidden=!job||jobs.length>=READY_TARGET||!moreReviews&&!(bufferRefilling&&!activeReviews.size&&!nextReviewCandidate()&&hasMoreJobs());
+  $('load-more-jobs').hidden=true;
   $('load-more-jobs').textContent=moreReviews?'Continue checking matches':'Find more matches';
   $('load-more-jobs').disabled=loading;
   $('undo-swipe').disabled = !undoAction;
   $('swipe-actions').hidden = !job;
-  if(job)$('feed-status').textContent=feedError?'More search paused · Your ready roles are kept.':reviewing?'Checking more matches in the background…':moreReviews?'Refill paused at the review limit.':jobs.length>=READY_TARGET?`Your shortlist is ready · Refill at ${REFILL_AT} remaining.`:'Your checked matches are ready.';
+  scheduleAutomaticDiscovery();
+  const resumes=resumeAt?'Next automatic check '+new Date(resumeAt).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})+'.':'';
+  if(job)$('feed-status').textContent=feedError?discovery.lastError+' · Retrying automatically':reviewing?'Checking more matches in the background…':moreReviews?resumes:jobs.length>=READY_TARGET?`Your shortlist is ready · Refill at ${REFILL_AT} remaining.`:'Your checked matches are ready.';
   const backgroundCandidate=nextReviewCandidate();if(backgroundCandidate)scheduleFitReview(backgroundCandidate);
   if (!job) {
   listingHighlights?.destroy();listingHighlights=null;
-  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${!profile.evidence.trim()?'Let’s start with your CV.' : reviewing?'Checking your matches…':moreReviews?'More CV checks available.':loading ? 'Finding your next possibility…' : feedError ? 'The search paused.' : hasMoreJobs() ? 'More results to search.' : discovery.fetchedAt ? 'No unreviewed matches in this search.' : 'Let’s find your kind of work.'}</h2><p>${!profile.evidence.trim()?'Upload your CVs in My profile. Suggestions need a documented skills match above 6/10 and experience within your dated CV history.' : reviewing?'Adverts have been found. We’re comparing their requirements with your CV; qualifying roles appear as each check finishes.':moreReviews?'The checked roles did not meet your criteria. More collected adverts still need a CV check; review more candidates to continue.':loading ? 'Looking for roles with skills evidence above 6/10 and suitable experience requirements.' : feedError ? esc(discovery.lastError||'A source could not be reached. Retry to keep searching; your saved roles are safe.') : hasMoreJobs() ? 'No matches in the batches checked so far. More source searches or pages remain; keep searching or adjust your filters.' : 'No more matching roles in the listings retrieved so far for '+esc(scopeLabel())+'. This is a limited set of public sources, not every vacancy. Change filters, check for new postings later, or revisit roles you passed.'}</p>${feedError&&reviewing?'<p role="status">'+esc(discovery.lastError||'One source is paused; the adverts already found are still being checked.')+'</p>':''}<button class="primary-button" id="empty-refresh" ${loading ? 'disabled' : ''}>${loading ? 'Finding roles…' : feedError?'Retry search':hasMoreJobs()?'Keep searching':'Check for new jobs'}</button><button class="secondary-button" data-view="profile">Review my CV details</button>${browserConnectionVerified&&!candidateReviewBudget?'<button class="text-button" data-more-reviews>Review more candidates</button>':''}${reviewServiceIssue?'<p role="status">'+esc(reviewServiceIssue)+' <button class="text-button" data-retry-fit>Retry full review</button></p>':fitReviewErrors.size?'<p role="status">Some CV checks could not finish. <button class="text-button" data-retry-fit>Retry CV checks</button></p>':''}${Object.keys(discovery.decisions).length ? '<button class="text-button" id="revisit-passed">Revisit passed roles</button>' : ''}<button class="text-button" data-change-locations>Change search filters</button><p class="source-note">Employer careers, public job feeds and web search. Location, experience and listing-age filters still apply.</p></div>`;
+  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${!profile.evidence.trim()?'Let’s start with your CV.':restoringReviews?'Loading your checked matches…':reviewing?'Checking your matches…':loading?'Finding matching jobs…':'No qualifying matches yet.'}</h2><p>${!profile.evidence.trim()?'Upload your CVs in My profile to find relevant roles.':reviewing?'Comparing requirements with your CV. Matches above 6/10 appear as each check finishes.':loading?'Checking employer careers and public job sources.':reviewServiceIssue?esc(reviewServiceIssue):'The checked roles did not meet your skills, experience or search criteria. Your search continues automatically.'}</p>${resumes?`<p role="status">${esc(resumes)}</p>`:''}${feedError?'<p role="status">'+esc(discovery.lastError||'A source could not be reached.')+' Retrying automatically.</p>':''}<button class="secondary-button" data-view="profile">Review my CV details</button>${reviewServiceIssue?'<p><button class="text-button" data-retry-fit>Check review availability</button></p>':''}${Object.keys(discovery.decisions).length?'<button class="text-button" id="revisit-passed">Revisit passed roles</button>':''}<button class="text-button" data-change-locations>Change search filters</button></div>`;
     const candidate=nextReviewCandidate();if(reviewing||moreReviews){const status=document.createElement('p');status.className='source-note';status.id='candidate-review-status';status.setAttribute('role','status');status.textContent=reviewProgress();$('job-deck').firstElementChild.append(status);}if(candidate)scheduleFitReview(candidate);
     return;
   }
@@ -510,10 +548,12 @@ async function updateFitCV(job,cv){
  }catch{if(selectedRole?.id===job.id&&$('fit-cv-status'))$('fit-cv-status').textContent='Could not read saved PDFs. Check your CV library in My profile.';}
 }
 function maybeLoadMore(count){
- if(!profile.evidence.trim()||!bufferRefilling||!candidateReviewBudget||count+activeReviews.size>=READY_TARGET||loading||feedError||autoBudget<=0||!discovery.fetchedAt||!hasMoreJobs()||activeView!=='discover'||document.hidden||!browserConnectionVerified||reviewServiceIssue)return;
+ if(!profile.evidence.trim()||!bufferRefilling||!candidateReviewBudget||count>REFILL_AT||count+activeReviews.size>=READY_TARGET||loading||feedError||autoBudget<=0||usage.searches>=DAILY_SEARCH_LIMIT||!discovery.fetchedAt||!hasMoreJobs()||!queueAllowed()||!browserConnectionVerified||reviewServiceIssue)return;
  // Assess the adverts already collected before spending more search credit.
- if(activeReviews.size||nextReviewCandidate({ignoreBudget:true})||fitReviewErrors.size)return;
- queueMicrotask(()=>{if(!loading&&!feedError&&autoBudget>0&&bufferRefilling&&candidateReviewBudget>0&&hasMoreJobs()&&activeView==='discover'&&!document.hidden&&!activeReviews.size&&!nextReviewCandidate({ignoreBudget:true})){autoBudget--;saveDiscovery();refreshJobs(true);}});
+ const checked=discovery.jobs.filter(j=>fullReview(j)).length,pending=nextReviewCandidate({ignoreBudget:true}),qualified=discovery.jobs.filter(j=>fullReview(j)&&reviewClearsDiscovery(fullReview(j))).length;
+ if((activeReviews.size||pending)&&(checked<(discovery.webCheckedAt||0)+4||qualified*2>=checked))return;
+ if(fitReviewErrors.size&&!pending)return;
+ queueMicrotask(()=>{if(!loading&&!feedError&&autoBudget>0&&usage.searches<DAILY_SEARCH_LIMIT&&bufferRefilling&&candidateReviewBudget>0&&hasMoreJobs()&&queueAllowed()){autoBudget--;usage.searches++;discovery.webCheckedAt=checked;saveDiscovery();refreshJobs(true);}});
 }
 async function refreshJobs(more=false) {
  more=more===true;
@@ -557,7 +597,7 @@ async function refreshJobs(more=false) {
   discovery.fetchedAt=typeof data.fetchedAt==='string'&&Number.isFinite(Date.parse(data.fetchedAt))?data.fetchedAt:new Date().toISOString();saveDiscovery();await hydrateFitReviews();
   const failures=(discovery.sourceErrors||[]).length;
   if(discovery.sourceErrors.includes('Firecrawl'))feedError=true;
-  $('feed-status').textContent=feedError?discovery.lastError||'Search paused · Retry to continue':failures?'Some adverts could not be read. Other source searches are still available.':hasMoreJobs()?'More source results available · Load more or keep browsing':'Current source searches checked · Coverage is limited';
+  $('feed-status').textContent=feedError?'A source is unavailable · Retrying automatically':failures?'Some adverts could not be read. Checking other sources automatically.':'Sources checked · Matching continues automatically';
  } catch(error) {
   if(requestId!==feedRequestId)return;
   feedError=true;discovery.nextPage=more?previousPage:1;discovery.nextSearch=more?previousSearch:'start';
@@ -572,7 +612,7 @@ async function refreshJobs(more=false) {
    discovery.lastError=rateIssue.message+' Retrying in '+seconds+' seconds.';$('feed-status').textContent=discovery.lastError;saveDiscovery();
    feedRetryTimer=setTimeout(()=>{if(requestId===feedRequestId&&activeView==='discover'&&!document.hidden&&!loading)refreshJobs(retryMore);},seconds*1000);
   }
-  $('retry-jobs').hidden=!feedError&&!discovery.sourceErrors?.length;
+  $('retry-jobs').hidden=true;
   renderDeck();
  }
 }
@@ -881,6 +921,7 @@ async function downloadCV() {
 }
 let browserConnection=(await deviceItem('connection').catch(()=>null))?.token||null,browserConnectionVerified=false, browserController=null, browserEntryId=null, browserSessionId=null, browserRun=0,alertInbox=null;
 async function loadBrowserConnection(restore=true) {
+  restoringReviews=true;
   try {browserConnection=(await cvStore('get','connection'))?.token||null;}catch{browserConnection=null;}
   browserConnectionVerified=false;
   $('browser-connection-status').textContent=browserConnection?'Checking your private connection…':'Connect or restore this device to enable full reviews and access saved CVs.';
@@ -911,6 +952,8 @@ async function loadBrowserConnection(restore=true) {
     }
    }
   }catch(error){$('browser-connection-status').textContent=error.name==='TimeoutError'?'Connection check timed out. Try Check connection again.':error.message;}
+  if(browserConnectionVerified)await restoreServerReviews();
+  restoringReviews=false;
   $('check-private-connection').disabled=!browserConnection;
   updateReviewStatus();
   renderDeck();
@@ -1204,7 +1247,7 @@ if (feedError||!discovery.fetchedAt || Date.now() - new Date(discovery.fetchedAt
 document.addEventListener('click',event=>{if(event.target.closest('[data-edit-evidence]')){setView('profile');const field=$('profile-evidence');field.closest('details').open=true;field.focus();field.scrollIntoView({block:'center'});}if(event.target.closest('[data-retry-summary]')){const job=deckJobs()[0];if(job){summaryErrors.delete(job.id);$('role-summary').innerHTML=summaryMarkup(job);requestSummary(job);}}});
 
 // Check for new postings when returning to an older feed, without polling hidden tabs.
-function checkFreshFeed(){if(document.hidden||activeView!=='discover')return;renderDeck();if(!loading&&Date.now()-Date.parse(discovery.fetchedAt||0)>60*60*1000)refreshJobs();}
+function checkFreshFeed(){if(document.hidden||!queueStarted||activeView==='profile')return;renderDeck();if(!loading&&Date.now()-Date.parse(discovery.fetchedAt||0)>60*60*1000)refreshJobs();}
 document.addEventListener('visibilitychange',checkFreshFeed);
 setInterval(checkFreshFeed,60000);
 

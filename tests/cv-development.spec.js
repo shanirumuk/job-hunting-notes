@@ -8,5 +8,5 @@ test('development experience widens the actual search and shows only qualified s
 });
 test('generic business evidence does not turn on development searches',async({page})=>{
  const requests=[];await page.addInitScript(()=>{localStorage.setItem('job-notebook-profile-v1',JSON.stringify({evidence:'Requirements documentation, SQL reports and stakeholder coordination.'}));});
- await page.route('**/api/jobs*',r=>{requests.push(r.request().url());return r.fulfill({json:{jobs:[job],nextPage:null,nextSearch:null}});});await page.goto('/');await expect(page.locator('#active-card')).toHaveCount(0);await expect(page.locator('#search-role-areas')).not.toContainText('Software & low-code');expect(new URL(requests[0]).searchParams.has('development')).toBe(false);
+ await page.route('**/api/jobs*',r=>{requests.push(r.request().url());return r.fulfill({json:{jobs:[job],nextPage:null,nextSearch:null}});});await page.goto('/');await expect(page.locator('#active-card')).toHaveCount(0);await expect(page.locator('#search-role-areas')).not.toContainText('Software & low-code');await expect.poll(()=>requests.length).toBeGreaterThan(0);expect(new URL(requests[0]).searchParams.has('development')).toBe(false);
 });

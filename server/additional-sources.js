@@ -30,7 +30,7 @@ export async function fetchEmployerBoard(board,fetcher=fetch){
   const locations=[location(j),...(Array.isArray(j.secondaryLocations)?j.secondaryLocations.filter(Boolean).map(location):[])].filter(Boolean);
   const salary=j.compensation?.compensationTierSummary||j.compensation?.scrapeableCompensationSalarySummary;
   return {id:'ashby-'+board.slug+'-'+j.id,company:board.company,title:plainText(j.title),location:[...new Set(locations)].join('; ')||'Location not stated',remote:j.isRemote===true||j.workplaceType==='Remote',
-   link:safeURL(j.jobUrl),description:(descriptionText(j.descriptionHtml||j.descriptionPlain)+(salary?'\nCompensation: '+plainText(salary):'')).slice(0,24000),publishedAt:listingDate(j.publishedAt),source:'Employer careers · Ashby',employerBoard:board.slug,fetchedAt:new Date().toISOString()};
+   link:safeURL(j.jobUrl),description:(descriptionText(j.descriptionHtml||j.descriptionPlain)+(salary?'\nCompensation: '+plainText(salary):'')).slice(0,24000),publishedAt:listingDate(j.publishedAt),source:'Employer careers · Ashby',employerBoard:board.slug,availability:'listed',availabilityCheckedAt:new Date().toISOString(),fetchedAt:new Date().toISOString()};
  });
 }
 const cache=new Map(),pending=new Map(),TTL=60*60*1000;

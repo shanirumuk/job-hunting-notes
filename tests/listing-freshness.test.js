@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import {listingDate,listingFreshness} from '../lib/listing-freshness.js';
 const now=Date.parse('2026-10-01T12:00:00Z');
 const check=(job,options={})=>listingFreshness(job,{now,...options});
+test('a role explicitly listed in the live employer feed keeps its real older posting date',()=>{
+ const job={publishedAt:'2025-01-01',employerBoard:'example',availability:'listed',availabilityCheckedAt:new Date(now).toISOString()};
+ assert.equal(check(job).visible,true);assert.match(check(job).label,/Still listed by employer.*2025-01-01/);
+ assert.equal(check({...job,expiresAt:'2025-12-31'}).visible,false);
+ assert.equal(check({...job,availabilityCheckedAt:'2025-01-01'}).visible,false);
+ assert.equal(check({...job,employerBoard:undefined}).visible,false);
+});
 test('provider dates support ISO, seconds and milliseconds without crashing on invalid data',()=>{
  const date='2026-09-30T00:00:00.000Z',ms=Date.parse(date);
  for(const input of [date,ms,ms/1000,String(ms/1000)])assert.equal(listingDate(input),date);

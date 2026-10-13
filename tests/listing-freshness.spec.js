@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-const base={company:'Example',title:'Business Analyst',location:'Berlin, Germany',description:'Business requirements, stakeholder workshops and API implementation.',link:'https://example.org/job'};
+const base={company:'Example',title:'Business Analyst',location:'Berlin, Germany',description:'Requirements:\nAPI experience.\nSQL experience.\nEnglish proficiency.\nResponsibilities:\nBusiness requirements, stakeholder workshops and API implementation.',link:'https://example.org/job'};
 const recent={...base,id:'recent',link:'https://example.org/recent',company:'Recent',publishedAt:new Date().toISOString()};
 const old={...base,id:'old',link:'https://example.org/old',company:'Old advert',publishedAt:'2024-03-01'};
 const repost={...base,id:'repost',link:'https://example.org/repost',company:'Softtest',publishedAt:new Date().toISOString(),description:base.description+' Contract start 01 March 2024 to 12 months, 2 x 12 months extensions.'};
@@ -8,6 +8,7 @@ test('cached old and reposted adverts are hidden, optional older filter persists
  await page.addInitScript(({jobs,old})=>{
   if(localStorage.getItem('freshness-test'))return;
   localStorage.setItem('freshness-test','1');
+  localStorage.setItem('job-notebook-profile-v1',JSON.stringify({evidence:'Built API integrations and SQL reporting. Ran stakeholder workshops and documented requirements.',languages:'English C1'}));
   localStorage.setItem('job-notebook-international-v23','1');localStorage.setItem('job-notebook-discovery-v26','1');
   localStorage.setItem('job-notebook-discovery-v1',JSON.stringify({jobs,decisions:{},fetchedAt:new Date().toISOString(),nextPage:null,nextSearch:null}));
   localStorage.setItem('job-notebook-v1',JSON.stringify([{...old,id:'saved-old',link:'https://example.org/saved-old',title:'Saved old application',status:'Applied',applicationDate:'2024-03-01'}]));

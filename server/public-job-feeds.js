@@ -3,6 +3,7 @@ import {additionalSources} from './additional-sources.js';
 import {geographicMatch,locationInfo} from '../lib/geography.js';
 import {isSeniorRole,experienceRequirement} from '../lib/experience-filter.js';
 import {sameJob} from '../lib/model.js';
+import {diverseAdverts} from '../lib/discovery-candidates.js';
 
 const cache=new Map(),pending=new Map();
 export async function publicJobFeeds(input,{fetcher=fetch,useCache=true}={}){
@@ -30,7 +31,7 @@ export async function publicJobFeeds(input,{fetcher=fetch,useCache=true}={}){
   const patterns={javascript:/\b(?:JavaScript|TypeScript|React|Next[ .]?js|Node[ .]?js)\b/i,python:/\bPython\b/i,api:/\bAPIs?\b/i,sql:/\b(?:SQL|PostgreSQL|MySQL)\b/i,crm:/\bCRM\b/i,requirements:/requirements|business analysis/i,testing:/testing|automated tests?/i,workflows:/workflow|process improvement/i};
   const priority=job=>skills.reduce((n,key)=>n+(patterns[key]?.test(job.description||'')?(key===skills[0]?2:1):0),0);
   jobs.sort((a,b)=>Number(isSeniorRole(a))-Number(isSeniorRole(b))||priority(b)-priority(a));
-  const value={jobs:jobs.slice(0,100),sourceErrors,refreshedEmployerBoards,sourcesChecked,nextPage:null,nextSearch:'start',source:'Employer careers and public job feeds',fetchedAt:new Date().toISOString()};
+  const value={jobs:diverseAdverts(jobs,100),sourceErrors,refreshedEmployerBoards,sourcesChecked,nextPage:null,nextSearch:'start',source:'Employer careers and public job feeds',fetchedAt:new Date().toISOString()};
   if(useCache&&(jobs.length||!sourceErrors.length)){cache.set(key,{time:Date.now(),value});if(cache.size>30)cache.delete(cache.keys().next().value);}
   return value;
  };

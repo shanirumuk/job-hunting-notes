@@ -14,12 +14,12 @@ test('email alerts persist matching candidates, hide gaps and preserve submitted
  await page.route('**/api/**',async route=>{
   const path=new URL(route.request().url()).pathname,body=route.request().postDataJSON()||{};
   if(path==='/api/setup')return route.fulfill({json:{reviewProvider:{provider:'openai',configured:true}}});
-  if(path==='/api/fit-review')return route.fulfill({json:{review:{version:7,skills:8,skillsLower:8,overall:8,cv:'Business Analyst CV',summary:'SQL and English are supported.',points:[],factors:[],audit:[],issues:[]}}});
+  if(path==='/api/fit-review')return route.fulfill({json:{review:{version:7,skills:8,skillsLower:8,overall:8,cv:'Business Analyst CV',summary:'SQL and English are supported.',points:body.job.title==='Technical Project Manager'?[{text:'5+ years managing distributed delivery teams',category:'required',dimension:'experience',importance:'essential',status:'gap',note:'Insufficient recorded experience.',cvQuote:'',sourceQuote:'5+ years managing distributed delivery teams.'}]:[],factors:[],audit:[],issues:[]}}});
   if(path==='/api/jobs')return route.fulfill({json:{jobs:[],nextPage:null,nextSearch:null,fetchedAt:new Date().toISOString()}});
   if(path==='/api/job-alerts')return route.fulfill({json:body.action==='status'?{configured:true,address:'fixture@alerts.resend.app'}:{processed:['fixture-email'],links:body.seen.includes('fixture-email')?[]:[{url:'https://www.linkedin.com/jobs/view/4473218727/'},{url:'https://www.linkedin.com/jobs/view/4473218728/'}],nextCursor:null,errors:[]}});
   if(path==='/api/import-job'){
    reads++;const good=body.url.includes('4473218727');
-   return route.fulfill({json:{job:{id:good?'alert-good':'alert-poor',title:good?'Business Analyst':'Technical Project Manager',company:good?'Matching employer':'Senior employer',location:'Berlin, Germany',link:body.url,description:good?'Requirements\nSQL\nEnglish':'Requirements\n5+ years managing distributed delivery teams.\nOwn budgets and margins.',source:'LinkedIn'}}});
+   return route.fulfill({json:{job:{id:good?'alert-good':'alert-poor',title:good?'Business Analyst':'Technical Project Manager',company:good?'Matching employer':'Senior employer',location:'Berlin, Germany',link:body.url,description:good?'Requirements\nSQL reporting experience.\nEnglish proficiency.\nResponsibilities\nAnalyse customer requirements.':'Requirements\n5+ years managing distributed delivery teams.\nOwn budgets and margins.',source:'LinkedIn'}}});
   }
   return route.fulfill({status:503,json:{error:'External services disabled in test'}});
  });

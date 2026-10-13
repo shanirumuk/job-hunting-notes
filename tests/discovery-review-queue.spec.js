@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {createHash} from 'node:crypto';
 const jobs=Array.from({length:4},(_,i)=>({id:'queue-'+i,company:'Employer '+i,title:'Business Analyst',location:'Berlin, Germany',link:'https://example.org/queue/'+i,description:'Requirements:\nInterpret customer needs and turn them into a technical rollout plan for department '+i+'.'}));
 const review={version:7,skills:8,skillsLower:8,overall:7,summary:'Requirements work transfers to this role.',cv:'Business Analyst CV',cvReason:'Use analysis evidence.',points:[{text:'Interpret customer needs',sourceQuote:jobs[0].description.split('\n')[1],category:'required',dimension:'skill',importance:'standard',status:'match',evidenceKind:'transferable',note:'Requirements evidence.',cvQuote:'SQL reporting and requirements documentation.'}],factors:[],audit:[],issues:[]};
 async function setup(page,{inputJobs=jobs}={}){
@@ -19,9 +20,10 @@ test('an unchanged CV and advert reuse verified version-six comparisons with rec
  await page.reload();await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('.card-fit-summary')).toContainText('Skills alignment: 10/10');expect(calls).toBe(0);
  const versions=await page.evaluate(async()=>Object.values(await(await import('/lib/device-store.js')).getItem('fit-reviews')).map(r=>r.version));expect(versions).toEqual([7]);
 });
-test('failed background checks have a working retry when no cards are visible',async({page})=>{
- let calls=0;await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({status:503,json:{error:'Temporary review failure'}});});await setup(page);await page.locator('.main-nav [data-view="discover"]').click();await expect.poll(()=>calls).toBe(4);await expect(page.locator('#active-card')).toHaveCount(0);await expect(page.locator('[data-retry-fit]')).toContainText('Retry CV checks');
- await page.route('**/api/fit-review',r=>r.fulfill({json:{review}}));await page.locator('[data-retry-fit]').click();await expect(page.locator('#active-card')).toHaveCount(1);
+test('failed background checks retry automatically without a search button',async({page})=>{
+ await page.clock.install();let calls=0;await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({status:503,json:{error:'Temporary review failure'}});});await setup(page);await page.locator('.main-nav [data-view="discover"]').click();await expect.poll(()=>calls).toBe(4);await expect(page.locator('#active-card')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:/Keep searching|Review more candidates|Retry CV checks/})).toHaveCount(0);
+ await page.route('**/api/fit-review',r=>r.fulfill({json:{review}}));await page.clock.fastForward(61000);await expect(page.locator('#active-card')).toHaveCount(1);
 });
 
 test('ten ready roles pause paid work, five consumed roles trigger a refill and cached cards render before connection checks',async({page})=>{
@@ -51,13 +53,13 @@ test('ten ready roles pause paid work, five consumed roles trigger a refill and 
  await page.reload();await expect(page.locator('#deck-count')).toHaveText('10 roles to explore');await expect.poll(()=>refreshed.length).toBe(1);expect(new URL(refreshed[0]).searchParams.has('search')).toBe(false);expect(waiting.length).toBe(15);
 });
 
-test('unsuitable candidates cannot empty the review budget again on every reload',async({page})=>{
- const many=Array.from({length:20},(_,i)=>({...jobs[0],id:'budget-'+i,company:'Employer '+i,link:'https://example.org/budget/'+i,description:jobs[0].description+' Department '+i+'.'}));
+test('a spent batch survives reload and automatically resumes after its credit pause',async({page})=>{
+ await page.clock.install();const many=Array.from({length:20},(_,i)=>({...jobs[0],id:'budget-'+i,company:'Employer '+i,link:'https://example.org/budget/'+i,description:jobs[0].description+' Department '+i+'.'}));
  let calls=0;await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({json:{review:{...review,skills:2,skillsLower:2}}});});await setup(page,{inputJobs:many});
- await page.locator('.main-nav [data-view="discover"]').click();await expect.poll(()=>calls).toBe(12);await expect(page.locator('[data-more-reviews]')).toBeVisible();
+ await page.locator('.main-nav [data-view="discover"]').click();await expect.poll(()=>calls).toBe(12);await expect(page.locator('.deck-empty')).toContainText('Next automatic check');
  const saved=await page.evaluate(async()=>Object.keys(await(await import('/lib/device-store.js?v=80')).getItem('fit-reviews')).length);expect(saved).toBe(12);
- await page.reload();await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('[data-more-reviews]')).toBeVisible();await page.waitForTimeout(450);expect(calls).toBe(12);
- await page.locator('[data-more-reviews]').click();await expect.poll(()=>calls).toBe(20);
+ await page.reload();await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('.deck-empty')).toContainText('Next automatic check');await page.waitForTimeout(450);expect(calls).toBe(12);
+ await page.clock.fastForward(61000);await expect.poll(()=>calls).toBe(20);await expect(page.getByRole('button',{name:/Keep searching|Continue checking|Review more candidates/})).toHaveCount(0);
 });
 
 test('a returning shortlist starts its refill as soon as the connection is verified without waiting for a feed refresh',async({page})=>{
@@ -73,4 +75,19 @@ test('a returning shortlist starts its refill as soon as the connection is verif
  await page.goto('/?warm-return=1#discover');await expect(page.locator('#deck-count')).toHaveText('1 role to explore');expect(waiting.length).toBe(0);
  await expect.poll(()=>typeof verify).toBe('function');verify();await expect.poll(()=>waiting.length).toBe(2);await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','warm-0');
  for(const resolve of waiting)resolve();
+});
+
+test('the funded refill continues in Applications and returns ready cards without another search step',async({page})=>{
+ const waiting=[];await page.route('**/api/fit-review',async r=>{expect(r.request().postDataJSON().purpose).toBe('discovery');await new Promise(resolve=>waiting.push(resolve));await r.fulfill({json:{review}}).catch(()=>{});});
+ await setup(page);await page.locator('.main-nav [data-view="discover"]').click();await expect.poll(()=>waiting.length).toBe(2);
+ await page.locator('.main-nav [data-view="notebook"]').click();waiting[0]();waiting[1]();await expect.poll(()=>waiting.length).toBe(4);waiting[2]();waiting[3]();
+ await expect.poll(()=>page.evaluate(async()=>Object.keys(await(await import('/lib/device-store.js?v=80')).getItem('fit-reviews')||{}).length)).toBe(4);
+ await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('#deck-count')).toHaveText('4 roles to explore');await expect(page.locator('#active-card')).toBeVisible();await expect(page.getByRole('button',{name:/Keep searching/})).toHaveCount(0);
+});
+
+test('private server comparisons restore a ready card in a browser without a local review cache',async({page})=>{
+ let paid=0;await page.route('**/api/fit-review',r=>{paid++;return r.fulfill({status:503,json:{error:'Must use completed review'}});});await setup(page,{inputJobs:[]});
+ await page.route('**/api/review-cache',r=>{const input={job:{title:jobs[0].title,location:jobs[0].location,remote:false,description:jobs[0].description},profile:r.request().postDataJSON().profile},hash=createHash('sha256').update(JSON.stringify([7,new Date().toISOString().slice(0,7),input])).digest('hex');return r.fulfill({json:{records:[{hash,job:jobs[0],review,savedAt:Date.now()}]}});});
+ await page.goto('/?server-ready=1#discover');await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','queue-0');await expect(page.locator('.card-fit-summary')).toContainText('8/10');expect(paid).toBe(0);
+ await page.locator('.main-nav [data-view="notebook"]').click();await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','queue-0');expect(paid).toBe(0);
 });
