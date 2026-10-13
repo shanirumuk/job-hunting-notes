@@ -417,7 +417,7 @@ function renderDeck() {
   requestSummary(job);scheduleFitReview(job);
 }
 function fitList(items,empty){return items.length?`<ul>${items.map(value=>`<li>${esc(value)}</li>`).join('')}</ul>`:`<p>${esc(empty)}</p>`;}
-function practicalCautions(review){return (review?.factors||[]).filter(f=>f.status==='gap'&&f.key!=='eligibility').map(f=>`<p class="fit-caution"><strong>${esc(factorLabels[f.key])}:</strong> ${esc(f.note)}</p>`).join('');}
+function practicalCautions(review){return (review?.factors||[]).filter(f=>f.status==='gap'&&f.key!=='eligibility'||f.key==='eligibility'&&['unknown','partial'].includes(f.status)).map(f=>`<p class="fit-caution"><strong>${esc(factorLabels[f.key])}:</strong> ${esc(f.note)}</p>`).join('');}
 function readSavedProfile(){
  try{
   const raw=localStorage.getItem(PROFILE_KEY);if(!raw)return false;

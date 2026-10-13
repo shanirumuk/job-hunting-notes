@@ -12,6 +12,7 @@ async function connect(page,jobs=[job]){
 test('full review updates compact checks, uses local cache and refreshes after profile edits',async({page})=>{
  let calls=0;await page.route('**/api/fit-review',async r=>{calls++;const body=r.request().postDataJSON();expect(body.profile.relocation).toContain('contract length');expect(body.profile.email).toBeUndefined();await r.fulfill({json:{review}});});
  await connect(page);await expect(page.locator('.card-fit-summary')).toContainText('Skills alignment: 8/10');
+ await expect(page.locator('#active-card .fit-caution')).toContainText('Work rights: Confirm this detail.');
  await page.locator('.qualification-details > summary').click();await expect(page.locator('.qualification.match .qualification-icon')).toHaveText('✓');await expect(page.locator('.qualification.partial .qualification-icon')).toHaveText('?');await expect(page.locator('.qualification.partial')).toContainText('required depth');
  await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('6.5');await expect(page.locator('.fit-cv-name')).toHaveText('Business Analyst CV');await expect(page.locator('#fit-download-cv')).toBeVisible();
  for(const width of [1440,390]){await page.setViewportSize({width,height:844});expect(await page.locator('#role-dialog').evaluate(e=>e.scrollWidth<=e.clientWidth)).toBe(true);}
