@@ -97,7 +97,7 @@ test('follow-up dates persist, can be rescheduled or cleared, and do not change 
  await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('#progress-follow-up')).toHaveText('1');
  await page.locator('[data-notebook-filter="follow-up"]').click();await expect(page.locator('.application-item')).toHaveCount(1);await expect(page.locator('.application-item')).toContainText('Due');
  await page.locator('[data-edit="deliverect"]').click();await expect(page.locator('#follow-up-date')).toHaveValue('2020-01-01');
- await page.locator('#follow-up-date').fill('2099-01-01');await page.getByRole('button',{name:'Save application',exact:true}).click();await expect(page.locator('#empty-state')).toContainText('No follow-ups due');
+ await page.locator('#follow-up-date').fill('2099-01-01');await page.getByRole('button',{name:'Save application',exact:true}).click();await expect(page.locator('#progress-follow-up')).toHaveText('0');await page.locator('.filter[data-filter="follow-up"]').click();await expect(page.locator('#empty-state')).toContainText('No follow-ups due');
  await page.locator('.filter[data-filter="all"]').click();await page.locator('[data-edit="deliverect"]').click();await page.locator('#follow-up-date').fill('');await page.getByRole('button',{name:'Save application',exact:true}).click();
  const entry=(await records(page)).find(e=>e.id==='deliverect');expect(entry.followUpDate).toBe('');expect(entry.status).toBe('Applied');
 });

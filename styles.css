@@ -136,6 +136,21 @@ body[data-view="discover"] main { height: calc(100dvh - var(--top-height) - var(
 .search-field { flex: 1; min-width: 0; }
 .search-field input { width: 100%; min-height: 48px; padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); color: var(--ink); font-size: 16px; }
 .toolbar>.primary-button { flex-shrink: 0; }
+.toolbar>#select-applications { flex-shrink: 0; }
+.bulk-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; margin-bottom: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.application-selection { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-size: 14px; }
+.application-selection input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); flex-shrink: 0; }
+.application-item .application-selection { display: flex; width: fit-content; margin-bottom: 6px; }
+.application-item.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+#selection-count { font-size: 14px; color: var(--muted); }
+.bulk-status-label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 14px; }
+.bulk-status-label select { min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 16px; }
+@media (max-width: 599px) {
+ .toolbar { flex-wrap: wrap; }
+ .toolbar .search-field { flex-basis: 100%; }
+ .bulk-status-label { flex: 1 1 150px; }
+ #apply-bulk-status { flex: 1 1 150px; align-self: flex-end; }
+}
 .status-line { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; min-width: 0; }
 .status-line>p { margin: 0; font-size: 12px; color: var(--muted); }
 .filters { display: flex; gap: 6px; width: 100%; overflow-x: auto; scrollbar-width: none; padding: 3px 0; }

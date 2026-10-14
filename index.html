@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=85" />
+  <link rel="stylesheet" href="styles.css?v=86" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -68,8 +68,14 @@
       </section>
       <section id="notebook-view" class="view" aria-labelledby="notebook-title" hidden>
         <div class="intro"><p class="eyebrow">YOUR APPLICATION SPACE</p><h1 id="notebook-title">Your <em>applications.</em></h1><p class="subtitle">From a promising role to your next conversation.</p></div>
-        <section class="toolbar" aria-label="Application tools"><label class="search-field"><span class="sr-only">Search applications</span><input id="search-input" type="search" placeholder="Search your applications" autocomplete="off" /></label><button class="primary-button" id="add-button" type="button" aria-label="Add application">+ Add</button></section>
+        <section class="toolbar" aria-label="Application tools"><label class="search-field"><span class="sr-only">Search applications</span><input id="search-input" type="search" placeholder="Search your applications" autocomplete="off" /></label><button class="secondary-button" id="select-applications" type="button" aria-pressed="false" aria-controls="bulk-actions applications">Select</button><button class="primary-button" id="add-button" type="button" aria-label="Add application">+ Add</button></section>
         <section class="status-line"><p id="summary-text" aria-live="polite"></p><div class="filters" role="group" aria-label="Filter applications"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="not applied">Not applied</button><button class="filter" data-filter="preparing">Preparing</button><button class="filter" data-filter="to apply">Saved</button><button class="filter" data-filter="applied">Applied</button><button class="filter" data-filter="interview">Interview</button><button class="filter" data-filter="rejected">Rejected</button><button class="filter" data-filter="follow-up">Follow-ups due</button></div></section>
+        <section id="bulk-actions" class="bulk-actions" aria-label="Update selected applications" hidden>
+          <label class="application-selection"><input type="checkbox" id="select-all-applications" />Select all shown</label>
+          <span id="selection-count" role="status">0 selected</span>
+          <label class="bulk-status-label">Change status<select id="bulk-status"><option value="">Choose status</option></select></label>
+          <button class="primary-button" id="apply-bulk-status" type="button" disabled>Update selected</button>
+        </section>
         <section id="applications" class="application-list" aria-label="Applications"></section>
         <div class="empty-state" id="empty-state" hidden><h2>No applications here yet</h2><p>Save a role from Discover, or add one yourself.</p><button class="text-button" id="empty-add-button">Add your first role</button></div>
       </section>
@@ -237,6 +243,6 @@
     </div>
     <div class="sheet-actions"><button id="reset-locations" type="button" class="secondary-button">Reset filters</button><button id="apply-locations" type="button" class="primary-button">Show matches</button></div>
   </div></dialog>
-  <script type="module" src="app.js?v=85"></script>
+  <script type="module" src="app.js?v=86"></script>
 </body>
 </html>

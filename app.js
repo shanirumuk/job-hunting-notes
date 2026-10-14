@@ -43,6 +43,8 @@ let discovery = read(DISCOVERY_KEY, {jobs: [], decisions: {}, fetchedAt: ''});
 if (!discovery || !Array.isArray(discovery.jobs) || !discovery.decisions || typeof discovery.decisions !== 'object') {discovery = {jobs: [], decisions: {}, fetchedAt: ''}; storageError = true;}
 let listingHighlights=null;
 let activeFilter = 'all', activeView = 'discover', undoAction = null, preparationId = null, loading = false, toastTimer, selectedRole = null, decisionPending = false;
+let applicationSelectionMode=false;
+const selectedApplicationIds=new Set();
 let pinnedJobId=null, feedError=false, autoBudget=readBuffer(discovery.buffer).searches,feedController=null,feedRequestId=0;
 let candidateReviewBudget=readBuffer(discovery.buffer).reviews,bufferRefilling=readBuffer(discovery.buffer).refilling;
 let queueStarted=!!discovery.buffer?.started,resumeAt=Number(discovery.buffer?.resumeAt)||0,queueTimer=null,usage=dailyUsage(discovery.usage),restoringReviews=false;
@@ -121,6 +123,29 @@ function setView(view) {
   history.replaceState(null, '', `#${view}`);
 }
 function followUpDue(entry) {return ['Applied','Interview','Offer'].includes(entry.status) && /^\d{4}-\d{2}-\d{2}$/.test(entry.followUpDate||'') && entry.followUpDate<=today();}
+function visibleApplications(){
+ const q=$('search-input').value.trim().toLowerCase();
+ const filtered=entries.filter(e=>(activeFilter==='all'||(activeFilter==='follow-up'?followUpDue(e):e.status.toLowerCase()===activeFilter))&&(!q||[e.company,e.title,e.location,e.notes,e.requirements].join(' ').toLowerCase().includes(q)));
+ if(activeFilter==='follow-up')filtered.sort((a,b)=>a.followUpDate.localeCompare(b.followUpDate));
+ return filtered;
+}
+function updateApplicationSelection(filtered=visibleApplications()){
+ const visibleIds=new Set(filtered.map(e=>e.id));
+ for(const id of selectedApplicationIds)if(!visibleIds.has(id))selectedApplicationIds.delete(id);
+ $('select-applications').textContent=applicationSelectionMode?'Cancel':'Select';
+ $('select-applications').setAttribute('aria-pressed',String(applicationSelectionMode));
+ $('bulk-actions').hidden=!applicationSelectionMode;
+ $('selection-count').textContent=`${selectedApplicationIds.size} selected`;
+ const all=$('select-all-applications');
+ all.disabled=!filtered.length;all.checked=!!filtered.length&&selectedApplicationIds.size===filtered.length;
+ all.indeterminate=selectedApplicationIds.size>0&&!all.checked;
+ $('apply-bulk-status').disabled=!selectedApplicationIds.size||!STATUSES.includes($('bulk-status').value);
+ for(const input of document.querySelectorAll('[data-select-application]')){
+  input.checked=selectedApplicationIds.has(input.dataset.selectApplication);
+  input.closest('.application-item').classList.toggle('selected',input.checked);
+ }
+}
+function endApplicationSelection(){applicationSelectionMode=false;selectedApplicationIds.clear();$('bulk-status').value='';}
 function render() {
   const applied = entries.filter(e => ['Applied','Interview','Offer','Rejected'].includes(e.status)).length;
   $('nav-count').textContent = entries.length;
@@ -138,10 +163,9 @@ function render() {
   $('experience-filter').textContent='CV match > 6/10 · How it works';
   $('compass-cv').textContent=cvFit.months!==null?'Dated CV history: '+(cvFit.months/12).toFixed(1)+' years':'Add dated CV details for experience checks';
   $('search-role-areas').innerHTML=roleGroupsForCV(profile).map(group=>`<span>${esc(group.label)}</span>`).join('');
-  const q = $('search-input').value.trim().toLowerCase();
-  const filtered = entries.filter(e => (activeFilter === 'all' || (activeFilter === 'follow-up' ? followUpDue(e) : e.status.toLowerCase() === activeFilter)) && (!q || [e.company,e.title,e.location,e.notes,e.requirements].join(' ').toLowerCase().includes(q)));
-  if(activeFilter==='follow-up')filtered.sort((a,b)=>a.followUpDate.localeCompare(b.followUpDate));
-  $('applications').innerHTML = filtered.map(e => `<article class="application-item"><div><span class="company-name">${esc(e.company)}</span><h2>${esc(e.title)}</h2><p>${esc(e.location)}${e.applicationDate ? ' · Applied '+esc(dateText(e.applicationDate)) : ''}</p>${e.followUpDate?`<p class="follow-up-note">Follow-up: ${esc(dateText(e.followUpDate))}${followUpDue(e)?' · Due':''}</p>`:''}</div><div class="application-actions"><label class="application-status-control status-${esc(e.status.toLowerCase().replaceAll(' ','-'))}"><span class="sr-only">Status</span><select data-status-id="${esc(e.id)}" aria-label="Status for ${esc(e.company)} — ${esc(e.title)}">${STATUSES.map(status=>`<option value="${esc(status)}" ${status===e.status?'selected':''}>${status==='To apply'?'Saved':esc(status)}</option>`).join('')}<option value="delete">Delete…</option></select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg></label><div class="application-action-links"><button class="text-button" data-edit="${esc(e.id)}">Edit notes</button>${e.description||e.requirements?`<button class="text-button" data-fit-entry="${esc(e.id)}">Review fit</button>`:''}${safeURL(e.link) ? `<a class="text-button" href="${esc(safeURL(e.link))}" target="_blank" rel="noopener noreferrer">Listing ↗</a>` : ''}</div></div></article>`).join('');
+  const filtered = visibleApplications();
+  $('applications').innerHTML = filtered.map(e => `<article class="application-item"><div>${applicationSelectionMode?`<label class="application-selection"><input type="checkbox" data-select-application="${esc(e.id)}" aria-label="Select ${esc(e.company)} — ${esc(e.title)}" />Select</label>`:''}<span class="company-name">${esc(e.company)}</span><h2>${esc(e.title)}</h2><p>${esc(e.location)}${e.applicationDate ? ' · Applied '+esc(dateText(e.applicationDate)) : ''}</p>${e.followUpDate?`<p class="follow-up-note">Follow-up: ${esc(dateText(e.followUpDate))}${followUpDue(e)?' · Due':''}</p>`:''}</div><div class="application-actions"><label class="application-status-control status-${esc(e.status.toLowerCase().replaceAll(' ','-'))}"><span class="sr-only">Status</span><select data-status-id="${esc(e.id)}" aria-label="Status for ${esc(e.company)} — ${esc(e.title)}">${STATUSES.map(status=>`<option value="${esc(status)}" ${status===e.status?'selected':''}>${status==='To apply'?'Saved':esc(status)}</option>`).join('')}<option value="delete">Delete…</option></select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg></label><div class="application-action-links"><button class="text-button" data-edit="${esc(e.id)}">Edit notes</button>${e.description||e.requirements?`<button class="text-button" data-fit-entry="${esc(e.id)}">Review fit</button>`:''}${safeURL(e.link) ? `<a class="text-button" href="${esc(safeURL(e.link))}" target="_blank" rel="noopener noreferrer">Listing ↗</a>` : ''}</div></div></article>`).join('');
+  updateApplicationSelection(filtered);
   $('empty-state').hidden = filtered.length > 0;
   $('empty-state').querySelector('h2').textContent=activeFilter==='follow-up'?'No follow-ups due':'No applications here yet';
   $('empty-state').querySelector('p').textContent=activeFilter==='follow-up'?'Set a follow-up date using Edit notes on a submitted application.':'Save a role from Discover, or add one yourself.';
@@ -1069,6 +1093,11 @@ $('retry-jobs').addEventListener('click',()=>{resetBuffer();saveDiscovery();refr
 $('job-deck').addEventListener('click',e => {if(e.target.closest('[data-change-locations]'))openLocations();if (e.target.closest('[data-read-role]')) {const text=document.querySelector('.source-description');if(text){text.open=true;text.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}} if (e.target.closest('[data-role-details]')) openRoleDetails(); if (e.target.closest('#empty-refresh')) {resetBuffer();saveDiscovery();if(nextReviewCandidate({ignoreBudget:true}))renderDeck();else refreshJobs(hasMoreJobs());} if (e.target.closest('#revisit-passed')) {Object.keys(discovery.decisions).forEach(id => {if (discovery.decisions[id] === 'pass') delete discovery.decisions[id];}); discovery.nextPage=1;resetBuffer();feedError=false;saveDiscovery();renderDeck();refreshJobs();}});
 $('applications').addEventListener('click',e => {const edit=e.target.closest('[data-edit]');if(edit)openEditor(entries.find(item=>item.id===edit.dataset.edit));});
 $('applications').addEventListener('change',e=>{
+ const selection=e.target.closest('[data-select-application]');
+ if(selection){
+  if(selection.checked)selectedApplicationIds.add(selection.dataset.selectApplication);else selectedApplicationIds.delete(selection.dataset.selectApplication);
+  updateApplicationSelection();return;
+ }
  const control=e.target.closest('[data-status-id]');if(!control)return;
  const entry=entries.find(item=>item.id===control.dataset.statusId);if(!entry)return;
  const status=control.value;
@@ -1079,6 +1108,26 @@ $('applications').addEventListener('change',e=>{
  const nextControl=[...document.querySelectorAll('[data-status-id]')].find(el=>el.dataset.statusId===entry.id);
  (nextControl||document.querySelector('.filter.active'))?.focus();
  toast(status==='delete'?'Application deleted.':`Status updated to ${status==='To apply'?'Saved':status}.`);
+});
+$('bulk-status').innerHTML+=STATUSES.map(status=>`<option value="${esc(status)}">${status==='To apply'?'Saved':esc(status)}</option>`).join('');
+$('bulk-status').addEventListener('change',()=>updateApplicationSelection());
+$('select-applications').addEventListener('click',()=>{
+ if(applicationSelectionMode)endApplicationSelection();else applicationSelectionMode=true;
+ render();
+ (applicationSelectionMode?document.querySelector('[data-select-application]')||$('select-all-applications'):$('select-applications')).focus();
+});
+$('select-all-applications').addEventListener('change',e=>{
+ selectedApplicationIds.clear();if(e.target.checked)for(const entry of visibleApplications())selectedApplicationIds.add(entry.id);
+ updateApplicationSelection();
+});
+$('apply-bulk-status').addEventListener('click',()=>{
+ if(!applicationSelectionMode)return;
+ updateApplicationSelection();const status=$('bulk-status').value,count=selectedApplicationIds.size;
+ if(!count||!STATUSES.includes(status))return;
+ const date=today(),next=entries.map(entry=>selectedApplicationIds.has(entry.id)?changeApplicationStatus(entry,status,date):entry);
+ if(!persist(KEY,next))return;
+ undoAction=null;endApplicationSelection();render();$('select-applications').focus();
+ toast(`${count} ${count===1?'application':'applications'} updated to ${status==='To apply'?'Saved':status}.`);
 });
 $('edit-materials').addEventListener('click',()=>{const id=$('entry-id').value;editor.close();openPreparation(id);});
 $('add-button').addEventListener('click',() => openEditor()); $('empty-add-button').addEventListener('click',() => openEditor()); $('close-editor').addEventListener('click',() => editor.close()); form.addEventListener('submit',upsert);
