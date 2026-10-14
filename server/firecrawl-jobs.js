@@ -1,10 +1,10 @@
 import {createHash} from 'node:crypto';
 import {isIP} from 'node:net';
-import {regions,europeanCountries} from '../lib/geography.js';
+import {regions,europeanCountries,geographicMatch} from '../lib/geography.js';
 import {searchSkills,searchRoleGroups} from '../lib/job-search-profile.js';
 import {safeURL,descriptionText,plainText,sameJob} from '../lib/model.js';
 import {listingDate} from '../lib/listing-freshness.js';
-import {isSeniorRole} from '../lib/experience-filter.js';
+import {isSeniorRole,experienceRequirement} from '../lib/experience-filter.js';
 import {importURL,publicAddress} from './job-import.js';
 const cache=new Map(),pending=new Map(),blockedSources=new Map(),TTL=6*60*60*1000;
 const failure=(message,status=503,code='FIRECRAWL_UNAVAILABLE')=>Object.assign(Error(message),{status,code});
@@ -38,8 +38,12 @@ export function firecrawlPlan({region='international',country='',skills=[],junio
  // Current development skills deserve their own focused searches. Requiring
  // every language, role alias and career-direction term loses valid adverts.
  const focusedPlace=country?place:({international:'Germany',europe:'Germany',africa:'"South Africa"',asia:'Singapore',oceania:'Australia','north-america':'Canada','south-america':'Brazil'}[region]);
- const developmentQueries=developmentTitles.length?chunks(developmentTitles,employerSites,focusedPlace+' '+developerStack+'job',16):[];
- return [...developmentQueries,...[0,1,2,3].flatMap(batch=>chunks(groups.filter(group=>group.batch===batch).flatMap(group=>group.titles))),...chunks(groups.flatMap(group=>group.titles),'site:linkedin.com/jobs/view/ ')];
+ const developmentQueries=developmentTitles.length?chunks(developmentTitles,employerSites,focusedPlace+' '+developerStack+(junior?'(junior OR graduate OR "entry level") ':'')+'job',24):[];
+ const areas=groups.filter(group=>!group.development).map(group=>chunks(group.titles));
+ const queues=[developmentQueries,...areas].filter(queue=>queue.length),employerQueries=[];
+ // Cover each role area before spending the allowance on more aliases in one area.
+ for(let round=0;queues.some(queue=>queue[round]);round++)for(const queue of queues)if(queue[round])employerQueries.push(queue[round]);
+ return [...employerQueries,...chunks(groups.flatMap(group=>group.titles),'site:linkedin.com/jobs/view/ ')];
 }
 // A result index may contain many real adverts. It cannot be treated as a
 // single vacancy even when structured extraction selects one of its cards.
@@ -129,5 +133,10 @@ export async function searchFirecrawlJobs(input,options={}){
   if(!pending.has(key))pending.set(key,firecrawlSearchBatch(key,options).then(batch=>{cache.set(key,{time:Date.now(),batch});if(cache.size>100)cache.delete(cache.keys().next().value);return batch;}).finally(()=>pending.delete(key)));
   batch=await pending.get(key);
  }
- return {...batch,nextSearch:batch.sourceIssue?cursor:index+1<plan.length?'fc:'+(index+1):null,nextPage:null,source:'Firecrawl',searchBatchCount:plan.length,searchQueries:[{q:plan[index]}],fetchedAt:new Date().toISOString()};
+ const jobs=batch.jobs.filter(job=>{
+  if(!geographicMatch(job,{geography:input.region||'international',country:input.country||'',includeBroadRemote:!!input.broad}).matches)return false;
+  const minimum=experienceRequirement(job).minimum;
+  return input.months==null||minimum==null||minimum<=input.months/12;
+ });
+ return {...batch,jobs,nextSearch:batch.sourceIssue?cursor:index+1<plan.length?'fc:'+(index+1):null,nextPage:null,source:'Firecrawl',searchBatchCount:plan.length,searchQueries:[{q:plan[index]}],fetchedAt:new Date().toISOString()};
 }

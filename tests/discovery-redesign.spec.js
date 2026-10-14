@@ -25,7 +25,7 @@ test('empty source batches pause at the allowance and resume automatically',asyn
  await page.route('**/api/fit-review',r=>r.fulfill({json:{review:{version:7,skills:8,skillsLower:8,overall:8,summary:'API and SQL evidence.',cv:'Consulting CV',points:[],factors:[],audit:[],issues:[]}}}));
  await page.goto('/#notebook');await page.evaluate(async()=>{await(await import('/lib/device-store.js?v=80')).setItem('connection',{token:'x'.repeat(43)});});await page.reload();await page.locator('.main-nav [data-view="discover"]').click();
  await expect.poll(()=>calls).toBe(5);await page.waitForTimeout(400);expect(calls).toBe(5);
- await expect(page.getByRole('button',{name:/Keep searching/})).toHaveCount(0);await page.clock.fastForward(61000);await expect.poll(()=>calls).toBe(7);await page.clock.fastForward(86400000);await expect(page.locator('#active-card')).toContainText('Example');expect(calls).toBeGreaterThanOrEqual(9);
+ await expect(page.getByRole('button',{name:/Keep searching/})).toHaveCount(0);await page.clock.fastForward(61000);await expect.poll(()=>calls).toBe(9);await expect(page.locator('#active-card')).toContainText('Example');expect(calls).toBeGreaterThanOrEqual(9);
 });
 test('pasting a listing link retrieves editable fields and saves the description and LinkedIn source',async({page})=>{
  let calls=0;await page.route('**/api/import-job',r=>{calls++;return r.fulfill({json:{job:{...good,source:'LinkedIn',publishedAt:'2026-10-01',description:good.description}}});});

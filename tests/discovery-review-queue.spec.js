@@ -99,3 +99,27 @@ test('a source batch cap does not remove a ready role still present in the full 
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[],refreshedEmployerBoards:['example'],listedEmployerJobIds:[cached.id],nextPage:null,nextSearch:null}}));
  await page.locator('#refresh-jobs').click();await expect(page.locator('#refresh-jobs')).toBeEnabled();await expect(page.locator('#active-card')).toHaveAttribute('data-job-id',cached.id);
 });
+
+test('the new allowance resumes an old 36-review midnight pause and keeps prior credit usage',async({page})=>{
+ let calls=0;await page.route('**/api/fit-review',r=>{calls++;return r.fulfill({json:{review}});});await setup(page);
+ await page.evaluate(()=>{const k='job-notebook-discovery-v1',d=JSON.parse(localStorage.getItem(k));d.usage={day:new Date().toISOString().slice(0,10),reviews:36,searches:6};d.budgetPolicy=1;d.buffer={started:true,refilling:true,reviews:0,searches:0,resumeAt:Date.now()+12*3600000};localStorage.setItem(k,JSON.stringify(d));});
+ await page.goto('/?new-allowance=1#discover');await expect(page.locator('#active-card')).toBeVisible();expect(calls).toBeGreaterThan(0);
+ const state=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-discovery-v1')));expect(state.budgetPolicy).toBe(2);expect(state.usage.reviews).toBeGreaterThan(36);expect(state.usage.reviews).toBeLessThanOrEqual(72);expect(state.buffer.resumeAt).toBe(0);
+});
+test('changing the continent shows only that continent and resets source progress',async({page})=>{
+ const abroad={...jobs[0],id:'singapore',company:'Singapore Employer',location:'Singapore',link:'https://example.org/sg',description:jobs[0].description+' Singapore team.'};
+ await page.route('**/api/fit-review',r=>r.fulfill({json:{review}}));await setup(page,{inputJobs:[jobs[0],abroad]});
+ await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('#active-card')).toHaveAttribute('data-job-id',jobs[0].id);
+ await page.evaluate(()=>{const k='job-notebook-discovery-v1',d=JSON.parse(localStorage.getItem(k));d.webCheckedAt=999;localStorage.setItem(k,JSON.stringify(d));});
+ const requests=[];await page.route('**/api/jobs*',r=>{requests.push(new URL(r.request().url()));return r.fulfill({json:{jobs:[jobs[0],abroad],nextPage:null,nextSearch:null}});});
+ await page.locator('#location-filter').click();await page.locator('#filter-region').selectOption('asia');await page.locator('#apply-locations').click();await expect(page.locator('#active-card')).toHaveAttribute('data-job-id',abroad.id);await expect(page.locator('#deck-count')).toHaveText('1 role to explore');expect(requests[0].searchParams.get('region')).toBe('asia');
+ const state=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-discovery-v1')));expect(state.webCheckedAt).toBe(0);
+});
+test('a saved advert excludes its other reviewed copies and newly fetched copies',async({page})=>{
+ const original=jobs[0],copy={...original,id:'copy',location:'Sweden',link:'https://example.org/copy'};let paid=0;
+ await page.addInitScript(()=>{window.open=()=>({opener:null,blur(){}});});
+ await page.route('**/api/fit-review',r=>{paid++;return r.fulfill({json:{review}});});await setup(page,{inputJobs:[]});
+ await page.route('**/api/review-cache',r=>r.fulfill({json:{records:[original,copy].map(job=>{const input={job:{title:job.title,location:job.location,remote:false,description:job.description},profile:r.request().postDataJSON().profile};return {hash:createHash('sha256').update(JSON.stringify([7,new Date().toISOString().slice(0,7),input])).digest('hex'),job,review};})}}));
+ await page.goto('/?copies=1#discover');await expect(page.locator('#deck-count')).toHaveText('1 role to explore');await page.keyboard.press('ArrowRight');await expect(page.locator('#active-card')).toHaveCount(0);
+ await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...copy,id:'new-copy',link:'https://example.org/new-copy'}],nextPage:null,nextSearch:null}}));await page.locator('#refresh-jobs').click();await expect(page.locator('#refresh-jobs')).toBeEnabled();await expect(page.locator('#active-card')).toHaveCount(0);expect(paid).toBe(0);
+});

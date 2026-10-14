@@ -25,9 +25,10 @@ test('legacy related-role settings never narrow automatic discovery',()=>{
 });
 test('the jobs endpoint searches broadly even for old clients sending a related-role setting',async()=>{
  const queries=[],handler=createJobsHandler({fetcher:async(url,options)=>{queries.push(JSON.parse(options.body).query);return response({web:[]});}});
+ const cursor=firecrawlPlan({region:'asia'}).findIndex(q=>q.includes('\"functional consultant\"'));
  for(const adjacent of ['0','1']){
   const res={setHeader(){},status(code){this.code=code;return this;},json(data){this.data=data;}};
-  await handler({method:'GET',url:'/api/jobs?region=asia&search=fc:2&adjacent='+adjacent,headers:{}},res);
+  await handler({method:'GET',url:'/api/jobs?region=asia&search=fc:'+cursor+'&adjacent='+adjacent,headers:{}},res);
   assert.equal(res.code,200);
  }
  assert(queries.length>=1);assert(queries.every(query=>query.includes('"functional consultant"')));
@@ -108,7 +109,7 @@ test('a partial rate failure retains verified adverts and the same cursor for re
  const input={region:'asia',skills:['testing'],cursor:'fc:3'};
  const result=await searchFirecrawlJobs(input,{pause:async()=>{},fetcher:async(url,opts)=>{
   if(url.endsWith('/search'))return response({web:[{url:'https://example.org/job/retained-after-limit'},{url:'https://example.org/job/rate-limited'}]});
-  return JSON.parse(opts.body).url.includes('rate-limited')?{ok:false,status:429,headers:{get:()=>20},json:async()=>({success:false})}:response(document);
+  return JSON.parse(opts.body).url.includes('rate-limited')?{ok:false,status:429,headers:{get:()=>20},json:async()=>({success:false})}:response({...document,json:{...json,location:'Singapore'}});
  }});
  assert.equal(result.jobs.length,1);assert.equal(result.nextSearch,'fc:3');assert.equal(result.sourceIssue.code,'FIRECRAWL_RATE_LIMIT');
 });
@@ -126,4 +127,15 @@ test('limited page reads prioritise non-senior employer adverts over senior sear
   if(url.endsWith('/search'))return response({web:[{title:'Senior Frontend Engineer',url:'https://example.org/job/prioritise-senior'},{title:'Principal Engineer',url:'https://example.org/job/prioritise-principal'},{title:'Frontend Engineer',url:'https://example.org/job/prioritise-frontend'},{title:'Junior Developer',url:'https://example.org/job/prioritise-junior'},{title:'Software Engineer',url:'https://example.org/job/prioritise-software'}]});
   read.push(JSON.parse(opts.body).url);return response(document);
  }});assert.equal(read.length,3);assert.equal(result.jobs.length,1);assert(read.every(url=>!url.includes('senior')&&!url.includes('principal')));
+});
+test('first search round covers different career areas and uses junior developer terms',()=>{
+ const plan=firecrawlPlan({region:'europe',development:true,junior:true,skills:['javascript','api']});
+ assert.match(plan[0],/junior/);assert.match(plan[0],/Germany/);
+ assert.match(plan[1],/implementation consultant/);assert.match(plan[2],/business analyst/);assert.match(plan[3],/technology consultant/);
+ assert(plan.every(q=>q.length<=500));
+});
+
+test('source results enforce continent and country filters before returning candidates',async()=>{
+ const load=async input=>searchFirecrawlJobs(input,{fetcher:async(url,opts)=>url.endsWith('/search')?response({web:[{url:'https://example.org/job/strict-scope'}]}):response({...document,json:{...json,location:'Argentina - Fully Remote'}})});
+ const result=await load({region:'europe',skills:['python'],cursor:'start'});assert.equal(result.jobs.length,0);assert(result.nextSearch);
 });

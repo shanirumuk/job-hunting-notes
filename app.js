@@ -1,4 +1,5 @@
 import {experienceRequirement,experienceWithinLimit,isSeniorRole} from './lib/experience-filter.js';
+import {openListingTab,backgroundTabsAvailable} from './lib/listing-tabs.js';
 import {listingFreshness} from './lib/listing-freshness.js?v=83';
 import {mountListingHighlights,validHighlights} from './lib/listing-highlights.js';
 import {applyProfileCorrections} from './lib/profile-corrections.js';
@@ -9,8 +10,8 @@ import {cvSearchSkills,hasDevelopmentEvidence,roleGroupsForCV} from './lib/job-s
 import {recordedEmploymentMonths} from './lib/insights.js?v=78';
 import {regions,europeanCountries,geographicMatch,scopedLocation} from './lib/geography.js';
 import {recoverImport,getItem as deviceItem,setItem as deviceSetItem,updateItem as deviceUpdateItem} from './lib/device-store.js?v=80';
-import {READY_TARGET,REFILL_AT,REVIEW_LIMIT,SEARCH_LIMIT,DAILY_REVIEW_LIMIT,DAILY_SEARCH_LIMIT,RESUME_DELAY,dailyUsage,nextBudgetDay,readBuffer,advanceBuffer,canFillBuffer} from './lib/discovery-buffer.js?v=83';
-import {advertGroupKey,compareCandidates} from './lib/discovery-candidates.js';
+import {READY_TARGET,REFILL_AT,REVIEW_LIMIT,SEARCH_LIMIT,DAILY_REVIEW_LIMIT,DAILY_SEARCH_LIMIT,RESUME_DELAY,dailyUsage,nextBudgetDay,readBuffer,advanceBuffer,canFillBuffer} from './lib/discovery-buffer.js?v=87';
+import {advertGroupKey,decidedAdvertGroups,compareCandidates} from './lib/discovery-candidates.js?v=87';
 import {startDeviceSync} from './lib/device-sync.js';
 import {mergeApplicationEntries,ApplicationConflict} from './lib/application-storage.js';
 import {applicationsFromFragment,addLinkedApplication} from './lib/application-link.js';
@@ -175,7 +176,7 @@ function render() {
 function scopeLabel(){return profile.country?europeanCountries.find(c=>c.value===profile.country)?.label:profile.geography==='international'?'International · excluding the US':profile.geography==='europe'?'Across Europe':regions[profile.geography];}
 function restartDiscovery(){
  feedController?.abort();feedRequestId++;loading=false;
- clearTimeout(feedRetryTimer);feedRetryAttempts=0;discovery.lastError='';pinnedJobId=null;resetBuffer();feedError=false;discovery.nextPage=1;discovery.nextSearch=null;discovery.sourceErrors=[];discovery.fetchedAt='';
+ clearTimeout(feedRetryTimer);feedRetryAttempts=0;discovery.lastError='';pinnedJobId=null;resetBuffer();discovery.webCheckedAt=0;feedError=false;discovery.nextPage=1;discovery.nextSearch=null;discovery.sourceErrors=[];discovery.fetchedAt='';
  saveDiscovery();render();refreshJobs();
 }
 function openLocations(showRules=false){
@@ -206,11 +207,12 @@ function deckJobs() {
   const all = [...discovery.jobs, ...historical];
   const result = [];
   const reviewed=Object.values(discovery.reviewed||{}).filter(j=>discovery.decisions[j.id]);
+  const decidedGroups=decidedAdvertGroups(discovery.jobs,discovery.decisions,discovery.reviewed,entries);
   for (const job of all) {
     if(!listingFreshness(job,{includeOlder:profile.includeOlderListings}).visible)continue;
     if(profile.hideSeniorRoles&&isSeniorRole(job))continue;
-    if (discovery.decisions[job.id] || reviewed.some(j=>sameJob(j,job)) || result.some(j => sameJob(j,job))) continue;
-    if (entries.some(e => sameJob(e,job) && (e.status !== 'To apply' || e.preparation))) continue;
+    if (decidedGroups.has(advertGroupKey(job)) || discovery.decisions[job.id] || reviewed.some(j=>sameJob(j,job)) || result.some(j => sameJob(j,job))) continue;
+    if (entries.some(e => sameJob(e,job))) continue;
     let match = matchCache.get(job);
     if (!match) {const fit=discoveryFit(job,profile);match = {...matchJob(job,profile),experience:experienceRequirement(job),cvFit:fit}; matchCache.set(job,match);}
     const reviewedFit=fullReview(job);
@@ -335,9 +337,10 @@ function scheduleAutomaticDiscovery(){
 function nextReviewCandidate({includeErrors=false,ignoreBudget=false}={}){
  if(!ignoreBudget&&(!canFillBuffer({refilling:bufferRefilling,reviews:candidateReviewBudget},deckJobs().length,activeReviews.size)||!queueAllowed())||!profile.evidence.trim()||!browserConnectionVerified||reviewServiceIssue||!queueStarted||activeView==='profile'||restoringReviews)return null;
  const candidates=[];
+ const decidedGroups=decidedAdvertGroups(discovery.jobs,discovery.decisions,discovery.reviewed,entries);
  const checkedGroups=new Set(discovery.jobs.filter(j=>fullReview(j)||activeReviews.has(fitReviewKey(j))).map(advertGroupKey));
  for(const job of discovery.jobs){
-  if((job.description||'').trim().length<50||checkedGroups.has(advertGroupKey(job))||discovery.decisions[job.id]||(profile.hideSeniorRoles&&isSeniorRole(job))||!listingFreshness(job,{includeOlder:profile.includeOlderListings}).visible||entries.some(e=>sameJob(e,job))||fullReview(job)||activeReviews.has(fitReviewKey(job))||!includeErrors&&fitReviewErrors.has(fitReviewKey(job)))continue;
+  if((job.description||'').trim().length<50||checkedGroups.has(advertGroupKey(job))||decidedGroups.has(advertGroupKey(job))||discovery.decisions[job.id]||(profile.hideSeniorRoles&&isSeniorRole(job))||!listingFreshness(job,{includeOlder:profile.includeOlderListings}).visible||entries.some(e=>sameJob(e,job))||fullReview(job)||activeReviews.has(fitReviewKey(job))||!includeErrors&&fitReviewErrors.has(fitReviewKey(job)))continue;
   let match=matchCache.get(job);if(!match){const base=matchJob(job,profile);if(!base.eligible)continue;match={...base,experience:experienceRequirement(job),cvFit:discoveryFit(job,profile)};matchCache.set(job,match);}
   if(match.eligible&&match.cvFit.reason!=='experience')candidates.push({job,match,fit:match.cvFit});
  }
@@ -493,12 +496,13 @@ function renderDeck() {
   $('undo-swipe').disabled = !undoAction;
   $('swipe-actions').hidden = !job;
   scheduleAutomaticDiscovery();
-  const resumes=resumeAt?'Next automatic check '+new Date(resumeAt).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})+'.':'';
+  const dailyLimited=usage.reviews>=DAILY_REVIEW_LIMIT||!nextReviewCandidate({ignoreBudget:true})&&usage.searches>=DAILY_SEARCH_LIMIT;
+  const resumes=resumeAt?'Next automatic check '+new Date(resumeAt).toLocaleString(undefined,{weekday:'short',hour:'2-digit',minute:'2-digit'})+'.':'';
   if(job)$('feed-status').textContent=feedError?discovery.lastError+' · Retrying automatically':reviewing?'Checking more matches in the background…':moreReviews?resumes:jobs.length>=READY_TARGET?`Your shortlist is ready · Refill at ${REFILL_AT} remaining.`:'Your checked matches are ready.';
   const backgroundCandidate=nextReviewCandidate();if(backgroundCandidate)scheduleFitReview(backgroundCandidate);
   if (!job) {
   listingHighlights?.destroy();listingHighlights=null;
-  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${!profile.evidence.trim()?'Let’s start with your CV.':restoringReviews?'Loading your checked matches…':reviewing?'Checking your matches…':loading?'Finding matching jobs…':'No qualifying matches yet.'}</h2><p>${!profile.evidence.trim()?'Upload your CVs in My profile to find relevant roles.':reviewing?'Comparing requirements with your CV. Matches above 6/10 appear as each check finishes.':loading?'Checking employer careers and public job sources.':reviewServiceIssue?esc(reviewServiceIssue):'The checked roles did not meet your skills, experience or search criteria. Your search continues automatically.'}</p>${resumes?`<p role="status">${esc(resumes)}</p>`:''}${feedError?'<p role="status">'+esc(discovery.lastError||'A source could not be reached.')+' Retrying automatically.</p>':''}<button class="secondary-button" data-view="profile">Review my CV details</button>${reviewServiceIssue?'<p><button class="text-button" data-retry-fit>Check review availability</button></p>':''}${Object.keys(discovery.decisions).length?'<button class="text-button" id="revisit-passed">Revisit passed roles</button>':''}<button class="text-button" data-change-locations>Change search filters</button></div>`;
+  $('job-deck').innerHTML = `<div class="deck-empty"><span aria-hidden="true">✧</span><h2>${!profile.evidence.trim()?'Let’s start with your CV.':restoringReviews?'Loading your checked matches…':reviewing?'Checking your matches…':loading?'Finding matching jobs…':dailyLimited?'Today’s automatic matching allowance is used.':'No new qualifying matches in this batch.'}</h2><p>${!profile.evidence.trim()?'Upload your CVs in My profile to find relevant roles.':reviewing?'Comparing requirements with your CV. Matches above 6/10 appear as each check finishes.':loading?'Checking employer careers and public job sources.':reviewServiceIssue?esc(reviewServiceIssue):dailyLimited?'Automatic checking is paused to protect your credits; saved roles remain in Applications.':'No unseen roles in the current batch meet your skills, experience and location filters. Fresh sources are checked automatically.'}</p><p class="source-note">${esc(scopeLabel())} · ${usage.reviews}/${DAILY_REVIEW_LIMIT} CV reviews · ${usage.searches}/${DAILY_SEARCH_LIMIT} web searches today</p>${resumes?`<p role="status">${esc(resumes)}</p>`:''}${feedError?'<p role="status">'+esc(discovery.lastError||'A source could not be reached.')+' Retrying automatically.</p>':''}<button class="secondary-button" data-view="profile">Review my CV details</button>${reviewServiceIssue?'<p><button class="text-button" data-retry-fit>Check review availability</button></p>':''}${Object.keys(discovery.decisions).length?'<button class="text-button" id="revisit-passed">Revisit passed roles</button>':''}<button class="text-button" data-change-locations>Change search filters</button></div>`;
     const candidate=nextReviewCandidate();if(reviewing||moreReviews){const status=document.createElement('p');status.className='source-note';status.id='candidate-review-status';status.setAttribute('role','status');status.textContent=reviewProgress();$('job-deck').firstElementChild.append(status);}if(candidate)scheduleFitReview(candidate);
     return;
   }
@@ -574,7 +578,7 @@ async function updateFitCV(job,cv){
 function maybeLoadMore(count){
  if(!profile.evidence.trim()||!bufferRefilling||!candidateReviewBudget||count>REFILL_AT||count+activeReviews.size>=READY_TARGET||loading||feedError||autoBudget<=0||usage.searches>=DAILY_SEARCH_LIMIT||!discovery.fetchedAt||!hasMoreJobs()||!queueAllowed()||!browserConnectionVerified||reviewServiceIssue)return;
  // Assess the adverts already collected before spending more search credit.
- const checked=discovery.jobs.filter(j=>fullReview(j)).length,pending=nextReviewCandidate({ignoreBudget:true}),qualified=discovery.jobs.filter(j=>fullReview(j)&&reviewClearsDiscovery(fullReview(j))).length;
+ const checked=discovery.jobs.filter(j=>fullReview(j)).length,pending=nextReviewCandidate({ignoreBudget:true}),qualified=deckJobs().length;
  if((activeReviews.size||pending)&&(checked<(discovery.webCheckedAt||0)+4||qualified*2>=checked))return;
  if(fitReviewErrors.size&&!pending)return;
  queueMicrotask(()=>{if(!loading&&!feedError&&autoBudget>0&&usage.searches<DAILY_SEARCH_LIMIT&&bufferRefilling&&candidateReviewBudget>0&&hasMoreJobs()&&queueAllowed()){autoBudget--;usage.searches++;discovery.webCheckedAt=checked;saveDiscovery();refreshJobs(true);}});
@@ -603,7 +607,7 @@ async function refreshJobs(more=false) {
   if(!more&&data.source==='Firecrawl'&&Number.isInteger(data.searchBatchCount))autoBudget=Math.min(autoBudget,Math.max(0,data.searchBatchCount-1));
   const incoming=data.jobs.filter(j=>j&&typeof j.id==='string'&&typeof j.company==='string'&&typeof j.title==='string'&&safeURL(j.link));
   discovery.reviewed ||= {};
-  for(const job of discovery.jobs)if(discovery.decisions[job.id])discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link};
+  for(const job of discovery.jobs)if(discovery.decisions[job.id])discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link,advertGroup:advertGroupKey(job)};
   const refreshedBoards=new Set(data.stale?[]:data.refreshedEmployerBoards||[]),incomingIds=new Set(incoming.map(j=>j.id));
   const listedIds=Array.isArray(data.listedEmployerJobIds)?new Set(data.listedEmployerJobIds):incomingIds;
   const retained=discovery.jobs.filter(j=>!j.employerBoard||!refreshedBoards.has(j.employerBoard)||listedIds.has(j.id)||discovery.decisions[j.id]);
@@ -644,13 +648,13 @@ async function refreshJobs(more=false) {
 async function decide(action, job = deckJobs()[0]) {
   if (!job || decisionPending) return;
   decisionPending = true;
-  let listingOpened=false;
+  let listingOpened=false,openedInBackground=false;
   document.querySelectorAll('.swipe-button').forEach(button => button.disabled = true);
   $('undo-swipe').disabled = true;
   const existing = entries.find(e => sameJob(e,job));
   undoAction = {jobId: job.id, previousDecision: discovery.decisions[job.id], entry: existing ? structuredClone(existing) : null, newId: null};
   discovery.decisions[job.id] = action;
-  discovery.reviewed ||= {};discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link};
+  discovery.reviewed ||= {};discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link,advertGroup:advertGroupKey(job)};
   if (action !== 'pass') {
     const recommendedCV=fullReview(job)?.cv||job.match.cv;
     const entry = existing || {id: job.id, company: job.company, title: job.title, location: job.location, link: job.link, requirements: job.description || job.requirements || '', status: 'To apply', materials: recommendedCV, notes: '', applicationDate: '', interviewDate: '', source: job.source};
@@ -660,11 +664,11 @@ async function decide(action, job = deckJobs()[0]) {
     if (action === 'prepare') {preparationId = entry.id;}
   }
   saveDiscovery();
-  if (action === 'prepare') {
+  if (action === 'prepare'||action === 'open') {
     const url = safeURL(job.link);
     if (url) {
-      const tab = window.open(url, '_blank');
-      if (tab) {tab.opener = null;listingOpened=true;}
+      const result=await openListingTab(url,{background:action==='open'});
+      if (result.opened) {listingOpened=true;openedInBackground=result.background;}
       else {
         $('listing-tab-link').href=url;
         $('listing-tab-job').textContent=job.title+' · '+job.company;
@@ -681,7 +685,8 @@ async function decide(action, job = deckJobs()[0]) {
   }
   decisionPending = false;
   render();
-  if (action === 'prepare' && !browserConnection) toast(listingOpened?'Listing opened in a new tab. Your CV choice and notes are saved in Applications.':'Saved as Preparing. Use Open application to open the blocked tab.');
+  if(action==='open')toast(listingOpened?(openedInBackground?'Opened in the background · saved for later.':'Listing opened · saved for later.'):'Saved for later. Use Open application to open the listing.');
+  else if (action === 'prepare' && !browserConnection) toast(listingOpened?'Listing opened in a new tab. Your CV choice and notes are saved in Applications.':'Saved as Preparing. Use Open application to open the blocked tab.');
   else if(action !== 'prepare') toast(action === 'pass' ? 'Passed. Undo is here if you change your mind.' : 'Saved to your applications for later.');
 }
 function undoSwipe() {
@@ -710,7 +715,7 @@ function wireSwipe() {
   function paint() {
     frame=0;
     card.style.transform = `translate3d(${dx}px,0,0) rotate(${Math.max(-8,Math.min(8,dx/30))}deg)`;
-    const label = card.querySelector('.swipe-label'); label.style.top=(card.scrollTop+Math.min(75,card.clientHeight/4))+'px'; label.style.opacity = Math.min(1,Math.abs(dx)/threshold()); label.textContent = dx > 0 ? 'SAVE' : 'PASS';
+    const label = card.querySelector('.swipe-label'); label.style.top=(card.scrollTop+Math.min(75,card.clientHeight/4))+'px'; label.style.opacity = Math.min(1,Math.abs(dx)/threshold()); label.textContent = dx > 0 ? 'OPEN' : 'PASS';
     card.dataset.direction = dx > 0 ? 'save' : 'pass';
   }
   card.addEventListener('pointermove', e => {
@@ -737,7 +742,7 @@ function wireSwipe() {
     const amount=dx,velocity=Math.abs(dx)/Math.max(1,e.timeStamp-start.time);
     const commit=start.dragging && (Math.abs(amount)>=threshold() || (Math.abs(amount)>=40 && velocity>=.55));
     if(commit)paint();
-    reset(commit);if(commit)decide(amount>0?'save':'pass',job);
+    reset(commit);if(commit)decide(amount>0?'open':'pass',job);
   });
   card.addEventListener('pointercancel',()=>reset());
   card.addEventListener('lostpointercapture', e => {if (e.target === card && start) reset();});
@@ -770,15 +775,15 @@ function wireTrackpadAndKeys() {
     gesture.distance-=Math.max(-90,Math.min(90,e.deltaX*unit));gesture.events++;
     const distance=gesture.distance*.55,threshold=Math.max(150,Math.min(180,card.clientWidth*.35));
     card.classList.add('dragging');card.style.transform=`translate3d(${distance}px,0,0) rotate(${Math.max(-8,Math.min(8,distance/30))}deg)`;
-    const label=card.querySelector('.swipe-label');label.style.top=(card.scrollTop+Math.min(75,card.clientHeight/4))+'px';label.style.opacity=Math.min(1,Math.abs(distance)/threshold);label.textContent=distance>0?'SAVE':'PASS';card.dataset.direction=distance>0?'save':'pass';
+    const label=card.querySelector('.swipe-label');label.style.top=(card.scrollTop+Math.min(75,card.clientHeight/4))+'px';label.style.opacity=Math.min(1,Math.abs(distance)/threshold);label.textContent=distance>0?'OPEN':'PASS';card.dataset.direction=distance>0?'save':'pass';
     if(gesture.events>=4 && Math.abs(distance)>=threshold){
       gesture.committed=true;card.classList.remove('dragging');
-      decide(distance>0?'save':'pass',gesture.job);
+      decide(distance>0?'open':'pass',gesture.job);
     }
   },{passive:false});
   document.addEventListener('keydown',e=>{
     if(blocked() || decisionPending || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.target.closest?.('input,textarea,select,[contenteditable],[role="textbox"],[role="slider"],[role="listbox"]'))return;
-    const action={ArrowLeft:'pass',ArrowRight:'save',s:'save'}[e.key];
+    const action={ArrowLeft:'pass',ArrowRight:'open',s:'save'}[e.key];
     if(!action || !$('active-card'))return;
     e.preventDefault();finishGesture();decide(action);
   });
@@ -1285,6 +1290,7 @@ function consumeApplicationLink(){
  if(message)toast(message);
  return true;
 }
+if(discovery.budgetPolicy!==2){discovery.budgetPolicy=2;resumeAt=0;discovery.webCheckedAt=0;discovery.nextSearch='start';resetBuffer();saveDiscovery();}
 if(!consumeApplicationLink()){setView(location.hash.slice(1));render();}
 if (storageError) toast('Some saved data could not be read. Export a backup before making changes.');
 if(privateRecoveryResult)toast(privateRecoveryResult.message);
@@ -1320,3 +1326,7 @@ window.addEventListener('storage',event=>{
   if(activeView==='profile')toast('Saved CV details changed in another tab. Reopen My profile to load them into the form.');
  }
 });
+
+function renderBackgroundTabsStatus(){ $('background-tabs-status').textContent=backgroundTabsAvailable()?'Background tabs connected. Right swipe opens a listing while you stay here.':'Chrome needs the Job Notebook helper to guarantee background tabs. Without it, your browser controls tab focus.'; }
+document.addEventListener('job-notebook-helper-ready',renderBackgroundTabsStatus);
+renderBackgroundTabsStatus();

@@ -1,8 +1,30 @@
 {
   "manifest_version": 3,
-  "name": "Job notebook · Application helper",
-  "version": "1.0.0",
-  "description": "Fill standard application fields from a Job notebook draft, then review and submit yourself.",
-  "permissions": ["activeTab", "scripting"],
-  "action": { "default_popup": "popup.html", "default_title": "Fill from Job notebook" }
+  "name": "Job notebook \u00b7 Application helper",
+  "version": "1.1.0",
+  "description": "Open Job Notebook listings in background tabs and fill standard application fields for review.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Fill from Job notebook"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://job-hunting-notes.vercel.app/*",
+        "http://127.0.0.1/*",
+        "http://localhost/*"
+      ],
+      "js": [
+        "notebook-tabs.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }

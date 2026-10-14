@@ -12,3 +12,13 @@ test('CV-specific technical evidence takes priority over generic soft-skill matc
  assert(compareCandidates(technical,generic,{evidence:'Built React applications.'})<0);
  assert(compareCandidates({...technical,fit:{...technical.fit,reason:'experience-unverified'}},generic,{})>0);
 });
+test('swipe history excludes regional copies after source refresh, without excluding different requirements',async()=>{
+ const {decidedAdvertGroups}=await import('../lib/discovery-candidates.js');
+ const original={id:'old',company:'Employer',title:'Developer',description:'Requirements: React, SQL and API experience.'};
+ const duplicate={...original,id:'copy',location:'Sweden'},different={...original,id:'other',description:original.description+' German C1 required.'};
+ const history={old:{id:'old',advertGroup:advertGroupKey(original)}};
+ const groups=decidedAdvertGroups([duplicate],{old:'open'},history,[]);
+ assert(groups.has(advertGroupKey(duplicate)));assert(!groups.has(advertGroupKey(different)));
+ assert.equal(decidedAdvertGroups([duplicate],{},history,[]).size,0);
+ assert(decidedAdvertGroups([],{},history,[{...original,requirements:original.description,description:undefined}]).has(advertGroupKey(duplicate)));
+});
