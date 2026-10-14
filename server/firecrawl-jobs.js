@@ -5,7 +5,8 @@ import {searchSkills,searchRoleGroups} from '../lib/job-search-profile.js';
 import {safeURL,descriptionText,plainText,sameJob} from '../lib/model.js';
 import {listingDate} from '../lib/listing-freshness.js';
 import {isSeniorRole,experienceRequirement} from '../lib/experience-filter.js';
-import {importURL,publicAddress} from './job-import.js';
+import {importURL,publicAddress,parseJobPage} from './job-import.js';
+import {employerPageURL,matchingEmployerListing} from './employer-listing-match.js';
 const cache=new Map(),pending=new Map(),blockedSources=new Map(),TTL=6*60*60*1000;
 const failure=(message,status=503,code='FIRECRAWL_UNAVAILABLE')=>Object.assign(Error(message),{status,code});
 export function publicListingURL(value){
@@ -80,9 +81,16 @@ const normalize=s=>String(s||'').replace(/!?\[([^\]]*)\]\([^)]*\)/g,'$1').toLowe
 export function normalizeFirecrawlJob(data,url){
  if(listingIndexURL(url))return null;
  const j=data?.json,markdown=typeof data?.markdown==='string'?data.markdown:'';
- if(!j||j.isJobPosting!==true||j.isClosed!==false)return null;
  if(/this (?:job|vacancy|position) (?:is no longer available|has (?:expired|closed)|is closed)|no longer accepting applications/i.test(markdown))return null;
  if(data.metadata?.statusCode>=400)throw Error('Source page unavailable.');
+ if(typeof data.rawHtml==='string'){
+  let sourceJob;try{sourceJob=parseJobPage(data.rawHtml,url);}catch{}
+  if(sourceJob&&sourceJob.description.length>=60){
+   const expiresAt=listingDate(sourceJob.expiresAt);if(expiresAt&&Date.parse(expiresAt)<=Date.now())return null;
+   return {...sourceJob,id:'firecrawl-'+createHash('sha256').update(sourceJob.link).digest('hex').slice(0,24),publishedAt:listingDate(sourceJob.publishedAt),expiresAt,fetchedAt:new Date().toISOString()};
+  }
+ }
+ if(!j||j.isJobPosting!==true||j.isClosed!==false)return null;
  if(['title','company','description','location','publishedAt','expiresAt'].some(key=>typeof j[key]!=='string')||typeof j.remote!=='boolean')throw Error('Incomplete job data.');
  if(!j.title.trim()||!j.company.trim()||j.description.trim().length<60||j.description.length>50000||!markdown)throw Error('Incomplete advert.');
  const source=normalize(markdown);
@@ -98,10 +106,11 @@ async function readJob(url,options){
  if(existing&&Date.now()-existing.time<60*60*1000)return existing.job;
  const host=new URL(url).hostname,sourceKey=createHash('sha256').update(options.apiKey||process.env.FIRECRAWL_API_KEY||'').digest('hex')+':'+(/(^|\.)linkedin\.com$/.test(host)?'linkedin.com':host),blocked=blockedSources.get(sourceKey);
  if(blocked&&Date.now()-blocked.time<10*60*1000)throw blocked.error;
- if(!pending.has(key))pending.set(key,call('scrape',{url,formats:['markdown',{type:'json',schema,prompt:prompt+' Include all advertised job locations in location, not just the first.'}],onlyMainContent:true,maxAge:0,timeout:40000},options).then(data=>{const job=normalizeFirecrawlJob(data,url);cache.set(key,{time:Date.now(),job});if(cache.size>100)cache.delete(cache.keys().next().value);return job;}).catch(error=>{if(error.code==='FIRECRAWL_SOURCE_BLOCKED'){blockedSources.set(sourceKey,{time:Date.now(),error});if(blockedSources.size>64)blockedSources.delete(blockedSources.keys().next().value);}throw error;}).finally(()=>pending.delete(key)));
+ if(!pending.has(key))pending.set(key,call('scrape',{url,formats:['markdown','rawHtml',{type:'json',schema,prompt:prompt+' Include all advertised job locations in location, not just the first.'}],onlyMainContent:true,maxAge:0,timeout:40000},options).then(data=>{const job=normalizeFirecrawlJob(data,url);cache.set(key,{time:Date.now(),job});if(cache.size>100)cache.delete(cache.keys().next().value);return job;}).catch(error=>{if(error.code==='FIRECRAWL_SOURCE_BLOCKED'){blockedSources.set(sourceKey,{time:Date.now(),error});if(blockedSources.size>64)blockedSources.delete(blockedSources.keys().next().value);}throw error;}).finally(()=>pending.delete(key)));
  return pending.get(key);
 }
 export async function importFirecrawlJob(url,options={}){
+ if(/(^|\.)linkedin\.com$/.test(new URL(url).hostname)&&options.hint?.title&&options.hint?.company)return resolveEmployerListing(url,options.hint,options);
  const job=await readJob(publicListingURL(url),options);
  if(!job)throw failure('This link does not contain an open individual vacancy. Try the employer’s direct listing or paste the advert.');
  return job;
@@ -139,4 +148,21 @@ export async function searchFirecrawlJobs(input,options={}){
   return input.months==null||minimum==null||minimum<=input.months/12;
  });
  return {...batch,jobs,nextSearch:batch.sourceIssue?cursor:index+1<plan.length?'fc:'+(index+1):null,nextPage:null,source:'Firecrawl',searchBatchCount:plan.length,searchQueries:[{q:plan[index]}],fetchedAt:new Date().toISOString()};
+}
+
+// Resolve alert hints to a verified employer page. Never score an email snippet.
+export async function resolveEmployerListing(linkedInURL,hint,options={}){
+ if(!hint?.title?.trim()||!hint?.company?.trim())throw failure('The alert needs an employer and role title to locate the original advert. Open its link or add the employer’s listing.');
+ const clean=value=>String(value||'').replace(/[^\p{L}\p{N}\s/-]/gu,' ').replace(/\s+/g,' ').trim();
+ const title=hint.title.replace(/\([mwdfx/| -]{3,20}\)|\b[mwdfx][|/][mwdfx][|/][mwdfx]\b/gi,'').replace(/\(?\bfull(?:y)? remote\b\)?/gi,'');
+ const company=hint.company.replace(/\b(?:GmbH|LLC|Ltd|Inc)\b\.?/gi,'');
+ const query=`"${clean(title).slice(0,160)}" "${clean(company).slice(0,100)}" job -site:linkedin.com -site:talents.studysmarter.de -site:indeed.com -site:glassdoor.com`;
+ options={...options,deadline:options.deadline||Date.now()+65000};
+ const result=await call('search',{query:query.slice(0,500),limit:5,sources:[{type:'web'}],timeout:15000},{...options,timeout:20000});
+ const urls=[...new Set((result.web||[]).flatMap(row=>{try{const url=publicListingURL(row.url);return !listingIndexURL(url)&&employerPageURL(url,hint.company)?[url]:[];}catch{return [];}}))].slice(0,2);
+ const results=await Promise.allSettled(urls.map(url=>readJob(url,options)));
+ const matching=results.filter(r=>r.status==='fulfilled'&&r.value&&matchingEmployerListing(r.value,hint)).map(r=>r.value);
+ const unique=[...new Map(matching.map(job=>[[normalize(job.company),normalize(job.title),normalize(job.location),normalize(job.description)].join('|'),job])).values()];
+ if(unique.length!==1){const issue=results.find(r=>r.status==='rejected'&&['FIRECRAWL_QUOTA_EXHAUSTED','FIRECRAWL_SETUP_REQUIRED','FIRECRAWL_RATE_LIMIT'].includes(r.reason.code));if(issue)throw issue.reason;throw failure(unique.length?'Several employer adverts match this alert. Open the original link to confirm the location.':'No matching open employer advert was verified yet. The alert remains waiting for another check.');}
+ return {...unique[0],linkedInURL,source:unique[0].source+' · LinkedIn alert'};
 }

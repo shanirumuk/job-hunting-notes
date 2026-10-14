@@ -1,5 +1,5 @@
 import {authorized} from '../server/access.js';
-import {linksFromAlert} from '../lib/job-alerts.js';
+import {listingsFromAlert} from '../lib/job-alerts.js';
 const id=value=>typeof value==='string'&&/^[a-z0-9_-]{1,100}$/i.test(value);
 const email=value=>typeof value==='string'&&/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
 export function createJobAlertsHandler({fetcher=fetch,pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),settings=()=>({key:process.env.RESEND_API_KEY,address:process.env.JOB_NOTEBOOK_ALERT_EMAIL})}={}){
@@ -33,7 +33,7 @@ export function createJobAlertsHandler({fetcher=fetch,pause=ms=>new Promise(reso
     try{
      const message=await request('/emails/receiving/'+encodeURIComponent(item.id));
      if(!Array.isArray(message.to)||!message.to.some(to=>typeof to==='string'&&to.toLowerCase()===address))throw Error('This message was not sent to your alert address.');
-     for(const url of linksFromAlert(message))if(!links.some(e=>e.url===url))links.push({url,messageId:item.id,receivedAt:item.created_at||''});
+     for(const listing of listingsFromAlert(message))if(!links.some(e=>e.url===listing.url))links.push({...listing,messageId:item.id,receivedAt:item.created_at||''});
      processed.push(item.id);
     }catch(error){errors.push(error.message);break;}
    }

@@ -3,7 +3,7 @@ import {authorized} from '../server/access.js';
 import {reviewInput,generateReview} from '../server/fit-review.js';
 import {reviewCache,reviewHash} from '../server/review-cache.js';
 import {z} from 'zod';
-const listingSchema=z.object({id:z.string().max(300),company:z.string().max(300),link:z.string().url().max(4000).refine(v=>/^https?:\/\//.test(v)),source:z.string().max(100).optional(),publishedAt:z.string().max(100).optional(),employerBoard:z.string().max(100).optional(),availability:z.enum(['listed']).optional(),availabilityCheckedAt:z.string().max(100).optional()});
+const listingSchema=z.object({id:z.string().max(300),company:z.string().max(300),link:z.string().url().max(4000).refine(v=>/^https?:\/\//.test(v)),source:z.string().max(160).optional(),linkedInURL:z.string().url().max(4000).optional(),publishedAt:z.string().max(100).optional(),employerBoard:z.string().max(100).optional(),availability:z.enum(['listed']).optional(),availabilityCheckedAt:z.string().max(100).optional()});
 export const config={maxDuration:300};
 export function createFitReviewHandler(generate=generateReview,now=Date.now,cache=reviewCache){
  const pending=new Map();

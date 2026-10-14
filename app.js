@@ -15,15 +15,15 @@ import {advertGroupKey,decidedAdvertGroups,compareCandidates} from './lib/discov
 import {startDeviceSync} from './lib/device-sync.js';
 import {mergeApplicationEntries,ApplicationConflict} from './lib/application-storage.js';
 import {applicationsFromFragment,addLinkedApplication} from './lib/application-link.js';
-import {mergeAlertJobs} from './lib/job-alerts.js';
-import {mountEmailAlertInbox} from './lib/email-alert-inbox.js';
+import {mergeAlertJobs} from './lib/job-alerts.js?v=88';
+import {mountEmailAlertInbox} from './lib/email-alert-inbox.js?v=88';
 import {restorePrivateLink} from './lib/private-recovery.js';
 import {recoverSubmittedApplications} from './lib/application-recovery.js?v=78';
 await recoverImport();
 const privateRecoveryResult=await restorePrivateLink().catch(()=>({ok:false,message:'Private recovery could not read this browser’s storage. Your saved notebook has been kept.'}));
 window.addEventListener('hashchange',()=>{if(location.hash.startsWith('#restore-notebook='))location.reload();});
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=78';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=88';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -400,7 +400,7 @@ async function requestFitReview(job,{explicit=false}={}){
   if(!review){
    if(!explicit&&(!queueAllowed()||!bufferRefilling||deckJobs().length>=READY_TARGET||!candidateReviewBudget&&!fitReviewRetries.has(key)))return;
    if(!explicit&&!fitReviewRetries.has(key)){candidateReviewBudget--;usage.reviews++;saveDiscovery();}
-   const listing=Object.fromEntries(['id','company','link','source','publishedAt','employerBoard','availability','availabilityCheckedAt'].filter(k=>job[k]!==undefined).map(k=>[k,job[k]]));
+   const listing=Object.fromEntries(['id','company','link','source','publishedAt','employerBoard','availability','availabilityCheckedAt','linkedInURL'].filter(k=>job[k]!==undefined).map(k=>[k,job[k]]));
    const response=await fetch('/api/fit-review',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${browserConnection}`},body:JSON.stringify({...input,listing,purpose:explicit?'detail':'discovery'}),signal:AbortSignal.timeout(295000)});
    if(response.status===429){
     const attempts=(fitReviewRetries.get(key)?.attempts||0)+1;
@@ -657,7 +657,7 @@ async function decide(action, job = deckJobs()[0]) {
   discovery.reviewed ||= {};discovery.reviewed[job.id]={id:job.id,company:job.company,title:job.title,location:job.location,link:job.link,advertGroup:advertGroupKey(job)};
   if (action !== 'pass') {
     const recommendedCV=fullReview(job)?.cv||job.match.cv;
-    const entry = existing || {id: job.id, company: job.company, title: job.title, location: job.location, link: job.link, requirements: job.description || job.requirements || '', status: 'To apply', materials: recommendedCV, notes: '', applicationDate: '', interviewDate: '', source: job.source};
+    const entry = existing || {id: job.id, company: job.company, title: job.title, location: job.location, link: job.link, requirements: job.description || job.requirements || '', status: 'To apply', materials: recommendedCV, notes: '', applicationDate: '', interviewDate: '', source: job.source,...(job.linkedInURL?{linkedInURL:job.linkedInURL}:{})};
     if (!existing) {entries.unshift(entry); undoAction.newId = entry.id;}
     if (action === 'prepare') {entry.status = 'Preparing'; if(!entry.preparation){entry.preparation=prepareApplication(job,profile);entry.preparation.cv=recommendedCV;entry.preparation.cvFile=profile[cvKey(recommendedCV)+'CV']||'';} entry.materials ||= recommendedCV;}
     saveEntries();
@@ -831,7 +831,7 @@ function upsert(event) {
   event.preventDefault(); const value = id => $(id).value.trim();
   if (value('link') && !safeURL(value('link'))) { $('save-status').textContent = 'Use an http or https application link.'; return; }
   const previous = editorEntry;
-  const data = {...previous,...(importedJob?{description:importedJob.description,sourceDescription:importedJob.description,source:importedJob.source,publishedAt:importedJob.publishedAt,expiresAt:importedJob.expiresAt,remote:importedJob.remote}:{}),id:value('entry-id') || crypto.randomUUID?.() || 'local-'+Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),company:value('company'),title:value('title'),location:value('location'),status:$('status').value,applicationDate:$('application-date').value,interviewDate:$('interview-date').value,followUpDate:$('follow-up-date').value,link:value('link'),materials:value('materials'),requirements:value('requirements'),notes:value('notes')};
+  const data = {...previous,...(importedJob?{description:importedJob.description,sourceDescription:importedJob.description,source:importedJob.source,publishedAt:importedJob.publishedAt,expiresAt:importedJob.expiresAt,remote:importedJob.remote,...(importedJob.linkedInURL?{linkedInURL:importedJob.linkedInURL}:{})}:{}),id:value('entry-id') || crypto.randomUUID?.() || 'local-'+Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),company:value('company'),title:value('title'),location:value('location'),status:$('status').value,applicationDate:$('application-date').value,interviewDate:$('interview-date').value,followUpDate:$('follow-up-date').value,link:value('link'),materials:value('materials'),requirements:value('requirements'),notes:value('notes')};
   if (!data.company || !data.title) return;
   if(importedJob||previous?.description)data.description=data.requirements;
   if(data.status!==previous?.status)Object.assign(data,changeApplicationStatus(data,data.status,today()));

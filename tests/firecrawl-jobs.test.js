@@ -46,7 +46,7 @@ test('Firecrawl is the only network provider and duplicate or unreadable pages a
   calls.push(url);assert.equal(options.headers.Authorization,'Bearer server-only-key');const body=JSON.parse(options.body);
   if(url.endsWith('/search'))return response({web:[{url:'https://example.org/job/1'},{url:'https://example.org/job/1'},{url:'https://example.org/blocked'}]});
   if(body.url.endsWith('blocked'))return {ok:false,status:500,json:async()=>({success:false})};
-  assert.equal(body.maxAge,0);assert.equal(body.formats[1].type,'json');return response(document);
+  assert.equal(body.maxAge,0);assert(body.formats.includes('rawHtml'));assert(body.formats.some(format=>format.type==='json'));return response(document);
  }});
  assert.equal(result.jobs.length,1);assert.equal(result.partial,true);assert.equal(calls.length,3);assert(calls.every(u=>u.startsWith('https://api.firecrawl.dev/v2/')));assert(!JSON.stringify(result).includes('server-only-key'));
 });

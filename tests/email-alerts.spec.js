@@ -56,3 +56,30 @@ test('a persisted daily limit survives reload and a manual check reads only thre
  await page.evaluate(()=>window.fixtureController.check(true));
  expect(await page.evaluate(()=>({reads:window.fixtureReads,waiting:JSON.parse(localStorage.getItem('job-notebook-email-alerts-v1')).queue.length,automatic:JSON.parse(localStorage.getItem('job-notebook-email-alerts-v1')).automaticReads}))).toEqual({reads:3,waiting:2,automatic:12});
 });
+
+test('legacy alert links gain employer hints, use a verified employer page and deduplicate later emails',async({page})=>{
+ const linkedin='https://www.linkedin.com/jobs/view/4473218727/',hint={title:'Business Analyst',company:'Example',location:'Berlin'};let reads=0,seenBodies=[];
+ await page.addInitScript(({profile,saved,linkedin})=>{
+  if(localStorage.getItem('fallback-test'))return;localStorage.setItem('fallback-test','1');localStorage.setItem('job-notebook-profile-v1',JSON.stringify(profile));localStorage.setItem('job-notebook-v1',JSON.stringify([saved]));localStorage.setItem('job-notebook-international-v23','1');localStorage.setItem('job-notebook-discovery-v26','1');
+  localStorage.setItem('job-notebook-email-alerts-v1',JSON.stringify({enabled:true,seen:['old-email'],queue:[{url:linkedin,attempts:3}],cursor:'old-cursor',lastChecked:Date.now(),day:new Date().toISOString().slice(0,10),automaticReads:0}));
+ },{profile,saved,linkedin});
+ await page.route('**/api/**',r=>{
+  const pathname=new URL(r.request().url()).pathname,body=r.request().postDataJSON();
+  if(pathname==='/api/setup')return r.fulfill({json:{reviewProvider:{provider:'openai',configured:true}}});
+  if(pathname==='/api/job-alerts'){
+   if(body.action==='status')return r.fulfill({json:{configured:true,address:'fixture@example.resend.app'}});
+   seenBodies.push(body);return r.fulfill({json:{links:[{url:linkedin,hint}],processed:['new-email'],nextCursor:null}});
+  }
+  if(pathname==='/api/import-job'){
+   reads++;expect(body).toEqual({url:linkedin,hint});return r.fulfill({json:{job:{id:'employer-resolved',company:'Example',title:'Business Analyst',location:'Berlin, Germany',link:'https://jobs.lever.co/example/role',linkedInURL:linkedin,source:'Employer listing',description:'Requirements:\nSQL experience.\nEnglish proficiency.'}}});
+  }
+  if(pathname==='/api/fit-review')return r.fulfill({json:{review:{version:7,skills:8,skillsLower:8,overall:8,summary:'SQL evidence supports the role.',cv:'Business Analyst CV',points:[],factors:[],audit:[],issues:[]}}});
+  if(pathname==='/api/jobs')return r.fulfill({json:{jobs:[],nextPage:null,nextSearch:null}});
+  return r.fulfill({json:{}});
+ });
+ await page.goto('/#notebook');await page.evaluate(async()=>{await(await import('/lib/device-store.js?v=80')).setItem('connection',{token:'x'.repeat(43)});});await page.reload();
+ await expect.poll(()=>reads).toBe(1);expect(seenBodies[0].seen).toEqual([]);expect(seenBodies[0].cursor).toBe(null);
+ await page.locator('.main-nav [data-view="discover"]').click();await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','employer-resolved');await page.locator('#save-job').click();
+ const rows=await page.evaluate(()=>JSON.parse(localStorage.getItem('job-notebook-v1')));expect(rows.find(r=>r.id==='employer-resolved').linkedInURL).toBe(linkedin);expect(rows.find(r=>r.id==='existing')).toEqual(saved);
+ await page.locator('.main-nav [data-view="profile"]').click();await page.locator('#email-alert-settings summary').first().click();await page.locator('#email-alert-check').click();await expect(page.locator('#email-alert-status')).toContainText('No new adverts read');expect(reads).toBe(1);
+});
