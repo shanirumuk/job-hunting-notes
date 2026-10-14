@@ -185,15 +185,16 @@ test('long role names and all review flags remain available on a small screen',a
   expect(await page.locator('#role-dialog').evaluate(el=>el.scrollWidth)).toBeLessThanOrEqual(320);
   await page.locator('#role-prepare').click();await reviewSaved(page);await expect(page.locator('#preparation-dialog')).toBeVisible();await expect(page.locator('#preparation-title')).toHaveText('Workflow Ltd');
 });
-test('touch scrolling stays inside the card and a horizontal touch prepares the role',async ({browser}) => {
+test('touch scrolling stays inside the card and a horizontal touch saves for later',async ({browser}) => {
   const context=await browser.newContext({viewport:{width:375,height:667},isMobile:true,hasTouch:true,serviceWorkers:'block'});const page=await context.newPage();await setup(page);
   const client=await context.newCDPSession(page);const card=await page.locator('#active-card').boundingBox();
   const x=card.x+80,y=card.y+60;
   await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
   for(let n=1;n<=8;n++) await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+n*17,y}]});
   await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-  await reviewSaved(page);await expect(page.locator('#preparation-dialog')).toBeVisible();
-  await page.locator('#close-preparation').click();await page.locator('.main-nav [data-view="discover"]').click();await page.locator('#undo-swipe').click();
+  await expect.poll(async()=>(await records(page)).find(e=>e.id==='fixture-ba')?.status).toBe('To apply');
+  expect(await page.evaluate(()=>window.openedListings)).toEqual([]);await expect(page.locator('#discover-view')).toBeVisible();
+  await expect(page.locator('#preparation-dialog')).not.toBeVisible();await page.locator('#undo-swipe').click();
   await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:180,y:card.y+card.height-85}]});
   for(let n=1;n<=6;n++) await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:180,y:card.y+card.height-85-n*17}]});
   await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
@@ -775,14 +776,13 @@ test('consulting contract review separates real qualifications, daily work and p
  await page.keyboard.press('Escape');await page.reload();await page.locator('.listing-info').click();await expect(page.locator('.fit-score')).toContainText('4 / 10');await expect(page.locator('.fit-review')).toContainText('6 core requirements');
 });
 
-for(const blocked of [false,true])test(`right trackpad swipe keeps the notebook open with ${blocked?'blocked':'allowed'} popups`,async({page,context})=>{
+for(const blocked of [false,true])test(`explicit Apply keeps the notebook open with ${blocked?'blocked':'allowed'} popups`,async({page,context})=>{
  await context.route('https://example.org/**',r=>r.fulfill({contentType:'text/html',body:'<h1>Employer application</h1>'}));
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs,nextPage:null}}));
  if(blocked)await page.addInitScript(()=>{window.open=()=>null;});
  await page.goto('/');await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','fixture-ba');const url=page.url();
- const body=await page.locator('.inline-role > h3').boundingBox();await page.mouse.move(body.x+body.width/2,body.y+20);
  const popupPromise=blocked?null:context.waitForEvent('page');
- for(let i=0;i<4;i++)await page.mouse.wheel(-90,0);
+ await page.locator('#prepare-job').click();
  let popup;
  if(blocked){
   await expect(page.locator('#listing-tab-dialog')).toBeVisible();await expect(page.locator('#listing-tab-link')).toHaveAttribute('href',jobs[0].link);await expect(page.locator('#listing-tab-link')).toHaveAttribute('target','_blank');
@@ -792,4 +792,30 @@ for(const blocked of [false,true])test(`right trackpad swipe keeps the notebook 
  await expect(page).toHaveURL(url);expect((await records(page)).find(e=>e.id==='fixture-ba').status).toBe('Preparing');
  await popup.close();if(blocked)await page.getByRole('button',{name:'Stay here',exact:true}).click();
  await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','fixture-consulting');
+});
+
+for(const input of ['mouse','trackpad','keyboard'])test(`right ${input} saves multiple roles without opening applications or leaving Discover`,async({page,context})=>{
+ await setup(page);
+ const initialPages=context.pages().length;
+ const swiped=[];
+ for(let i=0;i<2;i++){
+  const id=await page.locator('#active-card').getAttribute('data-job-id');swiped.push(id);
+  if(input==='keyboard')await page.keyboard.press('ArrowRight');
+  else{
+   const card=await page.locator('#active-card').boundingBox();
+   await page.mouse.move(card.x+70,card.y+70);
+   if(input==='mouse'){
+    await page.mouse.down();await page.mouse.move(card.x+230,card.y+70,{steps:8});
+    await expect(page.locator('.swipe-label')).toHaveText('SAVE');await page.mouse.up();
+   }else for(let n=0;n<4;n++)await page.mouse.wheel(-90,0);
+  }
+  await expect.poll(async()=>(await records(page)).find(e=>e.id===id)?.status).toBe('To apply');
+  await expect(page.locator(`#active-card[data-job-id="${id}"]`)).toHaveCount(0);
+  await expect(page.locator('#discover-view')).toBeVisible();await expect(page.locator('dialog[open]')).toHaveCount(0);
+  expect(context.pages().length).toBe(initialPages);expect(await page.evaluate(()=>window.openedListings)).toEqual([]);
+  if(input==='trackpad')await page.waitForTimeout(400);
+ }
+ await page.locator('.main-nav [data-view="notebook"]').click();await page.locator('[data-filter="to apply"]').click();
+ for(const id of swiped)await expect(page.locator(`[data-status-id="${id}"]`)).toHaveValue('To apply');
+ await page.reload();for(const id of swiped)expect((await records(page)).find(e=>e.id===id).status).toBe('To apply');
 });

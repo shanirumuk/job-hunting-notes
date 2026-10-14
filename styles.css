@@ -367,7 +367,7 @@ main { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: conta
 .nav-button:active { transform: scale(.96); }
 .job-card { animation: card-arrive .16s ease-out; }
 .job-card.dragging { will-change: transform; }
-.job-card[data-direction="prepare"] { border-color: #917286; }
+.job-card[data-direction="save"] { border-color: #917286; }
 .job-card[data-direction="pass"] { border-color: #b08a79; }
 @keyframes card-arrive { from { opacity: .4; } to { opacity: 1; } }
 @media (min-height: 780px) and (max-width: 599px) {

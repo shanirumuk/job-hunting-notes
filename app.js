@@ -650,9 +650,9 @@ async function decide(action, job = deckJobs()[0]) {
   }
   const card = $('active-card');
   if (card?.dataset.jobId === job.id && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const direction = action === 'pass' ? -1 : action === 'prepare' ? 1 : 0;
+    const direction = action === 'pass' ? -1 : 1;
     try {
-      await card.animate([{transform:card.style.transform || 'none',opacity:1}, {transform:`translate3d(${direction * card.clientWidth}px, ${direction ? 0 : -25}px, 0) rotate(${direction * 8}deg)`,opacity:0}], {duration:170,easing:'ease-in',fill:'forwards'}).finished;
+      await card.animate([{transform:card.style.transform || 'none',opacity:1}, {transform:`translate3d(${direction * card.clientWidth}px, 0, 0) rotate(${direction * 8}deg)`,opacity:0}], {duration:170,easing:'ease-in',fill:'forwards'}).finished;
     } catch { /* A cancelled animation must not block an already saved decision. */ }
   }
   decisionPending = false;
@@ -686,8 +686,8 @@ function wireSwipe() {
   function paint() {
     frame=0;
     card.style.transform = `translate3d(${dx}px,0,0) rotate(${Math.max(-8,Math.min(8,dx/30))}deg)`;
-    const label = card.querySelector('.swipe-label'); label.style.top=(card.scrollTop+Math.min(75,card.clientHeight/4))+'px'; label.style.opacity = Math.min(1,Math.abs(dx)/threshold()); label.textContent = dx > 0 ? 'APPLY' : 'PASS';
-    card.dataset.direction = dx > 0 ? 'prepare' : 'pass';
+    const label = card.querySelector('.swipe-label'); label.style.top=(card.scrollTop+Math.min(75,card.clientHeight/4))+'px'; label.style.opacity = Math.min(1,Math.abs(dx)/threshold()); label.textContent = dx > 0 ? 'SAVE' : 'PASS';
+    card.dataset.direction = dx > 0 ? 'save' : 'pass';
   }
   card.addEventListener('pointermove', e => {
     if (!start || e.pointerId !== start.id) return;
@@ -713,7 +713,7 @@ function wireSwipe() {
     const amount=dx,velocity=Math.abs(dx)/Math.max(1,e.timeStamp-start.time);
     const commit=start.dragging && (Math.abs(amount)>=threshold() || (Math.abs(amount)>=40 && velocity>=.55));
     if(commit)paint();
-    reset(commit);if(commit)decide(amount>0?'prepare':'pass',job);
+    reset(commit);if(commit)decide(amount>0?'save':'pass',job);
   });
   card.addEventListener('pointercancel',()=>reset());
   card.addEventListener('lostpointercapture', e => {if (e.target === card && start) reset();});
@@ -746,16 +746,15 @@ function wireTrackpadAndKeys() {
     gesture.distance-=Math.max(-90,Math.min(90,e.deltaX*unit));gesture.events++;
     const distance=gesture.distance*.55,threshold=Math.max(150,Math.min(180,card.clientWidth*.35));
     card.classList.add('dragging');card.style.transform=`translate3d(${distance}px,0,0) rotate(${Math.max(-8,Math.min(8,distance/30))}deg)`;
-    const label=card.querySelector('.swipe-label');label.style.top=(card.scrollTop+Math.min(75,card.clientHeight/4))+'px';label.style.opacity=Math.min(1,Math.abs(distance)/threshold);label.textContent=distance>0?'APPLY':'PASS';card.dataset.direction=distance>0?'prepare':'pass';
+    const label=card.querySelector('.swipe-label');label.style.top=(card.scrollTop+Math.min(75,card.clientHeight/4))+'px';label.style.opacity=Math.min(1,Math.abs(distance)/threshold);label.textContent=distance>0?'SAVE':'PASS';card.dataset.direction=distance>0?'save':'pass';
     if(gesture.events>=4 && Math.abs(distance)>=threshold){
       gesture.committed=true;card.classList.remove('dragging');
-      // Keep the notebook open for every gesture; offer a link if the browser blocks the tab.
-      decide(distance>0?'prepare':'pass',gesture.job);
+      decide(distance>0?'save':'pass',gesture.job);
     }
   },{passive:false});
   document.addEventListener('keydown',e=>{
     if(blocked() || decisionPending || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.target.closest?.('input,textarea,select,[contenteditable],[role="textbox"],[role="slider"],[role="listbox"]'))return;
-    const action={ArrowLeft:'pass',ArrowRight:'prepare',s:'save'}[e.key];
+    const action={ArrowLeft:'pass',ArrowRight:'save',s:'save'}[e.key];
     if(!action || !$('active-card'))return;
     e.preventDefault();finishGesture();decide(action);
   });

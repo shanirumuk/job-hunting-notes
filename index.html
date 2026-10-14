@@ -7,7 +7,7 @@
   <meta name="description" content="Find your next role. Swipe, prepare, and keep your job search in one place." />
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=76" />
+  <link rel="stylesheet" href="styles.css?v=85" />
   <title>Job notebook · Your next chapter</title>
 </head>
 <body data-view="discover">
@@ -48,10 +48,10 @@
             <div id="job-deck" aria-live="polite" aria-atomic="true"></div>
             <div class="swipe-actions" id="swipe-actions" hidden>
               <button id="pass-job" aria-keyshortcuts="ArrowLeft" title="Pass (←)" class="swipe-button pass" aria-label="Pass on this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-close"/></svg></span><small>Pass</small></button>
-              <button id="save-job" aria-keyshortcuts="S" title="Save (S)" class="swipe-button later" aria-label="Save this role for later"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-save"/></svg></span><small>Save</small></button>
-              <button id="prepare-job" aria-keyshortcuts="ArrowRight" title="Apply (→)" class="swipe-button prepare" aria-label="Open application for this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-check"/></svg></span><small>Apply ↗</small></button>
+              <button id="save-job" aria-keyshortcuts="S ArrowRight" title="Save (→ or S)" class="swipe-button later" aria-label="Save this role for later"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-save"/></svg></span><small>Save</small></button>
+              <button id="prepare-job" title="Open application" class="swipe-button prepare" aria-label="Open application for this role"><span class="action-icon"><svg class="ui-icon" aria-hidden="true"><use href="#icon-check"/></svg></span><small>Apply ↗</small></button>
             </div>
-            <p class="gesture-hint">Two-finger swipe or drag · ← Pass · → Apply · S Save</p>
+            <p class="gesture-hint">Two-finger swipe or drag · ← Pass · → Save for later</p>
             <p class="feed-status" id="feed-status" role="status"></p><button class="text-button" id="retry-jobs" hidden>Retry search</button><button class="text-button" id="load-more-jobs" hidden>Load more results</button>
           </div>
           <aside class="search-progress" aria-labelledby="next-steps-title">
@@ -237,6 +237,6 @@
     </div>
     <div class="sheet-actions"><button id="reset-locations" type="button" class="secondary-button">Reset filters</button><button id="apply-locations" type="button" class="primary-button">Show matches</button></div>
   </div></dialog>
-  <script type="module" src="app.js?v=84"></script>
+  <script type="module" src="app.js?v=85"></script>
 </body>
 </html>
