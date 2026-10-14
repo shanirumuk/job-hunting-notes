@@ -3,14 +3,37 @@ import assert from 'node:assert/strict';
 import {createReviewCache,reviewHash} from '../server/review-cache.js';
 import {createFitReviewHandler} from '../api/fit-review.js';
 const input={job:{title:'Analyst',location:'Germany',remote:false,description:'Requirements: SQL reporting and gathering business requirements.'},profile:{evidence:'SQL reporting.',languages:'English C1',workRights:'Germany route.',salaryTarget:'',motivation:'',workStyle:'',startDate:'',relocation:''}};
-test('private review cache merges simultaneous writes and isolates changed CV profiles',async()=>{
- const blobs=new Map();let version=0;
- const cache=createReviewCache({enabled:()=>true,secret:()=> 'cache-test-secret',now:()=>Date.parse('2026-10-13'),read:async key=>{const v=blobs.get(key);return v?{stream:new Blob([v.body]).stream(),blob:{etag:v.etag}}:null;},write:async(key,body,options)=>{await Promise.resolve();const old=blobs.get(key);if(old&&options.ifMatch!==old.etag)throw Object.assign(Error('Conflict'),{name:options.ifMatch?'BlobPreconditionFailedError':'BlobAlreadyExistsError'});blobs.set(key,{body,etag:String(++version)});}});
- const other={...input,job:{...input.job,title:'Consultant'}};
- await Promise.all([cache.save(input,{version:7,skills:8},{id:'a'}),cache.save(other,{version:7,skills:7},{id:'b'})]);
- assert.equal((await cache.list(input.profile)).length,2);assert.equal((await cache.find(input)).skills,8);
- assert.equal(await cache.find({...input,profile:{...input.profile,evidence:'Different CV'}}),null);
- assert.notEqual(reviewHash(input),reviewHash({...input,job:{...input.job,description:input.job.description+' Extra requirement.'}}));
+const memoryCache=()=>{
+ const blobs=new Map(),now=()=>Date.parse('2026-10-14');
+ const cache=createReviewCache({enabled:()=>true,secret:()=> 'cache-test-secret',now,
+  read:async key=>{const v=blobs.get(key);return v?{stream:new Blob([v]).stream()}:null;},
+  write:async(key,body)=>{await Promise.resolve();blobs.set(key,body);},
+  enumerate:async({prefix})=>({blobs:[...blobs.keys()].filter(k=>k.startsWith(prefix)).map(pathname=>({pathname,uploadedAt:new Date(now())})),hasMore:false})});
+ return {cache,blobs,now};
+};
+test('private review cache keeps 72 simultaneous completions and isolates changed CV profiles',async()=>{
+ const {cache,blobs,now}=memoryCache();
+ const inputs=Array.from({length:72},(_,i)=>({...input,job:{...input.job,title:'Consultant '+i}}));
+ await Promise.all(inputs.map((job,i)=>cache.save(job,{version:7,skills:i%10},{id:String(i)})));
+ assert.equal(blobs.size,72);
+ for(let i=0;i<inputs.length;i++)assert.equal((await cache.find(inputs[i])).skills,i%10);
+ assert.equal((await cache.list(input.profile)).length,20);
+ assert.equal(await cache.find({...inputs[0],profile:{...input.profile,evidence:'Different CV'}}),null);
+ assert.notEqual(reviewHash(input,now()),reviewHash({...input,job:{...input.job,description:input.job.description+' Extra requirement.'}},now()));
+});
+test('ready comparisons are restored before newer rejected adverts and legacy reviews remain readable',async()=>{
+ const {cache,blobs,now}=memoryCache(),ready={version:7,skills:8,points:[],factors:[]};
+ await cache.save(input,ready,{id:'ready'});
+ const readyPath=[...blobs.keys()][0],bankPath=readyPath.split('/ready/')[0]+'.json';
+ const old={...input,job:{...input.job,title:'Legacy role'}},oldEntry={hash:reviewHash(old,now()),review:ready,listing:{id:'legacy'},savedAt:now()};
+ blobs.set(bankPath,JSON.stringify({entries:[oldEntry]}));
+ for(let i=0;i<25;i++)await cache.save({...input,job:{...input.job,title:'Rejected '+i}},{version:7,skills:3,points:[],factors:[]},{id:String(i)});
+ const entries=await cache.list(input.profile);
+ assert(entries.some(e=>e.listing.id==='ready'));assert(entries.some(e=>e.listing.id==='legacy'));
+ assert.equal((await cache.find(old)).skills,8);
+ await cache.save(old,{...ready,skills:9},{id:'legacy-updated'});
+ assert.equal((await cache.find(old)).skills,9);
+ assert.equal((await cache.list(input.profile)).filter(e=>e.hash===oldEntry.hash).length,1);
 });
 test('concurrent requests for the same CV and advert share one paid comparison',async()=>{
  const previous=process.env.JOB_NOTEBOOK_ACCESS_TOKEN;process.env.JOB_NOTEBOOK_ACCESS_TOKEN='s'.repeat(43);
