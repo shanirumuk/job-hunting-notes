@@ -11,19 +11,19 @@ import {recordedEmploymentMonths} from './lib/insights.js?v=78';
 import {regions,europeanCountries,geographicMatch,scopedLocation} from './lib/geography.js';
 import {recoverImport,getItem as deviceItem,setItem as deviceSetItem,updateItem as deviceUpdateItem} from './lib/device-store.js?v=80';
 import {READY_TARGET,REFILL_AT,REVIEW_LIMIT,SEARCH_LIMIT,DAILY_REVIEW_LIMIT,DAILY_SEARCH_LIMIT,RESUME_DELAY,dailyUsage,nextBudgetDay,readBuffer,advanceBuffer,canFillBuffer} from './lib/discovery-buffer.js?v=87';
-import {advertGroupKey,decidedAdvertGroups,compareCandidates} from './lib/discovery-candidates.js?v=87';
+import {advertGroupKey,decidedAdvertGroups,compareCandidates,preferredListingCopies} from './lib/discovery-candidates.js?v=89';
 import {startDeviceSync} from './lib/device-sync.js';
 import {mergeApplicationEntries,ApplicationConflict} from './lib/application-storage.js';
 import {applicationsFromFragment,addLinkedApplication} from './lib/application-link.js';
-import {mergeAlertJobs} from './lib/job-alerts.js?v=88';
-import {mountEmailAlertInbox} from './lib/email-alert-inbox.js?v=88';
+import {mergeAlertJobs} from './lib/job-alerts.js?v=89';
+import {mountEmailAlertInbox} from './lib/email-alert-inbox.js?v=89';
 import {restorePrivateLink} from './lib/private-recovery.js';
 import {recoverSubmittedApplications} from './lib/application-recovery.js?v=78';
 await recoverImport();
 const privateRecoveryResult=await restorePrivateLink().catch(()=>({ok:false,message:'Private recovery could not read this browser’s storage. Your saved notebook has been kept.'}));
 window.addEventListener('hashchange',()=>{if(location.hash.startsWith('#restore-notebook='))location.reload();});
 import {publishedSummaries} from './lib/summaries.js';
-import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=88';
+import {roleInsights, jobFitReport, descriptionText, STATUSES, changeApplicationStatus, KEY, DISCOVERY_KEY, PROFILE_KEY, defaultProfile, safeURL, matchJob, sameJob, prepareApplication, validateEntries, validateProfile, cvKey, rankJobs, discoveryFit, discoveryDecision} from './lib/model.js?v=89';
 const seed = [
   {id:'deliverect', company:'Deliverect', title:'Implementation Consultant', location:'Berlin · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://jobs.lever.co/deliverect/a2a206c9-9ecf-4a24-8db9-32cc6d6a11b1/apply', materials:'Consulting CV PDF', requirements:'Strong fit: client implementation, onboarding, APIs/webhooks, troubleshooting, technical communication. Work-right question must be answered accurately for Germany.', notes:'Applied on 15 September 2026.'},
   {id:'allianz', company:'Allianz Technology', title:'Technical Business Analyst', location:'Barcelona · Hybrid', status:'Applied', applicationDate:'2026-09-15', interviewDate:'', link:'https://career5.successfactors.eu/careers?company=AZGROUPPROD&career_job_req_id=91937&career_ns=job_application', materials:'Business Analyst CV PDF', requirements:'Strong business-to-technology fit. Gap: contact-centre technology. Confirm Spanish work-authorisation pathway before investing heavily.', notes:'Applied on 15 September 2026.'},
@@ -204,7 +204,7 @@ function hasMoreJobs(){return !!(discovery.nextPage||discovery.nextSearch);}
 function deckJobs() {
   if (cachedProfile !== profile) {matchCache = new WeakMap(); cachedProfile = profile;}
   const historical = entries.filter(e => e.status === 'To apply' && !e.preparation).map(e => ({...e, description: e.description||e.requirements, source: e.source||'Your notebook', historical: !e.description}));
-  const all = [...discovery.jobs, ...historical];
+  const all = preferredListingCopies([...discovery.jobs, ...historical]);
   const result = [];
   const reviewed=Object.values(discovery.reviewed||{}).filter(j=>discovery.decisions[j.id]);
   const decidedGroups=decidedAdvertGroups(discovery.jobs,discovery.decisions,discovery.reviewed,entries);
@@ -338,9 +338,11 @@ function nextReviewCandidate({includeErrors=false,ignoreBudget=false}={}){
  if(!ignoreBudget&&(!canFillBuffer({refilling:bufferRefilling,reviews:candidateReviewBudget},deckJobs().length,activeReviews.size)||!queueAllowed())||!profile.evidence.trim()||!browserConnectionVerified||reviewServiceIssue||!queueStarted||activeView==='profile'||restoringReviews)return null;
  const candidates=[];
  const decidedGroups=decidedAdvertGroups(discovery.jobs,discovery.decisions,discovery.reviewed,entries);
- const checkedGroups=new Set(discovery.jobs.filter(j=>fullReview(j)||activeReviews.has(fitReviewKey(j))).map(advertGroupKey));
- for(const job of discovery.jobs){
-  if((job.description||'').trim().length<50||checkedGroups.has(advertGroupKey(job))||decidedGroups.has(advertGroupKey(job))||discovery.decisions[job.id]||(profile.hideSeniorRoles&&isSeniorRole(job))||!listingFreshness(job,{includeOlder:profile.includeOlderListings}).visible||entries.some(e=>sameJob(e,job))||fullReview(job)||activeReviews.has(fitReviewKey(job))||!includeErrors&&fitReviewErrors.has(fitReviewKey(job)))continue;
+ const decidedJobs=Object.values(discovery.reviewed||{}).filter(j=>discovery.decisions[j.id]);
+ const copies=preferredListingCopies(discovery.jobs);
+ const checkedGroups=new Set(copies.filter(j=>fullReview(j)||activeReviews.has(fitReviewKey(j))).map(advertGroupKey));
+ for(const job of copies){
+  if((job.description||'').trim().length<50||checkedGroups.has(advertGroupKey(job))||decidedGroups.has(advertGroupKey(job))||decidedJobs.some(e=>sameJob(e,job))||discovery.decisions[job.id]||(profile.hideSeniorRoles&&isSeniorRole(job))||!listingFreshness(job,{includeOlder:profile.includeOlderListings}).visible||entries.some(e=>sameJob(e,job))||fullReview(job)||activeReviews.has(fitReviewKey(job))||!includeErrors&&fitReviewErrors.has(fitReviewKey(job)))continue;
   let match=matchCache.get(job);if(!match){const base=matchJob(job,profile);if(!base.eligible)continue;match={...base,experience:experienceRequirement(job),cvFit:discoveryFit(job,profile)};matchCache.set(job,match);}
   if(match.eligible&&match.cvFit.reason!=='experience')candidates.push({job,match,fit:match.cvFit});
  }

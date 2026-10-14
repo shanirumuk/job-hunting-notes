@@ -123,3 +123,10 @@ test('a saved advert excludes its other reviewed copies and newly fetched copies
  await page.goto('/?copies=1#discover');await expect(page.locator('#deck-count')).toHaveText('1 role to explore');await page.keyboard.press('ArrowRight');await expect(page.locator('#active-card')).toHaveCount(0);
  await page.route('**/api/jobs*',r=>r.fulfill({json:{jobs:[{...copy,id:'new-copy',link:'https://example.org/new-copy'}],nextPage:null,nextSearch:null}}));await page.locator('#refresh-jobs').click();await expect(page.locator('#refresh-jobs')).toBeEnabled();await expect(page.locator('#active-card')).toHaveCount(0);expect(paid).toBe(0);
 });
+test('cross-source copies with Berlin versus Berlin Germany show one employer card and stay excluded after pass',async({page})=>{
+ const aggregate={...jobs[0],location:'Berlin',source:'Arbeitnow'},primary={...aggregate,id:'primary-copy',location:'Berlin, Germany',link:'https://example.org/employer-primary',description:aggregate.description+' Original employer requirements.',employerBoard:'example',availability:'listed'};let paid=0;
+ await page.route('**/api/fit-review',r=>{paid++;return r.fulfill({json:{review}});});await setup(page,{inputJobs:[]});
+ await page.route('**/api/review-cache',r=>r.fulfill({json:{records:[aggregate,primary].map(job=>{const input={job:{title:job.title,location:job.location,remote:false,description:job.description},profile:r.request().postDataJSON().profile};return {hash:createHash('sha256').update(JSON.stringify([7,new Date().toISOString().slice(0,7),input])).digest('hex'),job,review};})}}));
+ await page.goto('/?location-copies=1#discover');await expect(page.locator('#deck-count')).toHaveText('1 role to explore');await expect(page.locator('#active-card')).toHaveAttribute('data-job-id','primary-copy');
+ await page.keyboard.press('ArrowLeft');await expect(page.locator('#active-card')).toHaveCount(0);await page.locator('#refresh-jobs').click();await expect(page.locator('#refresh-jobs')).toBeEnabled();await expect(page.locator('#active-card')).toHaveCount(0);expect(paid).toBe(0);
+});

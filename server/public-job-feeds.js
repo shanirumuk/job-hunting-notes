@@ -3,7 +3,7 @@ import {additionalSources} from './additional-sources.js';
 import {geographicMatch,locationInfo} from '../lib/geography.js';
 import {isSeniorRole,experienceRequirement} from '../lib/experience-filter.js';
 import {sameJob} from '../lib/model.js';
-import {diverseAdverts} from '../lib/discovery-candidates.js';
+import {diverseAdverts,preferredListingCopies} from '../lib/discovery-candidates.js';
 
 const cache=new Map(),pending=new Map();
 export async function publicJobFeeds(input,{fetcher=fetch,useCache=true}={}){
@@ -27,7 +27,8 @@ export async function publicJobFeeds(input,{fetcher=fetch,useCache=true}={}){
     if(!role||!geographicMatch(job,{geography:region,country,includeBroadRemote:broad}).matches)continue;
     const minimum=experienceRequirement(job).minimum;
     if(months!==null&&minimum!==null&&minimum>months/12)continue;
-    if(!jobs.some(other=>sameJob(other,job)))jobs.push(job);
+    const duplicate=jobs.findIndex(other=>sameJob(other,job));
+    if(duplicate<0)jobs.push(job);else jobs[duplicate]=preferredListingCopies([jobs[duplicate],job])[0];
    }
   }
   const patterns={javascript:/\b(?:JavaScript|TypeScript|React|Next[ .]?js|Node[ .]?js)\b/i,python:/\bPython\b/i,api:/\bAPIs?\b/i,sql:/\b(?:SQL|PostgreSQL|MySQL)\b/i,crm:/\bCRM\b/i,requirements:/requirements|business analysis/i,testing:/testing|automated tests?/i,workflows:/workflow|process improvement/i};

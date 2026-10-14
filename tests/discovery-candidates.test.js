@@ -22,3 +22,9 @@ test('swipe history excludes regional copies after source refresh, without exclu
  assert.equal(decidedAdvertGroups([duplicate],{},history,[]).size,0);
  assert(decidedAdvertGroups([],{},history,[{...original,requirements:original.description,description:undefined}]).has(advertGroupKey(duplicate)));
 });
+test('cross-source city formatting deduplicates a vacancy and prefers the employer source',async()=>{
+ const {sameJob}=await import('../lib/model.js'),{preferredListingCopies}=await import('../lib/discovery-candidates.js');
+ const aggregate={id:'aggregate',company:'Almedia',title:'Junior Software Engineer - Data',location:'Berlin',link:'https://example.org/aggregate',description:'Short provider summary.',source:'Arbeitnow'},primary={...aggregate,id:'primary',location:'Berlin, Germany',link:'https://jobs.ashbyhq.com/almedia/primary',description:'The complete original employer advert.',employerBoard:'almedia',availability:'listed'};
+ assert(sameJob(aggregate,primary));assert.deepEqual(preferredListingCopies([aggregate,primary]),[primary]);
+ primary.location='Munich, Germany';assert(!sameJob(aggregate,primary));primary.location='Germany';assert(!sameJob(aggregate,primary));
+});
